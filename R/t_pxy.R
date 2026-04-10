@@ -1,0 +1,122 @@
+#' Two-life survival probability for independent lives
+#'
+#' Computes the survival probability for two independent lives with actuarial
+#' ages \code{x} and \code{y} at time 0 under a joint-life or last-survivor
+#' status.
+#'
+#' @param lt A life table data frame. Must contain columns \code{x} and
+#'   \code{lx}.
+#' @param x Integer actuarial age of the first life at time 0.
+#' @param y Integer actuarial age of the second life at time 0.
+#' @param t Nonnegative time (may be fractional).
+#' @param frac Fractional-age assumption: \code{"UDD"}, \code{"CF"},
+#'   \code{"CML"} (alias of CF), or \code{"Balducci"}. If not specified and
+#'   \code{lt} carries a \code{frac} attribute, that value is used.
+#'   Passed to \code{\link{t_px}}.
+#' @param status Two-life status: \code{"joint"} or \code{"last"}.
+#'
+#' @details
+#' Independence is assumed throughout (Finan, Sections 56--57).
+#'
+#' **Joint-life status** (Finan, Section 56): the status survives as long as
+#' \emph{both} lives are alive.
+#' \deqn{{}_tp_{xy} = {}_tp_x \cdot {}_tp_y.}
+#'
+#' **Last-survivor status** (Finan, Section 57): the status survives as long
+#' as \emph{at least one} life is alive.
+#' \deqn{{}_tp_{\overline{xy}} = {}_tp_x + {}_tp_y - {}_tp_x \cdot {}_tp_y.}
+#'
+#' Individual survival probabilities \eqn{{}_tp_x} and \eqn{{}_tp_y} are
+#' computed via \code{\link{t_px}}, which supports fractional ages under UDD,
+#' constant force, and Balducci assumptions (Finan, Section 24).
+#'
+#' @return A single numeric value.
+#'
+#' @seealso \code{\link{t_px}} for single-life survival,
+#'   \code{\link{e_xy}} for joint-life expectancy,
+#'   \code{\link{annuity_xy}} for two-life annuity APVs,
+#'   \code{\link{insurance_xy}} for two-life insurance APVs.
+#'
+#' @examples
+#' lt <- data.frame(
+#'   x  = 60:66,
+#'   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 86000)
+#' )
+#'
+#' # Joint life, 2.5 years, UDD (Finan, Sec. 56)
+#' t_pxy(lt, x = 60, y = 62, t = 2.5, frac = "UDD", status = "joint")
+#'
+#' # Verify: joint = product of marginals
+#' t_px(lt, x = 60, t = 2.5, frac = "UDD") *
+#'   t_px(lt, x = 62, t = 2.5, frac = "UDD")
+#'
+#' # Last survivor, 2.5 years, constant force (Finan, Sec. 57)
+#' t_pxy(lt, x = 60, y = 62, t = 2.5, frac = "CF", status = "last")
+#'
+#' # Finan Example 56.2 style: integer survival
+#' # 10_p_{50:60} = 10_p_50 * 10_p_60
+#' lt_ilt <- data.frame(
+#'   x  = 50:70,
+#'   lx = c(8950901, 8879913, 8804189, 8723382, 8637048,
+#'          8544731, 8445974, 8340310, 8227261, 8106334,
+#'          7977338, 7839775, 7693040, 7536522, 7369603,
+#'          7191658, 7002051, 6800139, 6585264, 6356752,
+#'          6114913)
+#' )
+#' t_pxy(lt_ilt, x = 50, y = 60, t = 10, status = "joint")
+#'
+#' # Finan Problem 56.1: t_q_xy = t_q_x + t_q_y - t_q_x * t_q_y
+#' p_joint <- t_pxy(lt, x = 60, y = 62, t = 3, status = "joint")
+#' q_joint <- 1 - p_joint
+#' qx <- 1 - t_px(lt, x = 60, t = 3)
+#' qy <- 1 - t_px(lt, x = 62, t = 3)
+#' c(q_joint = q_joint, q_sum = qx + qy - qx * qy)  # should match
+#'
+#' @export
+t_pxy <- function(
+    lt,
+    x, y,
+    t,
+    frac,
+    status = c("joint", "last")
+) {
+  status <- match.arg(status)
+
+  # --- checks ---
+  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
+  if (!all(c("x", "lx") %in% names(lt))) {
+    stop("Life table must contain columns 'x' and 'lx'.")
+  }
+  if (!is.numeric(x) || length(x) != 1L || is.na(x) || abs(x - round(x)) > 1e-10) {
+    stop("'x' must be a single integer age.")
+  }
+  if (!is.numeric(y) || length(y) != 1L || is.na(y) || abs(y - round(y)) > 1e-10) {
+    stop("'y' must be a single integer age.")
+  }
+  if (!is.numeric(t) || length(t) != 1L || is.na(t) || t < 0) {
+    stop("'t' must be a single nonnegative number.")
+  }
+
+  x <- as.integer(round(x))
+  y <- as.integer(round(y))
+
+  # --- compute marginal survival via t_px (Finan, Sec. 24) ---
+  if (missing(frac)) {
+    px <- t_px(lt, x = x, t = t, check = FALSE)
+    py <- t_px(lt, x = y, t = t, check = FALSE)
+  } else {
+    frac <- match.arg(frac, c("UDD", "CF", "CML", "Balducci"))
+    px <- t_px(lt, x = x, t = t, frac = frac, check = FALSE)
+    py <- t_px(lt, x = y, t = t, frac = frac, check = FALSE)
+  }
+
+  if (is.na(px) || is.na(py)) return(NA_real_)
+
+  # --- joint-life: t_p_xy = t_p_x * t_p_y (Finan, Sec. 56) ---
+  p_joint <- px * py
+
+  if (status == "joint") return(p_joint)
+
+  # --- last survivor: t_p_{xy-bar} = t_p_x + t_p_y - t_p_xy (Finan, Sec. 57) ---
+  px + py - p_joint
+}

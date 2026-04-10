@@ -1,0 +1,136 @@
+#' t-year death probability from a life table
+#'
+#' Computes the t-year death probability
+#' \deqn{{}_t q_x = \Pr[T(x) \le t] = 1 - {}_t p_x}
+#' using an annual life table, allowing for fractional ages under standard
+#' actuarial assumptions.
+#'
+#' @param lt A lifetable object as produced by \code{\link{lifetable}}.
+#'   Must contain columns \code{x} and \code{lx}. Columns \code{qx} or
+#'   \code{px} are used if present.
+#' @param x Integer age(s) at which the interval starts.
+#' @param t Nonnegative numeric duration(s) in years (can be fractional).
+#' @param frac Fractional-age assumption:
+#'   \code{"UDD"}, \code{"CF"}, \code{"CML"} (alias of CF), or
+#'   \code{"Balducci"}. If not specified and \code{lt} carries a \code{frac}
+#'   attribute (set by \code{\link{lifetable}}), that value is used.
+#'   Passed directly to \code{\link{t_px}}.
+#' @param tidy Logical. If \code{TRUE}, returns a tibble with columns
+#'   \code{x}, \code{t}, \code{frac}, \code{tqx}.
+#' @param check Logical. If \code{TRUE}, performs validity checks.
+#' @param tol Numeric tolerance for integer checks on \code{x}.
+#'
+#' @details
+#' This is a thin wrapper around \code{\link{t_px}}:
+#' \deqn{{}_t q_x = 1 - {}_t p_x.}
+#'
+#' The identity \eqn{{}_tq_x = {}_td_x / \ell_x} (Finan, Section 22) holds
+#' for integer \eqn{t}, where \eqn{{}_td_x = \ell_x - \ell_{x+t}} is the
+#' expected number of deaths between ages \eqn{x} and \eqn{x+t}.
+#'
+#' For fractional durations, the result depends on the chosen assumption
+#' (UDD, CF, or Balducci); see \code{\link{t_px}} for details and formulas
+#' (Finan, Section 24).
+#'
+#' The deferred death probability \eqn{{}_{n|}q_x} can be obtained as
+#' (Finan, Section 23.4):
+#' \deqn{{}_{n|}q_x = {}_np_x \cdot q_{x+n} = {}_{n+1}q_x - {}_nq_x.}
+#'
+#' @return Numeric vector of \eqn{{}_t q_x}, or a tibble if
+#'   \code{tidy = TRUE}.
+#'
+#' @seealso \code{\link{t_px}} for the complementary survival probability,
+#'   \code{\link{t_Ex}} for the pure endowment (discounted survival),
+#'   \code{\link{e_x}} for life expectancy,
+#'   \code{\link{lifetable}} for building the life table input.
+#'
+#' @examples
+#' x  <- 0:5
+#' lx <- c(100000, 99500, 99000, 98200, 97000, 95000)
+#' lt <- lifetable(x = x, lx = lx, omega = 5, close = TRUE)
+#'
+#' # Integer death probability (Finan, Section 22)
+#' t_qx(lt, x = 0, t = 3)  # (l0 - l3) / l0
+#'
+#' # t = 0 always returns 0
+#' t_qx(lt, x = 0, t = 0)
+#'
+#' # Fractional age under UDD (Finan, Section 24.1)
+#' t_qx(lt, x = 0, t = 2.5, frac = "UDD")
+#'
+#' # Finan Example 22.2a: number of deaths between ages 2 and 5
+#' # 3_d_2 = l_2 - l_5 = 98995 - 97468 = 1527
+#' lt_22 <- lifetable(
+#'   x = 0:5,
+#'   lx = c(100000, 99499, 98995, 98489, 97980, 97468)
+#' )
+#' t_qx(lt_22, x = 2, t = 3) * lt_22$lx[lt_22$x == 2]  # 1527
+#'
+#' # Deferred death probability (Finan, Section 23.4):
+#' # 2|1_q_0 = 2_p_0 * q_2 = 3_q_0 - 2_q_0
+#' t_qx(lt, x = 0, t = 3) - t_qx(lt, x = 0, t = 2)
+#'
+#' # Vectorized with tidy output
+#' t_qx(lt, x = c(0, 1), t = c(1.5, 2.2), frac = "Balducci", tidy = TRUE)
+#'
+#' # Use in a tidy pipeline
+#' if (requireNamespace("dplyr", quietly = TRUE)) {
+#'   tibble::tibble(age = c(0, 1, 2), duration = c(3, 2.5, 1.7)) |>
+#'     dplyr::mutate(
+#'       surv  = t_px(lt, x = age, t = duration),
+#'       death = t_qx(lt, x = age, t = duration)
+#'     )
+#' }
+#'
+#' @export
+t_qx <- function(
+    lt,
+    x,
+    t,
+    frac,
+    tidy = FALSE,
+    check = TRUE,
+    tol = 1e-10
+) {
+
+  # --- delegate frac resolution entirely to t_px ---
+  # If frac was not supplied, t_px will inherit from lt attribute
+  if (missing(frac)) {
+    tpx <- t_px(
+      lt = lt, x = x, t = t,
+      tidy = FALSE, check = check, tol = tol
+    )
+    # recover the frac that t_px actually used (for tidy output)
+    lt_frac <- attr(lt, "frac")
+    frac_used <- if (!is.null(lt_frac) && lt_frac %in% c("UDD", "CF", "Balducci")) {
+      lt_frac
+    } else {
+      "UDD"
+    }
+  } else {
+    frac_used <- match.arg(frac, c("UDD", "CF", "CML", "Balducci"))
+    if (frac_used == "CML") frac_used <- "CF"
+    tpx <- t_px(
+      lt = lt, x = x, t = t, frac = frac_used,
+      tidy = FALSE, check = check, tol = tol
+    )
+  }
+
+  # tqx = 1 - tpx, clamped to [0, 1]
+  tqx <- pmin(pmax(1 - tpx, 0), 1)
+
+  if (isTRUE(tidy)) {
+    # Recycle x, t to match output length (same logic t_px uses internally)
+    x0 <- as.integer(round(as.numeric(x)))
+    t0 <- as.numeric(t)
+    n  <- length(tqx)
+    return(tibble::tibble(
+      x    = rep_len(x0, n),
+      t    = rep_len(t0, n),
+      frac = frac_used,
+      tqx  = tqx
+    ))
+  }
+
+  tqx
+}
