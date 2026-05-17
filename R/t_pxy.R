@@ -4,15 +4,20 @@
 #' ages \code{x} and \code{y} at time 0 under a joint-life or last-survivor
 #' status.
 #'
-#' @param lt A life table data frame. Must contain columns \code{x} and
-#'   \code{lx}.
+#' @param lt Either:
+#'   \itemize{
+#'     \item a single life table data frame, used for both lives; or
+#'     \item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+#'   }
+#'   Each life table must contain columns \code{x} and \code{lx}.
 #' @param x Integer actuarial age of the first life at time 0.
 #' @param y Integer actuarial age of the second life at time 0.
 #' @param t Nonnegative time (may be fractional).
 #' @param frac Fractional-age assumption: \code{"UDD"}, \code{"CF"},
 #'   \code{"CML"} (alias of CF), or \code{"Balducci"}. If not specified and
-#'   \code{lt} carries a \code{frac} attribute, that value is used.
-#'   Passed to \code{\link{t_px}}.
+#'   the supplied life table(s) carry a \code{frac} attribute, that value is
+#'   used. If two tables are supplied and their \code{frac} attributes differ,
+#'   \code{frac} must be supplied explicitly. Passed to \code{\link{t_px}}.
 #' @param status Two-life status: \code{"joint"} or \code{"last"}.
 #'
 #' @details
@@ -53,6 +58,20 @@
 #' # Last survivor, 2.5 years, constant force (Finan, Sec. 57)
 #' t_pxy(lt, x = 60, y = 62, t = 2.5, frac = "CF", status = "last")
 #'
+#' # Same result if the same table is supplied explicitly for both lives
+#' t_pxy(list(lt, lt), x = 60, y = 62, t = 2.5, frac = "UDD", status = "joint")
+#'
+#' # Different life tables for the two lives
+#' lt_m <- data.frame(
+#'   x  = 60:66,
+#'   lx = c(100000, 98500, 96800, 94800, 92400, 89500, 86000)
+#' )
+#' lt_f <- data.frame(
+#'   x  = 60:66,
+#'   lx = c(100000, 99000, 97800, 96400, 94700, 92700, 90300)
+#' )
+#' t_pxy(list(lt_m, lt_f), x = 60, y = 62, t = 2.5, frac = "UDD", status = "joint")
+#'
 #' # Finan Example 56.2 style: integer survival
 #' # 10_p_{50:60} = 10_p_50 * 10_p_60
 #' lt_ilt <- data.frame(
@@ -82,15 +101,34 @@ t_pxy <- function(
 ) {
   status <- match.arg(status)
 
-  # --- checks ---
-  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
-  if (!all(c("x", "lx") %in% names(lt))) {
-    stop("Life table must contain columns 'x' and 'lx'.")
+  # --- resolve life table input ---
+  if (is.data.frame(lt)) {
+    if (!all(c("x", "lx") %in% names(lt))) {
+      stop("Life table must contain columns 'x' and 'lx'.")
+    }
+    lt_x <- lt
+    lt_y <- lt
+  } else if (is.list(lt) && length(lt) == 2L &&
+             all(vapply(lt, is.data.frame, logical(1)))) {
+    if (!all(c("x", "lx") %in% names(lt[[1]]))) {
+      stop("First life table must contain columns 'x' and 'lx'.")
+    }
+    if (!all(c("x", "lx") %in% names(lt[[2]]))) {
+      stop("Second life table must contain columns 'x' and 'lx'.")
+    }
+    lt_x <- lt[[1]]
+    lt_y <- lt[[2]]
+  } else {
+    stop("`lt` must be either one life table or a list of two life tables.")
   }
-  if (!is.numeric(x) || length(x) != 1L || is.na(x) || abs(x - round(x)) > 1e-10) {
+
+  # --- checks ---
+  if (!is.numeric(x) || length(x) != 1L || is.na(x) ||
+      abs(x - round(x)) > 1e-10) {
     stop("'x' must be a single integer age.")
   }
-  if (!is.numeric(y) || length(y) != 1L || is.na(y) || abs(y - round(y)) > 1e-10) {
+  if (!is.numeric(y) || length(y) != 1L || is.na(y) ||
+      abs(y - round(y)) > 1e-10) {
     stop("'y' must be a single integer age.")
   }
   if (!is.numeric(t) || length(t) != 1L || is.na(t) || t < 0) {
@@ -100,15 +138,37 @@ t_pxy <- function(
   x <- as.integer(round(x))
   y <- as.integer(round(y))
 
-  # --- compute marginal survival via t_px (Finan, Sec. 24) ---
+  # --- resolve fractional-age assumption ---
   if (missing(frac)) {
-    px <- t_px(lt, x = x, t = t, check = FALSE)
-    py <- t_px(lt, x = y, t = t, check = FALSE)
+    frac_x <- attr(lt_x, "frac")
+    frac_y <- attr(lt_y, "frac")
+
+    ok_x <- !is.null(frac_x) && frac_x %in% c("UDD", "CF", "Balducci")
+    ok_y <- !is.null(frac_y) && frac_y %in% c("UDD", "CF", "Balducci")
+
+    if (ok_x && ok_y) {
+      if (!identical(frac_x, frac_y)) {
+        stop(
+          "The two life tables carry different `frac` attributes. ",
+          "Supply `frac` explicitly."
+        )
+      }
+      frac_use <- frac_x
+    } else if (ok_x) {
+      frac_use <- frac_x
+    } else if (ok_y) {
+      frac_use <- frac_y
+    } else {
+      frac_use <- "UDD"
+    }
   } else {
-    frac <- match.arg(frac, c("UDD", "CF", "CML", "Balducci"))
-    px <- t_px(lt, x = x, t = t, frac = frac, check = FALSE)
-    py <- t_px(lt, x = y, t = t, frac = frac, check = FALSE)
+    frac_use <- match.arg(frac, c("UDD", "CF", "CML", "Balducci"))
+    if (frac_use == "CML") frac_use <- "CF"
   }
+
+  # --- compute marginal survival via t_px (Finan, Sec. 24) ---
+  px <- t_px(lt_x, x = x, t = t, frac = frac_use, check = FALSE)
+  py <- t_px(lt_y, x = y, t = t, frac = frac_use, check = FALSE)
 
   if (is.na(px) || is.na(py)) return(NA_real_)
 

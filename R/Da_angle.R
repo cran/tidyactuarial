@@ -281,7 +281,7 @@ Da_angle <- function(
 #'   \item{present_value}{Present value of the decreasing annuity.}
 #' }
 #'
-#' @seealso \code{\link{Da_angle}}, \code{\link{Ia_angle_tbl}}, \code{\link{a_angle_tbl}},
+#' @seealso \code{\link{Da_angle}}, \code{Ia_angle_tbl}, \code{\link{a_angle_tbl}},
 #'   \code{\link{standardize_interest}}
 #'
 #' @family annuities

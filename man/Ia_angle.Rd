@@ -52,6 +52,10 @@ Supported timing conventions:
 \item \code{"due"}: payments at the beginning of each period.
 }
 
+For an annuity-immediate, the payments \eqn{1,2,\ldots,n}
+occur at times \eqn{1,2,\ldots,n}. For an annuity-due, the payments
+\eqn{1,2,\ldots,n} occur at times \eqn{0,1,\ldots,n-1}.
+
 For discrete payments with \code{payments_per_year = k}, the total number
 of payment periods is \eqn{n k}. Deferral is supported through
 \code{deferral_years}; for discrete annuities, the deferral must align
@@ -73,9 +77,22 @@ Let \eqn{i_p}{ip} be the effective rate per payment period,
 \eqn{v_p = (1+i_p)^{-1}}{vp = 1/(1+ip)}, and let \eqn{n} be the total
 number of payment periods. Also let
 \deqn{a_n = \frac{1 - v_p^n}{i_p}}{a_n = (1 - vp^n) / ip}
+and
+\deqn{\ddot{a}_n = (1+i_p)a_n.}{a_due_n = (1 + ip) * a_n.}
 
 Then the increasing annuity-immediate factor is
-\deqn{(Ia)_n = \frac{a_n - n v_p^n}{i_p}}{(Ia)_n = (a_n - n * vp^n) / ip}
+\deqn{
+(Ia)_n = \frac{\ddot{a}_n - n v_p^n}{i_p}
+}{
+(Ia)_n = (a_due_n - n * vp^n) / ip
+}
+
+Equivalently,
+\deqn{
+(Ia)_n = \sum_{k=1}^{n} k v_p^k.
+}{
+(Ia)_n = sum_{k=1}^n k * vp^k.
+}
 
 For \eqn{i_p = 0}{ip = 0}, the limit is
 \deqn{(Ia)_n = \frac{n(n+1)}{2}}{(Ia)_n = n(n+1)/2}
@@ -91,7 +108,6 @@ Input vectors must have length 1 or a common length.
 Missing values are propagated.
 }
 \examples{
-# Simple scalar example
 Ia_angle(
   n_years = 10,
   rate = 0.05,
@@ -99,7 +115,6 @@ Ia_angle(
   timing = "immediate"
 )
 
-# Medium vectorized example
 Ia_angle(
   n_years = c(10, 20),
   payments_per_year = c(1, 12),
@@ -112,14 +127,13 @@ Ia_angle(
 
 }
 \seealso{
-\code{\link{Ia_angle_tbl}}, \code{\link{Da_angle}},
+\code{Ia_angle_tbl}, \code{\link{Da_angle}},
 \code{\link{a_angle}}, \code{\link{s_angle}},
 \code{\link{standardize_interest}}
 
 Other annuities: 
 \code{\link{Da_angle}()},
 \code{\link{Da_angle_tbl}()},
-\code{\link{Ia_angle_tbl}()},
 \code{\link{a_angle}()},
 \code{\link{a_angle_tbl}()},
 \code{\link{arithmetic_annuity_av_tbl}()},

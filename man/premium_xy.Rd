@@ -9,115 +9,179 @@ premium_xy(
   x,
   y,
   i,
-  type = c("whole", "term", "endowment"),
-  cohort = c("first", "last"),
-  benefit,
+  product = c("whole", "term", "endowment", "pure_endowment"),
+  type = NULL,
+  benefit = 1,
   n = NULL,
   m = 0,
   k = 1,
+  frac = c("UDD", "CF", "CML", "Balducci"),
   premium_timing = c("due", "immediate"),
   prem_start = c("issue", "deferred"),
   n_prem = NULL,
-  woolhouse = c("none", "first", "second"),
+  cohort = c("first", "last"),
   tidy = FALSE,
-  check = TRUE
+  check = TRUE,
+  tol = 1e-10
 )
 }
 \arguments{
-\item{lt}{A life table data frame with columns \code{x} and \code{lx}.}
+\item{lt}{A life table data frame with column \code{x} and at least one of
+\code{lx}, \code{px}, or \code{qx}; or a list of two such life tables.
+If a single life table is supplied, it is recycled for both lives.}
 
-\item{x}{Integer actuarial age for life 1 at issue.}
+\item{x}{Integer actuarial age at issue for the first life.}
 
-\item{y}{Integer actuarial age for life 2 at issue.}
+\item{y}{Integer actuarial age at issue for the second life.}
 
-\item{i}{Annual effective interest rate (must be \code{> -1}).}
+\item{i}{Effective annual interest rate. Must be greater than \code{-1}.}
 
-\item{type}{Insurance type: \code{"whole"}, \code{"term"}, or
-\code{"endowment"}.}
+\item{product}{Type of insurance: \code{"whole"}, \code{"term"},
+\code{"endowment"}, or \code{"pure_endowment"}.}
 
-\item{cohort}{Status cohort (benefit trigger): \code{"first"}
-(joint-life) or \code{"last"} (last-survivor).}
+\item{type}{Deprecated alias for \code{product}. Included for compatibility.}
 
-\item{benefit}{Benefit amount (single nonnegative numeric value).}
+\item{benefit}{Benefit amount. Must be a single nonnegative number.}
 
-\item{n}{Optional insurance term in years. Required for \code{"term"}
-and \code{"endowment"}.}
+\item{n}{Optional insurance term in years after deferment. Required for
+\code{"term"}, \code{"endowment"}, and \code{"pure_endowment"}.}
 
-\item{m}{Nonnegative integer deferral period in years (default \code{0}).}
+\item{m}{Nonnegative integer deferral period in years. Default is \code{0}.}
 
-\item{k}{Number of premium payments per year (default \code{1}).}
+\item{k}{Number of premium payments per year. Default is \code{1}.}
 
-\item{premium_timing}{Timing of premium payments: \code{"due"}
-(in advance, default) or \code{"immediate"} (in arrears).}
+\item{frac}{Fractional-age assumption used for fractional premium payment
+times: \code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.
+The option \code{"CML"} is treated as constant force, equivalent to
+\code{"CF"}.}
 
-\item{prem_start}{Start of premium payments: \code{"issue"} (start at
-time 0) or \code{"deferred"} (start at time \code{m}).}
+\item{premium_timing}{Timing of premium payments:
+\code{"due"} for payments in advance or \code{"immediate"} for payments
+in arrears.}
+
+\item{prem_start}{Start of premium payments:
+\code{"issue"} for time 0 or \code{"deferred"} for time \code{m}.}
 
 \item{n_prem}{Optional premium-paying term in years, counted from
-\code{prem_start}. If \code{NULL}, defaults to whole-life for
-\code{"whole"} or insurance term \code{n} for temporary products.}
+\code{prem_start}. If \code{NULL}, defaults to the available status
+horizon for whole-life products and to \code{n} for temporary products.}
 
-\item{woolhouse}{Woolhouse order for the premium annuity when
-\code{k > 1}: \code{"none"} (exact k-thly, default), \code{"first"},
-or \code{"second"}. Passed to \code{\link{annuity_xy}}.}
+\item{cohort}{Status definition: \code{"first"} for joint-life status or
+\code{"last"} for last-survivor status.}
 
-\item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble.}
+\item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble with details.}
 
-\item{check}{Logical. If \code{TRUE}, performs basic input validation.}
+\item{check}{Logical. If \code{TRUE}, performs input validation.}
+
+\item{tol}{Numeric tolerance for integer checks.}
 }
 \value{
 A numeric net premium per payment, or a one-row tibble if
 \code{tidy = TRUE}.
 }
 \description{
-Computes the net benefit premium of a two-life insurance contract
-(independent lives) using the equivalence principle
-(Finan, Sections 41 and 58--59):
-\deqn{P = \frac{\text{APV of benefits}}{\text{APV of premium annuity}}.}
+Computes the net benefit premium for a two-life insurance contract using the
+equivalence principle:
+\deqn{
+P =
+\frac{\mathrm{APV\ of\ benefits}}
+     {\mathrm{APV\ of\ premium\ annuity}}.
+}
+
+The premium returned corresponds to one premium payment. For example, if
+\code{k = 1}, it is an annual premium; if \code{k = 12}, it is a monthly
+premium.
 }
 \details{
-The premium returned corresponds to one premium payment
-(annual if \code{k = 1}, monthly if \code{k = 12}, etc.).
-
-The APV of benefits is computed via \code{\link{insurance_xy}},
-valued at issue (time 0, age \code{x}).
-
-The APV of the premium annuity is computed via
-\code{\link{annuity_xy}}, also valued at time 0. Both APVs are at the
-same valuation point, ensuring the equivalence principle is applied
-correctly.
-
-\strong{Premium payment start}:
+This function is designed to be consistent with \code{\link{premium_x}}.
+It separates:
 \itemize{
-\item \code{prem_start = "issue"}: premiums start at time 0 (ages
-\code{x}, \code{y}). The premium annuity is
-\eqn{\ddot{a}_{xy:\overline{n_p}|}}.
-\item \code{prem_start = "deferred"}: premiums start at time \code{m}
-(ages \code{x+m}, \code{y+m}). The premium annuity, valued at
-time 0, is a deferred annuity with \code{m} years of deferral:
-\eqn{v^m \cdot {}_mp_{xy} \cdot
-    \ddot{a}_{x+m,y+m:\overline{n_p}|}}.
+\item the insurance coverage period, controlled by \code{product},
+\code{n}, and \code{m};
+\item the premium-paying period, controlled by \code{n_prem},
+\code{prem_start}, \code{premium_timing}, and \code{k}.
 }
 
-The premium annuity uses the same two-life status as the benefit.
+Therefore, a 5-year two-life term insurance may be paid with premiums during
+only the first 3 years by using \code{n = 5} and \code{n_prem = 3}.
+
+The life-table input \code{lt} may be:
+\itemize{
+\item a single life table, recycled for both lives; or
+\item a list of two life tables, one for each life.
+}
+
+The supported two-life statuses are:
+\itemize{
+\item \code{cohort = "first"}: joint-life status. The status survives while
+both lives survive.
+\item \code{cohort = "last"}: last-survivor status. The status survives
+while at least one life survives.
+}
+
+Let \eqn{P(t)} denote the probability that the selected two-life status
+survives \eqn{t} years from issue. For integer death benefits paid at the
+end of the year of status failure, the benefit APV for a term insurance
+deferred \eqn{m} years and lasting \eqn{n} years is
+\deqn{
+B \sum_{r=m}^{m+n-1} v^{r+1}\{P(r)-P(r+1)\}.
+}
+
+For an endowment insurance, the pure endowment benefit
+\eqn{Bv^{m+n}P(m+n)} is added.
+
+Premiums are contingent on the two-life status being in force at the premium
+payment time. If \code{prem_start = "issue"}, premiums start at time 0. If
+\code{prem_start = "deferred"}, premiums start at time \code{m}. The argument
+\code{n_prem} is counted from the selected premium start time.
 }
 \examples{
-lt <- data.frame(x = 60:110, lx = seq(100000, 0, length.out = 51))
+lt <- data.frame(
+  x = 60:110,
+  lx = seq(100000, 0, length.out = 51)
+)
 
-# Joint-life whole insurance, annual premium from issue
-premium_xy(lt, x = 60, y = 62, i = 0.05,
-           type = "whole", cohort = "first",
-           benefit = 100000)
+# Joint-life whole life insurance, annual premiums
+premium_xy(
+  lt = lt,
+  x = 60,
+  y = 62,
+  i = 0.05,
+  product = "whole",
+  cohort = "first",
+  benefit = 100000
+)
 
-# 4-year term, last-survivor
-premium_xy(lt, x = 60, y = 62, i = 0.05,
-           type = "term", cohort = "last",
-           n = 4, benefit = 100000)
+# 5-year last-survivor term insurance paid over only 3 years
+premium_xy(
+  lt = lt,
+  x = 60,
+  y = 62,
+  i = 0.05,
+  product = "term",
+  cohort = "last",
+  n = 5,
+  n_prem = 3,
+  benefit = 100000
+)
+
+# Monthly premiums
+premium_xy(
+  lt = lt,
+  x = 60,
+  y = 62,
+  i = 0.05,
+  product = "term",
+  cohort = "first",
+  n = 5,
+  n_prem = 3,
+  k = 12,
+  benefit = 100000,
+  tidy = TRUE
+)
 
 }
 \seealso{
-\code{\link{insurance_xy}} for the APV of two-life benefits,
-\code{\link{annuity_xy}} for the APV of the premium annuity,
-\code{\link{premium_x}} for single-life premiums,
-\code{\link{premium_gross}} for gross premiums with expenses.
+\code{\link{premium_x}}, \code{\link{insurance_xy}},
+\code{\link{annuity_xy}}, \code{\link{reserve_xy}}, \code{\link{t_px}}
 }

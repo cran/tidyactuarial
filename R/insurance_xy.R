@@ -25,7 +25,12 @@
 #' Deferral by \eqn{m} years is applied as:
 #' \eqn{v^m \, {}_mp_{xy} \times \text{(value at ages } x+m, y+m\text{)}}.
 #'
-#' @param lt A life table data frame with columns \code{x} and \code{lx}.
+#' @param lt Either:
+#'   \itemize{
+#'     \item a single life table data frame, used for both lives; or
+#'     \item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+#'   }
+#'   Each life table must contain columns \code{x} and \code{lx}.
 #' @param x Integer actuarial age for life 1 at issue.
 #' @param y Integer actuarial age for life 2 at issue.
 #' @param i Annual effective interest rate (must be \code{> -1}).
@@ -57,7 +62,7 @@
 #'
 #' @seealso \code{\link{annuity_xy}} for two-life annuity APVs,
 #'   \code{\link{insurance_x}} for single-life insurance,
-#'   \code{\link{insurance_multi}} for N-life insurance,
+#'   \code{insurance_multi} for N-life insurance,
 #'   \code{\link{premium_xy}} for two-life benefit premiums,
 #'   \code{\link{t_pxy}} for two-life survival.
 #'
@@ -72,6 +77,16 @@
 #' insurance_xy(lt, x = 60, y = 62, i = 0.06,
 #'              n = 4, type = "term", cohort = "first")
 #'
+#' # 4-year endowment, last-survivor
+#' insurance_xy(lt, x = 60, y = 62, i = 0.06,
+#'              n = 4, type = "endowment", cohort = "last")
+#'
+#' # Different life tables for the two lives
+#' lt_m <- data.frame(x = 60:110, lx = seq(100000, 0, length.out = 51))
+#' lt_f <- data.frame(x = 60:110, lx = seq(100000, 1000, length.out = 51))
+#' insurance_xy(list(lt_m, lt_f), x = 60, y = 62, i = 0.06,
+#'              type = "whole", cohort = "first")
+#'
 #' @export
 insurance_xy <- function(
     lt, x, y, i,
@@ -84,14 +99,29 @@ insurance_xy <- function(
   type   <- match.arg(type)
   cohort <- match.arg(cohort)
 
+  # --- resolve life table input ---
+  if (is.data.frame(lt)) {
+    if (!all(c("x", "lx") %in% names(lt))) {
+      stop("Life table must contain columns 'x' and 'lx'.")
+    }
+    lt_use <- lt
+  } else if (is.list(lt) && length(lt) == 2L &&
+             all(vapply(lt, is.data.frame, logical(1)))) {
+    if (!all(c("x", "lx") %in% names(lt[[1]]))) {
+      stop("First life table must contain columns 'x' and 'lx'.")
+    }
+    if (!all(c("x", "lx") %in% names(lt[[2]]))) {
+      stop("Second life table must contain columns 'x' and 'lx'.")
+    }
+    lt_use <- lt
+  } else {
+    stop("`lt` must be either one life table or a list of two life tables.")
+  }
+
   # --- checks ---
   if (missing(i) || !is.numeric(i) || length(i) != 1L ||
       is.na(i) || i <= -1) {
     stop("'i' must be a single numeric rate > -1.")
-  }
-  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
-  if (!all(c("x", "lx") %in% names(lt))) {
-    stop("Life table must contain columns 'x' and 'lx'.")
   }
 
   if (!is.numeric(x) || length(x) != 1L || is.na(x) ||
@@ -105,6 +135,9 @@ insurance_xy <- function(
   if (!is.numeric(m) || length(m) != 1L || is.na(m) ||
       m < 0 || abs(m - round(m)) > 1e-10) {
     stop("'m' must be a single nonnegative integer.")
+  }
+  if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
+    stop("'tidy' must be TRUE or FALSE.")
   }
 
   x <- as.integer(round(x))
@@ -130,7 +163,7 @@ insurance_xy <- function(
 
   # --- deferral: v^m * m_p_status ---
   p_def <- t_pxy(
-    lt = lt, x = x, y = y,
+    lt = lt_use, x = x, y = y,
     t = m, frac = "UDD", status = status
   )
   if (is.na(p_def)) {
@@ -145,16 +178,18 @@ insurance_xy <- function(
   # --- whole life: A = 1 - d * \ddot{a} ---
   if (type == "whole") {
     adue <- annuity_xy(
-      lt = lt, x = x1, y = y1, i = i,
+      lt = lt_use, x = x1, y = y1, i = i,
       cohort = cohort, n = NULL, m = 0L,
       k = 1L, timing = "due", woolhouse = "none"
     )
     result <- defer * (1 - d * adue)
+
   } else if (n == 0L) {
     result <- 0
+
   } else {
     adue_n <- annuity_xy(
-      lt = lt, x = x1, y = y1, i = i,
+      lt = lt_use, x = x1, y = y1, i = i,
       cohort = cohort, n = n, m = 0L,
       k = 1L, timing = "due", woolhouse = "none"
     )
@@ -165,7 +200,7 @@ insurance_xy <- function(
     } else {
       # A^1_{xy:n} = 1 - d * \ddot{a}_{xy:n} - v^n * n_p_status
       p_n <- t_pxy(
-        lt = lt, x = x1, y = y1,
+        lt = lt_use, x = x1, y = y1,
         t = n, frac = "UDD", status = status
       )
       if (is.na(p_n)) {
@@ -182,5 +217,6 @@ insurance_xy <- function(
       m = m, type = type, cohort = cohort, apv = result
     ))
   }
+
   result
 }

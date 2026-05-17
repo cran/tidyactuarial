@@ -6,7 +6,9 @@
 #' Generalizes Finan, Sections 47 and 52 to the joint-life (Sec. 58)
 #' and last-survivor (Sec. 59) statuses.
 #'
-#' @param lt A life table data frame with columns \code{x} and \code{lx}.
+#' @param lt Either a single life table data frame (used for both lives) or
+#'   a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+#'   Each life table must contain columns \code{x} and \code{lx}.
 #' @param x Integer actuarial age for life 1 at issue.
 #' @param y Integer actuarial age for life 2 at issue.
 #' @param i Annual effective interest rate (must be \code{> -1}).
@@ -122,11 +124,30 @@ reserve_xy <- function(
   cohort <- match.arg(cohort)
   method <- match.arg(method)
 
-  # --- checks ---
-  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
-  if (!all(c("x", "lx") %in% names(lt))) {
-    stop("Life table must contain columns 'x' and 'lx'.")
+  # --- resolve life table input ---
+  if (is.data.frame(lt)) {
+    if (!all(c("x", "lx") %in% names(lt))) {
+      stop("Life table must contain columns 'x' and 'lx'.")
+    }
+    lt_use <- lt
+    lt_x   <- lt
+    lt_y   <- lt
+  } else if (is.list(lt) && length(lt) == 2L &&
+             all(vapply(lt, is.data.frame, logical(1)))) {
+    if (!all(c("x", "lx") %in% names(lt[[1]]))) {
+      stop("First life table must contain columns 'x' and 'lx'.")
+    }
+    if (!all(c("x", "lx") %in% names(lt[[2]]))) {
+      stop("Second life table must contain columns 'x' and 'lx'.")
+    }
+    lt_use <- lt
+    lt_x   <- lt[[1]]
+    lt_y   <- lt[[2]]
+  } else {
+    stop("`lt` must be either one life table or a list of two life tables.")
   }
+
+  # --- checks ---
   if (!is.numeric(i) || length(i) != 1L ||
       is.na(i) || i <= -1) {
     stop("'i' must be a single numeric value > -1.")
@@ -146,22 +167,43 @@ reserve_xy <- function(
 
   x <- as.integer(round(x))
   y <- as.integer(round(y))
-  omega <- max(lt$x, na.rm = TRUE)
+  omega_x <- max(lt_x$x, na.rm = TRUE)
+  omega_y <- max(lt_y$x, na.rm = TRUE)
+
+  # Remaining whole-life horizons from issue
+  hx <- max(0L, omega_x - x)
+  hy <- max(0L, omega_y - y)
+
+  # Maximum feasible term implied by the tables and the status
+  max_n <- if (cohort == "first") min(hx, hy) else max(hx, hy)
 
   # --- determine n ---
   if (type == "whole") {
-    if (cohort == "first") {
-      max_n <- omega - max(x, y)
+    if (is.null(n)) {
+      n <- max_n
     } else {
-      max_n <- omega - min(x, y)
+      if (!is.numeric(n) || length(n) != 1L || is.na(n) ||
+          n < 0 || abs(n - round(n)) > 1e-10) {
+        stop("'n' must be a single nonnegative integer.")
+      }
+      n <- as.integer(round(n))
+      if (n > max_n) {
+        stop("'n' exceeds the maximum term implied by the life table(s) for this status.")
+      }
     }
-    if (is.null(n)) n <- max_n
     n <- as.integer(round(n))
   } else {
     if (is.null(n)) {
       stop("'n' must be provided for term or endowment.")
     }
+    if (!is.numeric(n) || length(n) != 1L || is.na(n) ||
+        n < 0 || abs(n - round(n)) > 1e-10) {
+      stop("'n' must be a single nonnegative integer.")
+    }
     n <- as.integer(round(n))
+    if (n > max_n) {
+      stop("'n' exceeds the maximum term implied by the life table(s) for this status.")
+    }
   }
 
   # --- determine h (premium payment term) ---
@@ -175,7 +217,7 @@ reserve_xy <- function(
   # --- compute net premium if not supplied ---
   if (is.null(premium)) {
     premium <- premium_xy(
-      lt = lt, x = x, y = y, i = i,
+      lt = lt_use, x = x, y = y, i = i,
       type = type, cohort = cohort,
       benefit = benefit,
       n = if (type == "whole") NULL else n,
@@ -228,9 +270,9 @@ reserve_xy <- function(
       apv_ben - apv_prem
     }, numeric(1))
 
-  # -------------------------------------------------------
-  # RECURSIVE METHOD
-  # -------------------------------------------------------
+    # -------------------------------------------------------
+    # RECURSIVE METHOD
+    # -------------------------------------------------------
   } else {
     V_full <- numeric(n + 1L)
     V_full[1] <- 0

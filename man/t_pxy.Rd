@@ -7,8 +7,12 @@
 t_pxy(lt, x, y, t, frac, status = c("joint", "last"))
 }
 \arguments{
-\item{lt}{A life table data frame. Must contain columns \code{x} and
-\code{lx}.}
+\item{lt}{Either:
+\itemize{
+\item a single life table data frame, used for both lives; or
+\item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+}
+Each life table must contain columns \code{x} and \code{lx}.}
 
 \item{x}{Integer actuarial age of the first life at time 0.}
 
@@ -18,8 +22,9 @@ t_pxy(lt, x, y, t, frac, status = c("joint", "last"))
 
 \item{frac}{Fractional-age assumption: \code{"UDD"}, \code{"CF"},
 \code{"CML"} (alias of CF), or \code{"Balducci"}. If not specified and
-\code{lt} carries a \code{frac} attribute, that value is used.
-Passed to \code{\link{t_px}}.}
+the supplied life table(s) carry a \code{frac} attribute, that value is
+used. If two tables are supplied and their \code{frac} attributes differ,
+\code{frac} must be supplied explicitly. Passed to \code{\link{t_px}}.}
 
 \item{status}{Two-life status: \code{"joint"} or \code{"last"}.}
 }
@@ -61,6 +66,20 @@ t_px(lt, x = 60, t = 2.5, frac = "UDD") *
 
 # Last survivor, 2.5 years, constant force (Finan, Sec. 57)
 t_pxy(lt, x = 60, y = 62, t = 2.5, frac = "CF", status = "last")
+
+# Same result if the same table is supplied explicitly for both lives
+t_pxy(list(lt, lt), x = 60, y = 62, t = 2.5, frac = "UDD", status = "joint")
+
+# Different life tables for the two lives
+lt_m <- data.frame(
+  x  = 60:66,
+  lx = c(100000, 98500, 96800, 94800, 92400, 89500, 86000)
+)
+lt_f <- data.frame(
+  x  = 60:66,
+  lx = c(100000, 99000, 97800, 96400, 94700, 92700, 90300)
+)
+t_pxy(list(lt_m, lt_f), x = 60, y = 62, t = 2.5, frac = "UDD", status = "joint")
 
 # Finan Example 56.2 style: integer survival
 # 10_p_{50:60} = 10_p_50 * 10_p_60

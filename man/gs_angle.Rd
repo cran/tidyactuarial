@@ -151,7 +151,6 @@ Other annuities:
 \code{\link{Da_angle}()},
 \code{\link{Da_angle_tbl}()},
 \code{\link{Ia_angle}()},
-\code{\link{Ia_angle_tbl}()},
 \code{\link{a_angle}()},
 \code{\link{a_angle_tbl}()},
 \code{\link{arithmetic_annuity_av_tbl}()},

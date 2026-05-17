@@ -2,7 +2,7 @@
 % Please edit documentation in R/annuity_multi.R
 \name{annuity_multi}
 \alias{annuity_multi}
-\title{Actuarial present value of a multi-life annuity (n lives)}
+\title{Actuarial present value of a multi-life annuity (up to 3 independent lives)}
 \usage{
 annuity_multi(
   lt,
@@ -19,10 +19,13 @@ annuity_multi(
 )
 }
 \arguments{
-\item{lt}{Life table with column \code{x} and at least one of \code{lx},
-\code{px}, \code{qx}.}
+\item{lt}{A lifetable object (data.frame/tibble) with column \code{x} and at least
+one of \code{lx}, \code{px}, \code{qx}. For different mortality assumptions by life,
+you may pass a list of lifetables of the same length as \code{ages}
+(e.g., \code{list(lt_male, lt_female, lt_child)}).}
 
-\item{ages}{Integer vector of actuarial ages for the lives at issue.}
+\item{ages}{Integer vector of actuarial ages for the lives at issue. Must have
+length 1--3.}
 
 \item{annuity}{Type of annuity logic: \code{"cohort"} uses the status
 defined in \code{cohort}; \code{"reversionary"} uses the \eqn{\alpha}
@@ -38,7 +41,8 @@ Note: \code{alpha = 0} matches joint-life; \code{alpha = 1}
 matches last-survivor.}
 
 \item{n}{Integer term in years after deferment. If \code{NULL}, runs to
-the end of the table.}
+the end of the available table horizon (conservatively based on the
+smallest omega across lifetables).}
 
 \item{m}{Integer deferment in years.}
 
@@ -56,12 +60,15 @@ A single numeric value representing the APV.
 }
 \description{
 Computes the APV of a discrete annuity contingent on multiple independent lives.
+This implementation supports up to three lives (the most common practical case,
+e.g., parent–parent–child arrangements).
+}
+\details{
 Supports status-based annuities (joint-life / last-survivor) and a
 joint-and-survivor style annuity ("reversionary") that pays 1 while all
 lives are alive and then pays a fraction \eqn{\alpha} while at least one
 life remains alive.
-}
-\details{
+
 Under the assumption of independent future lifetimes (Finan, Section 51),
 the survival probability for the status is calculated as:
 \itemize{

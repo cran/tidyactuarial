@@ -21,7 +21,12 @@ annuity_xy(
 )
 }
 \arguments{
-\item{lt}{A life table data frame with columns \code{x} and \code{lx}.}
+\item{lt}{Either:
+\itemize{
+\item a single life table data frame, used for both lives; or
+\item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+}
+Each life table must contain columns \code{x} and \code{lx}.}
 
 \item{x}{Integer actuarial age for life 1.}
 
@@ -37,7 +42,8 @@ is explicitly supplied.}
 \code{y_only}. If supplied, the payment at time \eqn{t} is weighted by
 the probability of each state at \eqn{t}.}
 
-\item{n}{Integer term (years). If \code{NULL}, whole life to end of table.}
+\item{n}{Integer term (years). If \code{NULL}, whole life to the relevant
+horizon implied by the supplied table(s) and benefit structure.}
 
 \item{m}{Integer deferment (years). Default \code{0}.}
 
@@ -46,12 +52,14 @@ the probability of each state at \eqn{t}.}
 \item{timing}{Payment timing: \code{"immediate"} or \code{"due"}.}
 
 \item{woolhouse}{Woolhouse approximation for \code{k > 1}:
-\code{"none"} (exact UDD k-thly), \code{"first"}, or \code{"second"}.}
+\code{"none"} (exact UDD/CF/Balducci k-thly), \code{"first"}, or
+\code{"second"}.}
 
 \item{frac}{Fractional-age assumption for \code{k > 1} exact computation:
 \code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.
-If not specified and \code{lt} carries a \code{frac} attribute, that
-value is used.}
+If not specified and the supplied life table(s) carry a \code{frac}
+attribute, that value is used. If two tables are supplied and their
+\code{frac} attributes differ, \code{frac} must be supplied explicitly.}
 
 \item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble.}
 }
@@ -77,6 +85,10 @@ This function assumes independence between lives (Finan, Sections 56--59).
 \strong{State-based benefits}: for reversionary annuities, use
 \code{benefit = list(both = 1, x_only = alpha, y_only = alpha)} where
 \eqn{\alpha} is the fraction paid to the survivor.
+
+When \code{lt} is a list of two tables, the first table is used for life
+\code{x} and the second for life \code{y}. Marginal survival probabilities
+are always computed via \code{\link{t_px}} on the corresponding life table.
 
 For \code{k > 1} with \code{woolhouse = "none"}, exact k-thly computation
 is performed under the selected fractional-age assumption using
@@ -110,6 +122,18 @@ annuity_xy(lt, x = 60, y = 62, i = 0.05,
 
 # 2-year deferred joint-life annuity
 annuity_xy(lt, x = 60, y = 62, i = 0.05, m = 2,
+           cohort = "first", timing = "due")
+
+# Different life tables for the two lives
+lt_m <- data.frame(
+  x  = 60:66,
+  lx = c(100000, 98500, 96800, 94800, 92400, 89500, 86000)
+)
+lt_f <- data.frame(
+  x  = 60:66,
+  lx = c(100000, 99000, 97800, 96400, 94700, 92700, 90300)
+)
+annuity_xy(list(lt_m, lt_f), x = 60, y = 62, i = 0.05,
            cohort = "first", timing = "due")
 
 # Tidy output

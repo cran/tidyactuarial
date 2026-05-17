@@ -1,13 +1,19 @@
-# R/globals.R
-
-#' @importFrom rlang .data :=
 #' @importFrom utils head tail
+#' @importFrom rlang .data
 NULL
 
-# Evitar notas de R CMD check por variables usadas en NSE (dplyr/ggplot)
-utils::globalVariables(c(
-  "scenario_time",
-  "scenario_id",
-  "cashflow_id"
-  # Si te salen mas en el futuro, agregalas a esta lista
-))
+# Global variables used in tidy evaluation and dplyr/data-masking contexts.
+# This avoids R CMD check notes for column names and special tidy-eval syntax.
+
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(c(
+    ".data",
+    ":=",
+    "scenario_time",
+    "scenario_id",
+    "cashflow_id",
+    "q_total",
+    "p_total",
+    "d_total"
+  ))
+}

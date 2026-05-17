@@ -1,14 +1,20 @@
-#' Actuarial present value of a multi-life annuity (n lives)
+#' Actuarial present value of a multi-life annuity (up to 3 independent lives)
 #'
 #' Computes the APV of a discrete annuity contingent on multiple independent lives.
+#' This implementation supports up to three lives (the most common practical case,
+#' e.g., parent–parent–child arrangements).
+#'
 #' Supports status-based annuities (joint-life / last-survivor) and a
 #' joint-and-survivor style annuity ("reversionary") that pays 1 while all
 #' lives are alive and then pays a fraction \eqn{\alpha} while at least one
 #' life remains alive.
 #'
-#' @param lt Life table with column \code{x} and at least one of \code{lx},
-#'   \code{px}, \code{qx}.
-#' @param ages Integer vector of actuarial ages for the lives at issue.
+#' @param lt A lifetable object (data.frame/tibble) with column \code{x} and at least
+#'   one of \code{lx}, \code{px}, \code{qx}. For different mortality assumptions by life,
+#'   you may pass a list of lifetables of the same length as \code{ages}
+#'   (e.g., \code{list(lt_male, lt_female, lt_child)}).
+#' @param ages Integer vector of actuarial ages for the lives at issue. Must have
+#'   length 1--3.
 #' @param annuity Type of annuity logic: \code{"cohort"} uses the status
 #'   defined in \code{cohort}; \code{"reversionary"} uses the \eqn{\alpha}
 #'   fractional reduction.
@@ -20,7 +26,8 @@
 #'   Note: \code{alpha = 0} matches joint-life; \code{alpha = 1}
 #'   matches last-survivor.
 #' @param n Integer term in years after deferment. If \code{NULL}, runs to
-#'   the end of the table.
+#'   the end of the available table horizon (conservatively based on the
+#'   smallest omega across lifetables).
 #' @param m Integer deferment in years.
 #' @param k Integer payments per year. If \code{k > 1}, Woolhouse approximations
 #'   may be applied.
@@ -67,14 +74,37 @@ annuity_multi <- function(
   if (missing(i) || !is.numeric(i) || length(i) != 1L || is.na(i) || i <= -1) {
     stop("'i' must be a single numeric rate greater than -1.")
   }
-  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
-  if (!("x" %in% names(lt))) stop("Life table must contain column 'x'.")
-  if (!("lx" %in% names(lt)) && !("px" %in% names(lt)) && !("qx" %in% names(lt))) {
-    stop("Life table must contain 'lx', 'px', or 'qx'.")
-  }
 
   if (!is.numeric(ages) || length(ages) < 1) stop("'ages' must be a non-empty numeric vector.")
   ages <- as.integer(round(ages))
+
+  if (length(ages) > 3L) {
+    stop("'ages' must contain at most 3 lives (length <= 3).")
+  }
+
+  # --- normalize lt to a list of lifetables (one per life) ---
+  if (is.data.frame(lt)) {
+    lt_list <- rep(list(lt), length(ages))
+  } else if (is.list(lt) && length(lt) >= 1L && all(vapply(lt, is.data.frame, logical(1)))) {
+    if (length(lt) == 1L) {
+      lt_list <- rep(lt, length(ages))
+    } else if (length(lt) == length(ages)) {
+      lt_list <- lt
+    } else {
+      stop("When `lt` is a list, it must have length 1 or length equal to `length(ages)`.", call. = FALSE)
+    }
+  } else {
+    stop("'lt' must be a data.frame or a list of data.frames.", call. = FALSE)
+  }
+
+  # validate lifetable structure
+  for (j in seq_along(lt_list)) {
+    if (!("x" %in% names(lt_list[[j]]))) stop("Each lifetable must contain column 'x'.", call. = FALSE)
+    if (!("lx" %in% names(lt_list[[j]])) && !("px" %in% names(lt_list[[j]])) && !("qx" %in% names(lt_list[[j]]))) {
+      stop("Each lifetable must contain 'lx', 'px', or 'qx'.", call. = FALSE)
+    }
+    lt_list[[j]] <- lt_list[[j]][order(lt_list[[j]]$x), ]
+  }
 
   m <- as.integer(round(m))
   k <- as.integer(round(k))
@@ -87,50 +117,55 @@ annuity_multi <- function(
     }
   }
 
-  lt <- lt[order(lt$x), ]
-  omega <- max(lt$x, na.rm = TRUE)
+  # Conservative omega: smallest last age across lifetables
+  omega_min <- min(vapply(lt_list, function(LT) max(LT$x, na.rm = TRUE), numeric(1)))
 
   # term after deferment
   if (is.null(n)) {
-    n <- max(0L, omega - max(ages) - m)
+    n <- max(0L, omega_min - max(ages) - m)
   } else {
     n <- as.integer(round(n))
     if (n < 0) stop("'n' must be nonnegative or NULL.")
   }
   if (n == 0L) return(0)
 
+  # Ensure the lifetables support the required ages (conservative but safe)
+  if (max(ages) + m + n > omega_min) {
+    stop("Life table horizon insufficient for requested deferment/term (based on smallest omega).")
+  }
+
   v <- function(t) (1 + i)^(-t)
 
-  # integer-year survival for one life: {}_t p_age
-  t_px1 <- function(age, t) {
+  # integer-year survival for one life with its own lifetable: {}_t p_age
+  t_px1 <- function(lt1, age, t) {
     if (t == 0) return(1)
 
-    if ("lx" %in% names(lt)) {
-      l0 <- lt$lx[match(age, lt$x)]
-      l1 <- lt$lx[match(age + t, lt$x)]
+    if ("lx" %in% names(lt1)) {
+      l0 <- lt1$lx[match(age, lt1$x)]
+      l1 <- lt1$lx[match(age + t, lt1$x)]
       if (is.na(l0) || is.na(l1) || l0 <= 0) return(NA_real_)
       return(l1 / l0)
     }
 
-    if ("px" %in% names(lt)) {
-      pxv <- lt$px[match(age:(age + t - 1), lt$x)]
+    if ("px" %in% names(lt1)) {
+      pxv <- lt1$px[match(age:(age + t - 1), lt1$x)]
       if (anyNA(pxv)) return(NA_real_)
       return(prod(pxv))
     }
 
-    qxv <- lt$qx[match(age:(age + t - 1), lt$x)]
+    qxv <- lt1$qx[match(age:(age + t - 1), lt1$x)]
     if (anyNA(qxv)) return(NA_real_)
     prod(1 - qxv)
   }
 
   # Prob(all alive at time u) and Prob(any alive at time u), from ISSUE ages
   P_all_u <- function(u) {
-    p_vec <- vapply(ages, function(a) t_px1(a, u), numeric(1))
+    p_vec <- vapply(seq_along(ages), function(j) t_px1(lt_list[[j]], ages[j], u), numeric(1))
     if (anyNA(p_vec)) return(NA_real_)
     prod(p_vec)
   }
   P_any_u <- function(u) {
-    p_vec <- vapply(ages, function(a) t_px1(a, u), numeric(1))
+    p_vec <- vapply(seq_along(ages), function(j) t_px1(lt_list[[j]], ages[j], u), numeric(1))
     if (anyNA(p_vec)) return(NA_real_)
     1 - prod(1 - p_vec)
   }

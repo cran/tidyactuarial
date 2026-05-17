@@ -91,13 +91,12 @@ Da_angle_tbl(
 
 }
 \seealso{
-\code{\link{Da_angle}}, \code{\link{Ia_angle_tbl}}, \code{\link{a_angle_tbl}},
+\code{\link{Da_angle}}, \code{Ia_angle_tbl}, \code{\link{a_angle_tbl}},
 \code{\link{standardize_interest}}
 
 Other annuities: 
 \code{\link{Da_angle}()},
 \code{\link{Ia_angle}()},
-\code{\link{Ia_angle_tbl}()},
 \code{\link{a_angle}()},
 \code{\link{a_angle_tbl}()},
 \code{\link{arithmetic_annuity_av_tbl}()},

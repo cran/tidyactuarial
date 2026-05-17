@@ -17,7 +17,12 @@ insurance_xy(
 )
 }
 \arguments{
-\item{lt}{A life table data frame with columns \code{x} and \code{lx}.}
+\item{lt}{Either:
+\itemize{
+\item a single life table data frame, used for both lives; or
+\item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+}
+Each life table must contain columns \code{x} and \code{lx}.}
 
 \item{x}{Integer actuarial age for life 1 at issue.}
 
@@ -93,11 +98,21 @@ insurance_xy(lt, x = 60, y = 62, i = 0.06,
 insurance_xy(lt, x = 60, y = 62, i = 0.06,
              n = 4, type = "term", cohort = "first")
 
+# 4-year endowment, last-survivor
+insurance_xy(lt, x = 60, y = 62, i = 0.06,
+             n = 4, type = "endowment", cohort = "last")
+
+# Different life tables for the two lives
+lt_m <- data.frame(x = 60:110, lx = seq(100000, 0, length.out = 51))
+lt_f <- data.frame(x = 60:110, lx = seq(100000, 1000, length.out = 51))
+insurance_xy(list(lt_m, lt_f), x = 60, y = 62, i = 0.06,
+             type = "whole", cohort = "first")
+
 }
 \seealso{
 \code{\link{annuity_xy}} for two-life annuity APVs,
 \code{\link{insurance_x}} for single-life insurance,
-\code{\link{insurance_multi}} for N-life insurance,
+\code{insurance_multi} for N-life insurance,
 \code{\link{premium_xy}} for two-life benefit premiums,
 \code{\link{t_pxy}} for two-life survival.
 }

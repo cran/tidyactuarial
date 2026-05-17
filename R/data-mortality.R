@@ -1,0 +1,104 @@
+#' World mortality sample, 2023
+#'
+#' @description
+#' A compact international sample of period life tables for selected countries
+#' in 2023. The dataset is intended for recent and simple examples involving
+#' central death rates, one-year death probabilities, survival probabilities,
+#' and life-table calculations.
+#'
+#' @format A tibble with 3,939 rows and 13 variables:
+#' \describe{
+#'   \item{country}{Country name.}
+#'   \item{country_code}{Numeric ISO country code.}
+#'   \item{continent}{Continent.}
+#'   \item{region}{Geographic region.}
+#'   \item{year}{Calendar year.}
+#'   \item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
+#'   \item{age}{Integer age, from 0 to 100.}
+#'   \item{mx}{Central death rate at age \code{x}.}
+#'   \item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
+#'   \item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
+#'   \item{lx}{Number of survivors at exact age \code{x}, based on radix 100,000.}
+#'   \item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
+#'   \item{source}{Data source.}
+#' }
+#'
+#' @details
+#' The dataset is derived from central death rates \code{mx}. Death probabilities
+#' \code{qx} were computed using the annual approximation
+#' \deqn{
+#' q_x = \frac{m_x}{1 + (1 - a_x)m_x},
+#' }
+#' with \eqn{a_x = 0.5}. The last available age is closed by setting
+#' \code{qx = 1}. Survivors \code{lx} and expected deaths \code{dx} are then
+#' reconstructed recursively from a radix of 100,000.
+#'
+#' This dataset is a selected-country sample, not a complete world mortality
+#' database.
+#'
+#' @source United Nations, World Population Prospects 2024.
+#'
+#' @examples
+#' data(mortality_world_sample_2023)
+#'
+#' mortality_world_sample_2023 |>
+#'   dplyr::filter(country == "Colombia", sex == "both") |>
+#'   dplyr::select(age, mx, qx, px, lx, dx)
+#'
+#' @docType data
+#' @keywords datasets
+"mortality_world_sample_2023"
+
+
+#' World mortality sample panel, 2015--2023
+#'
+#' @description
+#' A compact international panel of period life tables for selected countries
+#' from 2015 to 2023. The dataset is intended for comparative mortality examples,
+#' especially before, during, and after the COVID-19 pandemic period.
+#'
+#' @format A tibble with 35,451 rows and 14 variables:
+#' \describe{
+#'   \item{country}{Country name.}
+#'   \item{country_code}{Numeric ISO country code.}
+#'   \item{continent}{Continent.}
+#'   \item{region}{Geographic region.}
+#'   \item{year}{Calendar year, from 2015 to 2023.}
+#'   \item{pandemic_period}{Period label: \code{"pre_pandemic"},
+#'   \code{"pre_pandemic_reference"}, \code{"pandemic"}, \code{"transition"},
+#'   or \code{"post_pandemic"}.}
+#'   \item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
+#'   \item{age}{Integer age, from 0 to 100.}
+#'   \item{mx}{Central death rate at age \code{x}.}
+#'   \item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
+#'   \item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
+#'   \item{lx}{Number of survivors at exact age \code{x}, based on radix 100,000.}
+#'   \item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
+#'   \item{source}{Data source.}
+#' }
+#'
+#' @details
+#' The dataset is derived from central death rates \code{mx}. Death probabilities
+#' \code{qx} were computed using the annual approximation
+#' \deqn{
+#' q_x = \frac{m_x}{1 + (1 - a_x)m_x},
+#' }
+#' with \eqn{a_x = 0.5}. The last available age is closed by setting
+#' \code{qx = 1}. Survivors \code{lx} and expected deaths \code{dx} are then
+#' reconstructed recursively from a radix of 100,000.
+#'
+#' This dataset is a selected-country panel, not a complete world mortality
+#' database.
+#'
+#' @source United Nations, World Population Prospects 2024.
+#'
+#' @examples
+#' data(mortality_world_sample_2015_2023)
+#'
+#' mortality_world_sample_2015_2023 |>
+#'   dplyr::filter(country == "Colombia", sex == "both", age == 70) |>
+#'   dplyr::select(year, pandemic_period, qx, lx)
+#'
+#' @docType data
+#' @keywords datasets
+"mortality_world_sample_2015_2023"

@@ -21,7 +21,9 @@ reserve_xy(
 )
 }
 \arguments{
-\item{lt}{A life table data frame with columns \code{x} and \code{lx}.}
+\item{lt}{Either a single life table data frame (used for both lives) or
+a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+Each life table must contain columns \code{x} and \code{lx}.}
 
 \item{x}{Integer actuarial age for life 1 at issue.}
 
