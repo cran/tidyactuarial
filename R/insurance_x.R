@@ -1,60 +1,69 @@
-#' Actuarial present value of a life insurance (derived from annuity_x)
+#' Actuarial present value of a life insurance
 #'
-#' Computes the actuarial present value (APV) of a discrete life insurance with
-#' benefit 1 payable at the end of the year of death. The implementation uses
-#' the standard identities that express insurance values as functions of the
-#' annuity-due value (Finan, Sections 37 and 41).
+#' Computes the actuarial present value of a discrete life insurance using a
+#' life table.
+#'
+#' The benefit is paid at the end of the year of death for whole-life and term
+#' insurance. For endowment insurance, the same benefit is paid either at death
+#' within the term or at the end of the term if the life survives.
 #'
 #' Supported contracts:
 #' \itemize{
-#'   \item \strong{Whole life insurance} (Finan, Sec. 37.1):
-#'     \eqn{A_x = 1 - d \, \ddot{a}_x}
-#'   \item \strong{n-year term insurance} (Finan, Sec. 27):
-#'     \eqn{A^1_{x:\overline{n}|} = 1 - d \, \ddot{a}_{x:\overline{n}|}
-#'     - v^n \, {}_np_x}
-#'   \item \strong{n-year endowment insurance} (Finan, Sec. 26.3.2):
-#'     \eqn{A_{x:\overline{n}|} = 1 - d \, \ddot{a}_{x:\overline{n}|}}
+#'   \item \code{"whole"}: whole-life insurance.
+#'   \item \code{"term"}: n-year term insurance.
+#'   \item \code{"endowment"}: n-year endowment insurance.
 #' }
 #'
-#' The endowment decomposes as (Finan, Example 26.15):
-#' \deqn{A_{x:\overline{n}|} = A^1_{x:\overline{n}|} + {}_nE_x}
+#' @param mortality_table A life table as produced by \code{\link{lifetable}}.
+#'   It must contain columns \code{x} and \code{lx}.
+#' @param age Integer actuarial age.
+#' @param rate Numeric scalar. Annual interest-rate input.
+#' @param rate_type Character string indicating the rate type. Allowed values
+#'   are \code{"effective"}, \code{"nominal_interest"},
+#'   \code{"nominal_discount"}, and \code{"force"}.
+#' @param m Positive integer. Compounding frequency for nominal rates. Ignored
+#'   for \code{rate_type = "effective"} and \code{rate_type = "force"}.
+#' @param term_years Integer term in years. Required for
+#'   \code{insurance_type = "term"} and \code{insurance_type = "endowment"}.
+#'   Use \code{Inf} only for whole-life insurance.
+#' @param deferral_years Integer deferral period in years.
+#' @param insurance_type Character string. One of \code{"whole"},
+#'   \code{"term"}, or \code{"endowment"}.
+#' @param benefit Numeric scalar. Benefit amount.
+#' @param output Character string. Use \code{"value"} to return a numeric APV
+#'   or \code{"table"} to return a one-row tibble with intermediate quantities.
 #'
-#' Deferral by \eqn{m} years is handled as:
-#' \eqn{v^m \, {}_mp_x \times \text{value at age } x+m}.
+#' @return
+#' If \code{output = "value"}, a numeric scalar containing the actuarial present
+#' value.
 #'
-#' @param lt A life table data frame. Must contain columns \code{x} and
-#'   \code{lx}.
-#' @param x Integer actuarial age.
-#' @param i Effective annual interest rate (must be \code{> -1}).
-#' @param n Integer term in years. Required for \code{type = "term"} or
-#'   \code{type = "endowment"}. Ignored for \code{type = "whole"}.
-#' @param m Integer deferral in years (default \code{0}).
-#' @param type Contract type: \code{"whole"}, \code{"term"}, or
-#'   \code{"endowment"}.
-#' @param tidy Logical. If \code{TRUE}, returns a one-row tibble.
+#' If \code{output = "table"}, a one-row tibble with the main input values,
+#' equivalent interest rate, deferral factor, pure endowment factor, annuity-due
+#' value used in the identity, and APV.
 #'
 #' @details
-#' This function calls \code{\link{annuity_x}} internally using annual
-#' payments (\code{k = 1}) and \code{timing = "due"} (annuity-due).
-#' Fractional payments and Woolhouse approximations are not used here
-#' because the identities above are stated for annual discrete contracts.
+#' This function uses standard annual discrete identities.
 #'
-#' The key identity connecting annuities and insurance is
-#' (Finan, Sec. 37.1):
-#' \deqn{\ddot{a}_x = \frac{1 - A_x}{d}, \quad \text{i.e., } A_x = 1 - d\,\ddot{a}_x}
-#' where \eqn{d = i/(1+i)} is the annual effective discount rate.
+#' For whole-life insurance,
+#' \deqn{A_x = 1 - d\,\ddot{a}_x,}
+#' where \eqn{d = i/(1+i)}.
 #'
-#' For m-thly and continuous insurance APVs under UDD, use the
-#' adjustment factor \eqn{i/i^{(m)}} or \eqn{i/\delta} (Finan, Sec. 30).
+#' For n-year term insurance,
+#' \deqn{A^1_{x:\overline{n}|} =
+#' 1 - d\,\ddot{a}_{x:\overline{n}|} - v^n\,{}_np_x.}
 #'
-#' @return A single numeric APV value, or a one-row tibble if
-#'   \code{tidy = TRUE}.
+#' For n-year endowment insurance,
+#' \deqn{A_{x:\overline{n}|} =
+#' 1 - d\,\ddot{a}_{x:\overline{n}|}.}
 #'
-#' @seealso \code{\link{annuity_x}} for the annuity-due values used
-#'   internally, \code{\link{premium_x}} for benefit premiums
-#'   (\eqn{P = A / \ddot{a}}), \code{\link{Var_insurance_x}} for the
-#'   variance, \code{\link{t_Ex}} for pure endowments,
-#'   \code{\link{insurance_xy}} for two-life insurance.
+#' Deferral is handled by multiplying the value at age
+#' \code{age + deferral_years} by \eqn{v^h {}_hp_x}, where
+#' \eqn{h =} \code{deferral_years}.
+#'
+#' @seealso \code{\link{annuity_x}}, \code{\link{premium_x}},
+#'   \code{\link{reserve_x}}, \code{\link{t_Ex}}, \code{\link{insurance_xy}}
+#'
+#' @family life-contingencies
 #'
 #' @examples
 #' lt <- data.frame(
@@ -62,123 +71,377 @@
 #'   lx = c(100000, 99000, 97500, 95500, 93000, 90000)
 #' )
 #'
-#' # Whole life insurance: A_60 = 1 - d * \ddot{a}_60
-#' insurance_x(lt, x = 60, i = 0.06, type = "whole")
+#' # Whole-life insurance
+#' insurance_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   insurance_type = "whole"
+#' )
 #'
-#' # 5-year term insurance: A^1_{60:5} (Finan, Sec. 27)
-#' insurance_x(lt, x = 60, i = 0.06, n = 5, type = "term")
+#' # 5-year term insurance
+#' insurance_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   term_years = 5,
+#'   insurance_type = "term"
+#' )
 #'
-#' # 5-year endowment insurance: A_{60:5} = A^1 + 5_E_60
-#' insurance_x(lt, x = 60, i = 0.06, n = 5, type = "endowment")
+#' # 5-year endowment insurance
+#' insurance_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   term_years = 5,
+#'   insurance_type = "endowment"
+#' )
 #'
-#' # Verify endowment decomposition (Finan, Sec. 26.3.2):
-#' # A_{x:n} = A^1_{x:n} + nEx
-#' A_term  <- insurance_x(lt, x = 60, i = 0.06, n = 5, type = "term")
-#' A_endow <- insurance_x(lt, x = 60, i = 0.06, n = 5, type = "endowment")
-#' nEx     <- (1.06)^(-5) * lt$lx[lt$x == 65] / lt$lx[lt$x == 60]
-#' c(endowment = A_endow, term_plus_nEx = A_term + nEx)  # should match
+#' # Deferred whole-life insurance
+#' insurance_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   deferral_years = 2,
+#'   insurance_type = "whole"
+#' )
 #'
-#' # 2-year deferred whole life
-#' insurance_x(lt, x = 60, i = 0.06, m = 2, type = "whole")
-#'
-#' # Tidy output
-#' insurance_x(lt, x = 60, i = 0.06, n = 5, type = "term", tidy = TRUE)
+#' # Table output
+#' insurance_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   term_years = 5,
+#'   insurance_type = "term",
+#'   output = "table"
+#' )
 #'
 #' @export
 insurance_x <- function(
-    lt, x, i,
-    n = NULL,
-    m = 0L,
-    type = c("whole", "term", "endowment"),
-    tidy = FALSE
+    mortality_table,
+    age,
+    rate,
+    rate_type = "effective",
+    m = 1L,
+    term_years = Inf,
+    deferral_years = 0L,
+    insurance_type = c("whole", "term", "endowment"),
+    benefit = 1,
+    output = c("value", "table")
 ) {
-  type <- match.arg(type)
+  insurance_type <- match.arg(insurance_type)
+  output <- match.arg(output)
 
-  # --- checks ---
-  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
-  if (!all(c("x", "lx") %in% names(lt))) stop("Life table must contain columns 'x' and 'lx'.")
-  if (!is.numeric(i) || length(i) != 1L || is.na(i) || i <= -1) stop("'i' must be > -1.")
+  # -------------------------------------------------------------------------
+  # Pipe support: allow a tidyact_life_contract as first argument
+  # -------------------------------------------------------------------------
 
-  if (!is.numeric(x) || length(x) != 1L || is.na(x) || abs(x - round(x)) > 1e-10) {
-    stop("'x' must be a single integer age.")
-  }
-  if (!is.numeric(m) || length(m) != 1L || is.na(m) || m < 0 || abs(m - round(m)) > 1e-10) {
-    stop("'m' must be a single nonnegative integer.")
-  }
+  if (.as_life_contract(mortality_table)) {
+    contract <- mortality_table
 
-  x <- as.integer(round(x))
-  m <- as.integer(round(m))
-
-  if (type %in% c("term", "endowment")) {
-    if (is.null(n)) stop("'n' must be provided for type 'term' or 'endowment'.")
-    if (!is.numeric(n) || length(n) != 1L || is.na(n) || n < 0 || abs(n - round(n)) > 1e-10) {
-      stop("'n' must be a single nonnegative integer.")
+    if (!identical(contract$lives, "single")) {
+      stop(
+        "`insurance_x()` currently supports only single-life `life_contract()` objects.",
+        call. = FALSE
+      )
     }
-    n <- as.integer(round(n))
+
+    mortality_table <- contract$mortality_table
+
+    if (missing(age) || is.null(age)) {
+      age <- contract$age
+    }
+
+    if (missing(rate) || is.null(rate)) {
+      rate <- contract$rate
+    }
+
+    if (missing(rate_type) || is.null(rate_type)) {
+      rate_type <- contract$rate_type
+    }
+
+    if (missing(m) || is.null(m)) {
+      m <- contract$m
+    }
   }
 
-  lt <- lt[order(lt$x), ]
-  if (anyDuplicated(lt$x)) stop("Life table ages 'x' must be unique.")
-  if (any(is.na(lt$lx)) || any(lt$lx < 0)) stop("'lx' must be nonnegative and not NA.")
+  # -------------------------------------------------------------------------
+  # Basic validation
+  # -------------------------------------------------------------------------
 
-  get_lx <- function(age) {
-    idx <- match(age, lt$x)
-    if (!is.na(idx)) return(lt$lx[idx])
-    if (age == max(lt$x, na.rm = TRUE) + 1L) return(0)
+  if (!is.data.frame(mortality_table)) {
+    stop("`mortality_table` must be a data.frame or tibble.", call. = FALSE)
+  }
+
+  if (!all(c("x", "lx") %in% names(mortality_table))) {
+    stop("`mortality_table` must contain columns `x` and `lx`.", call. = FALSE)
+  }
+
+  if (!is.numeric(age) ||
+      length(age) != 1L ||
+      is.na(age) ||
+      !is.finite(age) ||
+      abs(age - round(age)) > 1e-10) {
+    stop("`age` must be a single integer age.", call. = FALSE)
+  }
+
+  if (!is.numeric(rate) ||
+      length(rate) != 1L ||
+      is.na(rate) ||
+      !is.finite(rate)) {
+    stop("`rate` must be a single finite numeric value.", call. = FALSE)
+  }
+
+  if (!is.character(rate_type) ||
+      length(rate_type) != 1L ||
+      is.na(rate_type)) {
+    stop("`rate_type` must be a single character string.", call. = FALSE)
+  }
+
+  if (!is.numeric(m) ||
+      length(m) != 1L ||
+      is.na(m) ||
+      !is.finite(m) ||
+      m < 1 ||
+      abs(m - round(m)) > 1e-10) {
+    stop("`m` must be a single positive integer.", call. = FALSE)
+  }
+
+  if (!is.numeric(deferral_years) ||
+      length(deferral_years) != 1L ||
+      is.na(deferral_years) ||
+      !is.finite(deferral_years) ||
+      deferral_years < 0 ||
+      abs(deferral_years - round(deferral_years)) > 1e-10) {
+    stop("`deferral_years` must be a single nonnegative integer.", call. = FALSE)
+  }
+
+  if (!is.numeric(benefit) ||
+      length(benefit) != 1L ||
+      is.na(benefit) ||
+      !is.finite(benefit)) {
+    stop("`benefit` must be a single finite numeric value.", call. = FALSE)
+  }
+
+  if (!is.numeric(term_years) ||
+      length(term_years) != 1L ||
+      is.na(term_years) ||
+      term_years < 0 ||
+      (!is.infinite(term_years) &&
+       (!is.finite(term_years) ||
+        abs(term_years - round(term_years)) > 1e-10))) {
+    stop(
+      "`term_years` must be `Inf` or a single nonnegative integer.",
+      call. = FALSE
+    )
+  }
+
+  if (insurance_type %in% c("term", "endowment") && is.infinite(term_years)) {
+    stop(
+      "`term_years` must be finite for term and endowment insurance.",
+      call. = FALSE
+    )
+  }
+
+  age <- as.integer(round(age))
+  m <- as.integer(round(m))
+  deferral_years <- as.integer(round(deferral_years))
+
+  if (!is.infinite(term_years)) {
+    term_years <- as.integer(round(term_years))
+  }
+
+  # -------------------------------------------------------------------------
+  # Interest conversion
+  # -------------------------------------------------------------------------
+
+  i_effective <- standardize_interest(
+    type = rate_type,
+    rate = rate,
+    m = m
+  )
+
+  if (!is.numeric(i_effective) ||
+      length(i_effective) != 1L ||
+      is.na(i_effective) ||
+      !is.finite(i_effective) ||
+      i_effective <= -1) {
+    stop(
+      "The standardized annual effective interest rate must be greater than -1.",
+      call. = FALSE
+    )
+  }
+
+  v_fun <- function(tt) {
+    (1 + i_effective)^(-tt)
+  }
+
+  d_effective <- i_effective / (1 + i_effective)
+
+  # -------------------------------------------------------------------------
+  # Life table preparation
+  # -------------------------------------------------------------------------
+
+  lt <- mortality_table[order(mortality_table$x), , drop = FALSE]
+
+  if (!is.numeric(lt$x)) {
+    stop("Column `x` in `mortality_table` must be numeric.", call. = FALSE)
+  }
+
+  if (!is.numeric(lt$lx)) {
+    stop("Column `lx` in `mortality_table` must be numeric.", call. = FALSE)
+  }
+
+  if (any(is.na(lt$x)) || any(!is.finite(lt$x))) {
+    stop("Column `x` must contain finite non-missing values.", call. = FALSE)
+  }
+
+  if (any(abs(lt$x - round(lt$x)) > 1e-10)) {
+    stop("Column `x` must contain integer ages.", call. = FALSE)
+  }
+
+  if (anyDuplicated(lt$x)) {
+    stop("Life table ages in column `x` must be unique.", call. = FALSE)
+  }
+
+  if (any(is.na(lt$lx)) || any(!is.finite(lt$lx)) || any(lt$lx < 0)) {
+    stop("Column `lx` must contain finite nonnegative values.", call. = FALSE)
+  }
+
+  ages <- as.integer(round(lt$x))
+  lx <- as.numeric(lt$lx)
+  omega <- max(ages)
+
+  get_lx <- function(current_age) {
+    idx <- match(current_age, ages)
+
+    if (!is.na(idx)) {
+      return(lx[[idx]])
+    }
+
+    if (current_age == omega + 1L) {
+      return(0)
+    }
+
     NA_real_
   }
 
-  t_p_int <- function(age, tt) {
-    if (tt == 0) return(1)
-    l0 <- get_lx(age)
-    l1 <- get_lx(age + tt)
-    if (is.na(l0) || is.na(l1) || l0 <= 0) return(NA_real_)
+  t_p_int <- function(current_age, tt) {
+    if (tt == 0) {
+      return(1)
+    }
+
+    l0 <- get_lx(current_age)
+    l1 <- get_lx(current_age + tt)
+
+    if (is.na(l0) || is.na(l1) || l0 <= 0) {
+      return(NA_real_)
+    }
+
     l1 / l0
   }
 
-  v_fun <- function(tt) (1 + i)^(-tt)
-  d <- i / (1 + i)
+  # -------------------------------------------------------------------------
+  # Deferral
+  # -------------------------------------------------------------------------
 
-  # --- deferral factor: v^m * {}_m p_x ---
-  defer <- v_fun(m) * t_p_int(x, m)
-  if (is.na(defer)) stop("Deferral age x+m is outside the life table (or lx(x)=0).")
+  deferment_factor <- v_fun(deferral_years) *
+    t_p_int(age, deferral_years)
 
-  y <- x + m
-
-  # --- whole life: A_x = 1 - d * \ddot{a}_x (Finan, Sec. 37.1) ---
-  if (type == "whole") {
-    adue_y <- annuity_x(
-      lt = lt, x = y, i = i,
-      n = NULL, m = 0L, k = 1L,
-      timing = "due", woolhouse = "none"
+  if (is.na(deferment_factor)) {
+    stop(
+      "The deferral age `age + deferral_years` is outside the life table ",
+      "or `lx(age)` is zero.",
+      call. = FALSE
     )
-    result <- defer * (1 - d * adue_y)
-  } else if (n == 0L) {
-    result <- 0
+  }
+
+  start_age <- age + deferral_years
+
+  # -------------------------------------------------------------------------
+  # Insurance value at the deferred starting age
+  # -------------------------------------------------------------------------
+
+  pure_endowment_factor <- NA_real_
+  annuity_due_value <- NA_real_
+
+  if (insurance_type == "whole") {
+    annuity_due_value <- annuity_x(
+      mortality_table = lt,
+      age = start_age,
+      rate = rate,
+      rate_type = rate_type,
+      m = m,
+      term_years = Inf,
+      deferral_years = 0L,
+      payments_per_year = 1L,
+      timing = "due",
+      woolhouse = "none",
+      output = "value"
+    )
+
+    value_at_start <- 1 - d_effective * annuity_due_value
+  } else if (term_years == 0L) {
+    value_at_start <- 0
+    annuity_due_value <- 0
+    pure_endowment_factor <- 1
   } else {
-    adue_y_n <- annuity_x(
-      lt = lt, x = y, i = i,
-      n = n, m = 0L, k = 1L,
-      timing = "due", woolhouse = "none"
+    annuity_due_value <- annuity_x(
+      mortality_table = lt,
+      age = start_age,
+      rate = rate,
+      rate_type = rate_type,
+      m = m,
+      term_years = term_years,
+      deferral_years = 0L,
+      payments_per_year = 1L,
+      timing = "due",
+      woolhouse = "none",
+      output = "value"
     )
 
-    if (type == "endowment") {
-      # A_{x:n} = 1 - d * \ddot{a}_{x:n} (Finan, Sec. 26.3.2 / Example 37.8)
-      result <- defer * (1 - d * adue_y_n)
+    n_p_start <- t_p_int(start_age, term_years)
+
+    if (is.na(n_p_start)) {
+      stop(
+        "The life table does not support the survival probability needed ",
+        "for this term insurance calculation.",
+        call. = FALSE
+      )
+    }
+
+    pure_endowment_factor <- v_fun(term_years) * n_p_start
+
+    if (insurance_type == "endowment") {
+      value_at_start <- 1 - d_effective * annuity_due_value
     } else {
-      # A^1_{x:n} = 1 - d * \ddot{a}_{x:n} - v^n * n_p_y (Finan, Sec. 27)
-      # = A_{x:n} - nEx
-      n_p_y <- t_p_int(y, n)
-      if (is.na(n_p_y)) stop("Life table does not support {}_n p_{x+m} needed for term insurance.")
-      result <- defer * (1 - d * adue_y_n - v_fun(n) * n_p_y)
+      value_at_start <- 1 - d_effective * annuity_due_value -
+        pure_endowment_factor
     }
   }
 
-  if (isTRUE(tidy)) {
-    return(tibble::tibble(
-      x = x, i = i, n = if (type == "whole") NA_integer_ else n,
-      m = m, type = type, apv = result
-    ))
+  result <- benefit * deferment_factor * value_at_start
+
+  if (output == "value") {
+    return(result)
   }
-  result
+
+  tibble::tibble(
+    age = age,
+    rate = rate,
+    rate_type = rate_type,
+    m = m,
+    i_effective = i_effective,
+    d_effective = d_effective,
+    term_years = term_years,
+    deferral_years = deferral_years,
+    start_age = start_age,
+    insurance_type = insurance_type,
+    benefit = benefit,
+    deferment_factor = deferment_factor,
+    annuity_due_value = annuity_due_value,
+    pure_endowment_factor = pure_endowment_factor,
+    value_at_start = value_at_start,
+    apv = result
+  )
 }

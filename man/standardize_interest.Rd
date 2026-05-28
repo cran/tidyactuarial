@@ -75,9 +75,8 @@ if (requireNamespace("dplyr", quietly = TRUE) &&
 
 Other interest: 
 \code{\link{discount_factor_spot}()},
-\code{\link{discount_factor_spot_tbl}()},
-\code{\link{forward_rate_tbl}()},
+\code{\link{forward_rate}()},
 \code{\link{interest_equivalents}()},
-\code{\link{yield_curve_tbl}()}
+\code{\link{yield_curve}()}
 }
 \concept{interest}

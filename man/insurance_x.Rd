@@ -2,76 +2,91 @@
 % Please edit documentation in R/insurance_x.R
 \name{insurance_x}
 \alias{insurance_x}
-\title{Actuarial present value of a life insurance (derived from annuity_x)}
+\title{Actuarial present value of a life insurance}
 \usage{
 insurance_x(
-  lt,
-  x,
-  i,
-  n = NULL,
-  m = 0L,
-  type = c("whole", "term", "endowment"),
-  tidy = FALSE
+  mortality_table,
+  age,
+  rate,
+  rate_type = "effective",
+  m = 1L,
+  term_years = Inf,
+  deferral_years = 0L,
+  insurance_type = c("whole", "term", "endowment"),
+  benefit = 1,
+  output = c("value", "table")
 )
 }
 \arguments{
-\item{lt}{A life table data frame. Must contain columns \code{x} and
-\code{lx}.}
+\item{mortality_table}{A life table as produced by \code{\link{lifetable}}.
+It must contain columns \code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age.}
+\item{age}{Integer actuarial age.}
 
-\item{i}{Effective annual interest rate (must be \code{> -1}).}
+\item{rate}{Numeric scalar. Annual interest-rate input.}
 
-\item{n}{Integer term in years. Required for \code{type = "term"} or
-\code{type = "endowment"}. Ignored for \code{type = "whole"}.}
+\item{rate_type}{Character string indicating the rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Integer deferral in years (default \code{0}).}
+\item{m}{Positive integer. Compounding frequency for nominal rates. Ignored
+for \code{rate_type = "effective"} and \code{rate_type = "force"}.}
 
-\item{type}{Contract type: \code{"whole"}, \code{"term"}, or
-\code{"endowment"}.}
+\item{term_years}{Integer term in years. Required for
+\code{insurance_type = "term"} and \code{insurance_type = "endowment"}.
+Use \code{Inf} only for whole-life insurance.}
 
-\item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble.}
+\item{deferral_years}{Integer deferral period in years.}
+
+\item{insurance_type}{Character string. One of \code{"whole"},
+\code{"term"}, or \code{"endowment"}.}
+
+\item{benefit}{Numeric scalar. Benefit amount.}
+
+\item{output}{Character string. Use \code{"value"} to return a numeric APV
+or \code{"table"} to return a one-row tibble with intermediate quantities.}
 }
 \value{
-A single numeric APV value, or a one-row tibble if
-\code{tidy = TRUE}.
+If \code{output = "value"}, a numeric scalar containing the actuarial present
+value.
+
+If \code{output = "table"}, a one-row tibble with the main input values,
+equivalent interest rate, deferral factor, pure endowment factor, annuity-due
+value used in the identity, and APV.
 }
 \description{
-Computes the actuarial present value (APV) of a discrete life insurance with
-benefit 1 payable at the end of the year of death. The implementation uses
-the standard identities that express insurance values as functions of the
-annuity-due value (Finan, Sections 37 and 41).
+Computes the actuarial present value of a discrete life insurance using a
+life table.
 }
 \details{
+The benefit is paid at the end of the year of death for whole-life and term
+insurance. For endowment insurance, the same benefit is paid either at death
+within the term or at the end of the term if the life survives.
+
 Supported contracts:
 \itemize{
-\item \strong{Whole life insurance} (Finan, Sec. 37.1):
-\eqn{A_x = 1 - d \, \ddot{a}_x}
-\item \strong{n-year term insurance} (Finan, Sec. 27):
-\eqn{A^1_{x:\overline{n}|} = 1 - d \, \ddot{a}_{x:\overline{n}|}
-    - v^n \, {}_np_x}
-\item \strong{n-year endowment insurance} (Finan, Sec. 26.3.2):
-\eqn{A_{x:\overline{n}|} = 1 - d \, \ddot{a}_{x:\overline{n}|}}
+\item \code{"whole"}: whole-life insurance.
+\item \code{"term"}: n-year term insurance.
+\item \code{"endowment"}: n-year endowment insurance.
 }
 
-The endowment decomposes as (Finan, Example 26.15):
-\deqn{A_{x:\overline{n}|} = A^1_{x:\overline{n}|} + {}_nE_x}
+This function uses standard annual discrete identities.
 
-Deferral by \eqn{m} years is handled as:
-\eqn{v^m \, {}_mp_x \times \text{value at age } x+m}.
+For whole-life insurance,
+\deqn{A_x = 1 - d\,\ddot{a}_x,}
+where \eqn{d = i/(1+i)}.
 
-This function calls \code{\link{annuity_x}} internally using annual
-payments (\code{k = 1}) and \code{timing = "due"} (annuity-due).
-Fractional payments and Woolhouse approximations are not used here
-because the identities above are stated for annual discrete contracts.
+For n-year term insurance,
+\deqn{A^1_{x:\overline{n}|} =
+1 - d\,\ddot{a}_{x:\overline{n}|} - v^n\,{}_np_x.}
 
-The key identity connecting annuities and insurance is
-(Finan, Sec. 37.1):
-\deqn{\ddot{a}_x = \frac{1 - A_x}{d}, \quad \text{i.e., } A_x = 1 - d\,\ddot{a}_x}
-where \eqn{d = i/(1+i)} is the annual effective discount rate.
+For n-year endowment insurance,
+\deqn{A_{x:\overline{n}|} =
+1 - d\,\ddot{a}_{x:\overline{n}|}.}
 
-For m-thly and continuous insurance APVs under UDD, use the
-adjustment factor \eqn{i/i^{(m)}} or \eqn{i/\delta} (Finan, Sec. 30).
+Deferral is handled by multiplying the value at age
+\code{age + deferral_years} by \eqn{v^h {}_hp_x}, where
+\eqn{h =} \code{deferral_years}.
 }
 \examples{
 lt <- data.frame(
@@ -79,33 +94,67 @@ lt <- data.frame(
   lx = c(100000, 99000, 97500, 95500, 93000, 90000)
 )
 
-# Whole life insurance: A_60 = 1 - d * \ddot{a}_60
-insurance_x(lt, x = 60, i = 0.06, type = "whole")
+# Whole-life insurance
+insurance_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  insurance_type = "whole"
+)
 
-# 5-year term insurance: A^1_{60:5} (Finan, Sec. 27)
-insurance_x(lt, x = 60, i = 0.06, n = 5, type = "term")
+# 5-year term insurance
+insurance_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  term_years = 5,
+  insurance_type = "term"
+)
 
-# 5-year endowment insurance: A_{60:5} = A^1 + 5_E_60
-insurance_x(lt, x = 60, i = 0.06, n = 5, type = "endowment")
+# 5-year endowment insurance
+insurance_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  term_years = 5,
+  insurance_type = "endowment"
+)
 
-# Verify endowment decomposition (Finan, Sec. 26.3.2):
-# A_{x:n} = A^1_{x:n} + nEx
-A_term  <- insurance_x(lt, x = 60, i = 0.06, n = 5, type = "term")
-A_endow <- insurance_x(lt, x = 60, i = 0.06, n = 5, type = "endowment")
-nEx     <- (1.06)^(-5) * lt$lx[lt$x == 65] / lt$lx[lt$x == 60]
-c(endowment = A_endow, term_plus_nEx = A_term + nEx)  # should match
+# Deferred whole-life insurance
+insurance_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  deferral_years = 2,
+  insurance_type = "whole"
+)
 
-# 2-year deferred whole life
-insurance_x(lt, x = 60, i = 0.06, m = 2, type = "whole")
-
-# Tidy output
-insurance_x(lt, x = 60, i = 0.06, n = 5, type = "term", tidy = TRUE)
+# Table output
+insurance_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  term_years = 5,
+  insurance_type = "term",
+  output = "table"
+)
 
 }
 \seealso{
-\code{\link{annuity_x}} for the annuity-due values used
-internally, \code{\link{premium_x}} for benefit premiums
-(\eqn{P = A / \ddot{a}}), \code{\link{Var_insurance_x}} for the
-variance, \code{\link{t_Ex}} for pure endowments,
-\code{\link{insurance_xy}} for two-life insurance.
+\code{\link{annuity_x}}, \code{\link{premium_x}},
+\code{\link{reserve_x}}, \code{\link{t_Ex}}, \code{\link{insurance_xy}}
+
+Other life-contingencies: 
+\code{\link{annuity_x}()},
+\code{\link{annuity_xy}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_x}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{reserve_xy}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
 }
+\concept{life-contingencies}

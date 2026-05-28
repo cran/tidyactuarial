@@ -1,71 +1,55 @@
 #' Benefit reserve schedule for single-life insurance
 #'
-#' Computes the terminal benefit reserve \eqn{{}_kV} at one or more
-#' policy durations for a fully discrete single-life insurance contract,
-#' using the prospective or recursive method (Finan, Sections 47 and 52).
+#' Computes terminal benefit reserves at selected policy durations for a
+#' fully discrete single-life insurance contract.
 #'
-#' @param lt A life table data frame with columns \code{x} and \code{lx}.
-#' @param x Integer actuarial age at issue.
-#' @param i Annual effective interest rate (must be \code{> -1}).
-#' @param type Insurance type: \code{"whole"}, \code{"term"}, or
-#'   \code{"endowment"}.
-#' @param n Integer insurance term in years. Required for \code{"term"}
-#'   and \code{"endowment"}. For \code{"whole"}, determined from the
-#'   life table.
-#' @param benefit Numeric benefit amount (default \code{1}).
-#' @param premium Net premium per payment. If \code{NULL} (default),
-#'   computed internally via the equivalence principle using
+#' The function supports whole-life, term, and endowment insurance. Reserves
+#' may be computed prospectively or recursively. Premiums are assumed payable
+#' annually in advance. Limited-payment policies are supported through
+#' \code{premium_term_years}.
+#'
+#' @param mortality_table A life table data frame with columns \code{x} and
+#'   \code{lx}.
+#' @param age Integer actuarial age at issue.
+#' @param rate Numeric scalar. Annual interest-rate input.
+#' @param rate_type Character string indicating the rate type. Allowed values
+#'   are \code{"effective"}, \code{"nominal_interest"},
+#'   \code{"nominal_discount"}, and \code{"force"}.
+#' @param m Positive integer. Compounding frequency for nominal rates. Ignored
+#'   for \code{rate_type = "effective"} and \code{rate_type = "force"}.
+#' @param insurance_type Character string. One of \code{"whole"},
+#'   \code{"term"}, or \code{"endowment"}.
+#' @param term_years Insurance term in years. Use \code{Inf} for whole-life
+#'   insurance. For term and endowment insurance, this must be finite.
+#' @param benefit Numeric scalar. Insurance benefit amount.
+#' @param premium Optional numeric scalar. Premium per annual payment. If
+#'   \code{NULL}, the net premium is computed internally using
 #'   \code{\link{premium_x}}.
-#' @param h Integer premium-paying term in years. If \code{NULL},
-#'   premiums are payable for the full duration of the contract
-#'   (i.e., \code{h = n} for temporary products, whole life for whole).
-#'   Set \code{h < n} for limited-payment policies (Finan, Sec. 47.3).
-#' @param at Integer vector of policy durations at which to compute
-#'   the reserve. Default \code{NULL} computes for all integer
-#'   durations \code{0, 1, ..., n} (or to end of table for whole life).
-#' @param method Computation method: \code{"prospective"} (default,
-#'   Finan Sec. 47) or \code{"recursive"} (Finan Sec. 52).
-#' @param tidy Logical. If \code{TRUE} (default), returns a tibble
-#'   schedule. If \code{FALSE}, returns a named numeric vector.
+#' @param premium_term_years Optional premium-paying term in years. If
+#'   \code{NULL}, premiums are payable for the full contract duration.
+#' @param durations Optional integer vector of policy durations at which to
+#'   compute reserves. If \code{NULL}, reserves are computed for all integer
+#'   durations from issue to the contract horizon.
+#' @param method Character string. Either \code{"prospective"} or
+#'   \code{"recursive"}.
+#' @param output Character string. Use \code{"table"} to return a reserve
+#'   schedule, or \code{"value"} to return a named numeric vector.
+#'
+#' @return
+#' If \code{output = "table"}, a tibble with one row per selected duration.
+#' If \code{output = "value"}, a named numeric vector of reserves.
 #'
 #' @details
-#' **Prospective method** (Finan, Sections 47.1--47.3):
-#' \deqn{{}_kV = \text{APV(future benefits at } x+k\text{)} -
-#'   P \cdot \text{APV(future premiums at } x+k\text{)}}
+#' The prospective reserve is computed as
+#' \deqn{{}_kV = APV_k(\text{future benefits}) - P\,APV_k(\text{future premiums}).}
 #'
-#' For each product type:
-#' \itemize{
-#'   \item \strong{Whole life} (Sec. 47.1):
-#'     \eqn{{}_kV(A_x) = A_{x+k} - P \, \ddot{a}_{x+k}}
-#'   \item \strong{Term} (Sec. 47.2), \eqn{k < n}:
-#'     \eqn{{}_kV(A^1_{x:\overline{n}|}) = A^1_{x+k:\overline{n-k}|}
-#'     - P \, \ddot{a}_{x+k:\overline{n_p-k}|}}
-#'     where \eqn{n_p = \min(n, h)}.
-#'   \item \strong{Endowment} (Sec. 47.3), \eqn{k < n}:
-#'     \eqn{{}_kV(A_{x:\overline{n}|}) = A_{x+k:\overline{n-k}|}
-#'     - P \, \ddot{a}_{x+k:\overline{n_p-k}|}}
-#'   \item Endowment at \eqn{k = n}: \eqn{{}_nV = \text{benefit}}.
-#' }
+#' The recursive method uses the annual fully discrete recursion
+#' \deqn{{}_{k+1}V = \frac{({}_kV + P_k)(1+i) - b_{k+1}q_{x+k}}{p_{x+k}}.}
 #'
-#' For limited-payment policies (\code{h < n}), premiums cease after
-#' year \eqn{h}. For \eqn{k \ge h}, the premium annuity term is zero.
+#' @seealso \code{\link{premium_x}}, \code{\link{insurance_x}},
+#'   \code{\link{annuity_x}}, \code{\link{t_px}}
 #'
-#' **Recursive method** (Finan, Section 52):
-#' \deqn{{}_{k+1}V = \frac{({}_kV + \pi_k)(1+i) - b_{k+1} \cdot
-#'   q_{x+k}}{p_{x+k}}}
-#' starting from \eqn{{}_0V = 0} (equivalence principle).
-#'
-#' @return If \code{tidy = TRUE}, a tibble with columns \code{k}
-#'   (duration), \code{age} (\eqn{x+k}), \code{reserve},
-#'   \code{premium_paid} (premium at start of year \eqn{k+1}, 0
-#'   after limited payment), and \code{benefit_due} (death benefit
-#'   in year \eqn{k+1}). If \code{tidy = FALSE}, a named numeric
-#'   vector of reserves.
-#'
-#' @seealso \code{\link{premium_x}} for benefit premiums,
-#'   \code{\link{insurance_x}} for insurance APVs,
-#'   \code{\link{annuity_x}} for annuity APVs,
-#'   \code{\link{t_px}} for survival probabilities.
+#' @family life-contingencies
 #'
 #' @examples
 #' lt <- data.frame(
@@ -74,231 +58,436 @@
 #'          86000, 81000, 75000, 68000, 60000)
 #' )
 #'
-#' # Whole life reserve schedule (Finan, Sec. 47.1)
-#' reserve_x(lt, x = 60, i = 0.06, type = "whole")
+#' reserve_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   insurance_type = "whole"
+#' )
 #'
-#' # 5-year term (Finan, Sec. 47.2)
-#' reserve_x(lt, x = 60, i = 0.06, type = "term", n = 5)
-#'
-#' # 5-year endowment (Finan, Sec. 47.3)
-#' reserve_x(lt, x = 60, i = 0.06, type = "endowment", n = 5)
-#'
-#' # Limited payment: 3-payment, 5-year endowment
-#' reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'           n = 5, h = 3)
-#'
-#' # Recursive method (Finan, Sec. 52)
-#' reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'           n = 5, method = "recursive")
-#'
-#' # Verify: prospective = recursive
-#' r_pro <- reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'                    n = 5, method = "prospective")
-#' r_rec <- reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'                    n = 5, method = "recursive")
-#' all.equal(r_pro$reserve, r_rec$reserve)
-#'
-#' # Specific durations only
-#' reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'           n = 5, at = c(0, 3, 5))
-#'
-#' # Benefit of $100,000
-#' reserve_x(lt, x = 60, i = 0.06, type = "whole",
-#'           benefit = 100000)
-#'
-#' # Custom premium (e.g., loaded)
-#' reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'           n = 5, benefit = 100000, premium = 22000)
-#'
-#' # As named vector
-#' reserve_x(lt, x = 60, i = 0.06, type = "endowment",
-#'           n = 5, tidy = FALSE)
+#' reserve_x(
+#'   mortality_table = lt,
+#'   age = 60,
+#'   rate = 0.06,
+#'   insurance_type = "endowment",
+#'   term_years = 5,
+#'   benefit = 100000
+#' )
 #'
 #' @export
 reserve_x <- function(
-    lt, x, i,
-    type = c("whole", "term", "endowment"),
-    n = NULL,
+    mortality_table,
+    age,
+    rate,
+    rate_type = "effective",
+    m = 1L,
+    insurance_type = c("whole", "term", "endowment"),
+    term_years = Inf,
     benefit = 1,
     premium = NULL,
-    h = NULL,
-    at = NULL,
+    premium_term_years = NULL,
+    durations = NULL,
     method = c("prospective", "recursive"),
-    tidy = TRUE
+    output = c("table", "value")
 ) {
-  type   <- match.arg(type)
+  insurance_type <- match.arg(insurance_type)
   method <- match.arg(method)
+  output <- match.arg(output)
 
-  # --- checks ---
-  if (!is.data.frame(lt)) stop("'lt' must be a data.frame.")
-  if (!all(c("x", "lx") %in% names(lt))) {
-    stop("Life table must contain columns 'x' and 'lx'.")
-  }
-  if (!is.numeric(i) || length(i) != 1L || is.na(i) || i <= -1) {
-    stop("'i' must be a single numeric value > -1.")
-  }
-  if (!is.numeric(x) || length(x) != 1L || is.na(x) ||
-      abs(x - round(x)) > 1e-10) {
-    stop("'x' must be a single integer age.")
-  }
-  if (!is.numeric(benefit) || length(benefit) != 1L ||
-      is.na(benefit) || benefit <= 0) {
-    stop("'benefit' must be a single positive number.")
-  }
+  # -------------------------------------------------------------------------
+  # Pipe support: allow a tidyact_life_contract as first argument
+  # -------------------------------------------------------------------------
 
-  x <- as.integer(round(x))
-  omega <- max(lt$x, na.rm = TRUE)
+  if (.as_life_contract(mortality_table)) {
+    contract <- mortality_table
 
-  # --- determine n ---
-  if (type == "whole") {
-    max_n <- omega - x
-    if (is.null(n)) n <- max_n
-    n <- as.integer(round(n))
-  } else {
-    if (is.null(n)) {
-      stop("'n' must be provided for term or endowment.")
+    if (!identical(contract$lives, "single")) {
+      stop(
+        "`reserve_x()` currently supports only single-life `life_contract()` objects.",
+        call. = FALSE
+      )
     }
-    n <- as.integer(round(n))
-  }
 
-  # --- determine h (premium payment term) ---
-  if (is.null(h)) {
-    h <- n
-  } else {
-    h <- as.integer(round(h))
-    if (h < 1 || h > n) {
-      stop("'h' must be between 1 and n.")
+    mortality_table <- contract$mortality_table
+
+    if (missing(age) || is.null(age)) {
+      age <- contract$age
+    }
+
+    if (missing(rate) || is.null(rate)) {
+      rate <- contract$rate
+    }
+
+    if (missing(rate_type) || is.null(rate_type)) {
+      rate_type <- contract$rate_type
+    }
+
+    if (missing(m) || is.null(m)) {
+      m <- contract$m
     }
   }
 
-  # --- compute net premium if not supplied ---
-  if (is.null(premium)) {
-    premium <- premium_x(
-      lt = lt, x = x, i = i,
-      product = type, benefit = benefit,
-      n = if (type == "whole") NULL else n,
-      n_prem = h
+  # -------------------------------------------------------------------------
+  # Basic validation
+  # -------------------------------------------------------------------------
+
+  if (!is.data.frame(mortality_table)) {
+    stop("`mortality_table` must be a data.frame or tibble.", call. = FALSE)
+  }
+
+  if (!all(c("x", "lx") %in% names(mortality_table))) {
+    stop("`mortality_table` must contain columns `x` and `lx`.", call. = FALSE)
+  }
+
+  if (!is.numeric(age) || length(age) != 1L || is.na(age) ||
+      !is.finite(age) || abs(age - round(age)) > 1e-10) {
+    stop("`age` must be a single integer age.", call. = FALSE)
+  }
+
+  if (!is.numeric(rate) || length(rate) != 1L || is.na(rate) ||
+      !is.finite(rate)) {
+    stop("`rate` must be a single finite numeric value.", call. = FALSE)
+  }
+
+  if (!is.character(rate_type) || length(rate_type) != 1L || is.na(rate_type)) {
+    stop("`rate_type` must be a single character string.", call. = FALSE)
+  }
+
+  if (!is.numeric(m) || length(m) != 1L || is.na(m) || !is.finite(m) ||
+      m < 1 || abs(m - round(m)) > 1e-10) {
+    stop("`m` must be a single positive integer.", call. = FALSE)
+  }
+
+  if (!is.numeric(benefit) || length(benefit) != 1L || is.na(benefit) ||
+      !is.finite(benefit) || benefit <= 0) {
+    stop("`benefit` must be a single positive finite number.", call. = FALSE)
+  }
+
+  if (!is.null(premium) &&
+      (!is.numeric(premium) || length(premium) != 1L || is.na(premium) ||
+       !is.finite(premium))) {
+    stop("`premium` must be NULL or a single finite numeric value.", call. = FALSE)
+  }
+
+  if (!is.numeric(term_years) || length(term_years) != 1L || is.na(term_years) ||
+      term_years <= 0 ||
+      (!is.infinite(term_years) &&
+       (!is.finite(term_years) || abs(term_years - round(term_years)) > 1e-10))) {
+    stop("`term_years` must be `Inf` or a single positive integer.", call. = FALSE)
+  }
+
+  if (insurance_type %in% c("term", "endowment") && is.infinite(term_years)) {
+    stop("`term_years` must be finite for term and endowment insurance.", call. = FALSE)
+  }
+
+  if (!is.null(premium_term_years) &&
+      (!is.numeric(premium_term_years) || length(premium_term_years) != 1L ||
+       is.na(premium_term_years) || premium_term_years <= 0 ||
+       (!is.infinite(premium_term_years) &&
+        (!is.finite(premium_term_years) ||
+         abs(premium_term_years - round(premium_term_years)) > 1e-10)))) {
+    stop(
+      "`premium_term_years` must be NULL, Inf, or a single positive integer.",
+      call. = FALSE
     )
   }
 
-  # --- determine durations ---
-  if (is.null(at)) {
-    k_vec <- 0:n
+  age <- as.integer(round(age))
+  m <- as.integer(round(m))
+
+  if (!is.infinite(term_years)) {
+    term_years <- as.integer(round(term_years))
+  }
+
+  if (!is.null(premium_term_years) && !is.infinite(premium_term_years)) {
+    premium_term_years <- as.integer(round(premium_term_years))
+  }
+
+  # -------------------------------------------------------------------------
+  # Interest and life table preparation
+  # -------------------------------------------------------------------------
+
+  i_effective <- standardize_interest(type = rate_type, rate = rate, m = m)
+
+  if (!is.numeric(i_effective) || length(i_effective) != 1L ||
+      is.na(i_effective) || !is.finite(i_effective) || i_effective <= -1) {
+    stop(
+      "The standardized annual effective interest rate must be greater than -1.",
+      call. = FALSE
+    )
+  }
+
+  lt <- mortality_table[order(mortality_table$x), , drop = FALSE]
+
+  if (!is.numeric(lt$x) || !is.numeric(lt$lx)) {
+    stop("Columns `x` and `lx` in `mortality_table` must be numeric.", call. = FALSE)
+  }
+
+  if (any(is.na(lt$x)) || any(!is.finite(lt$x)) ||
+      any(abs(lt$x - round(lt$x)) > 1e-10)) {
+    stop("Column `x` must contain finite integer ages.", call. = FALSE)
+  }
+
+  if (anyDuplicated(lt$x)) {
+    stop("Life table ages in column `x` must be unique.", call. = FALSE)
+  }
+
+  if (any(is.na(lt$lx)) || any(!is.finite(lt$lx)) || any(lt$lx < 0)) {
+    stop("Column `lx` must contain finite nonnegative values.", call. = FALSE)
+  }
+
+  ages <- as.integer(round(lt$x))
+  lx <- as.numeric(lt$lx)
+  omega <- max(ages)
+
+  get_lx <- function(current_age) {
+    idx <- match(current_age, ages)
+
+    if (!is.na(idx)) {
+      return(lx[[idx]])
+    }
+
+    if (current_age == omega + 1L) {
+      return(0)
+    }
+
+    NA_real_
+  }
+
+  one_year_qx <- function(current_age) {
+    l0 <- get_lx(current_age)
+    l1 <- get_lx(current_age + 1L)
+
+    if (is.na(l0) || is.na(l1) || l0 <= 0) {
+      return(NA_real_)
+    }
+
+    1 - l1 / l0
+  }
+
+  # -------------------------------------------------------------------------
+  # Contract and premium-paying horizons
+  # -------------------------------------------------------------------------
+
+  contract_horizon <- if (insurance_type == "whole") {
+    omega - age
   } else {
-    k_vec <- sort(unique(as.integer(round(at))))
-    if (any(k_vec < 0) || any(k_vec > n)) {
-      stop("'at' durations must be between 0 and n.")
+    term_years
+  }
+
+  if (!is.finite(contract_horizon) || contract_horizon < 1) {
+    stop(
+      "The life table does not provide a positive contract horizon from `age`.",
+      call. = FALSE
+    )
+  }
+
+  if (age + contract_horizon > omega) {
+    stop(
+      "The requested contract horizon exceeds the available life table ages.",
+      call. = FALSE
+    )
+  }
+
+  if (is.null(premium_term_years)) {
+    premium_horizon <- contract_horizon
+  } else if (is.infinite(premium_term_years)) {
+    premium_horizon <- contract_horizon
+  } else {
+    premium_horizon <- min(premium_term_years, contract_horizon)
+  }
+
+  premium_horizon <- as.integer(round(premium_horizon))
+
+  # -------------------------------------------------------------------------
+  # Premium
+  # -------------------------------------------------------------------------
+
+  premium_was_computed <- is.null(premium)
+
+  if (is.null(premium)) {
+    premium <- premium_x(
+      mortality_table = mortality_table,
+      age = age,
+      rate = rate,
+      rate_type = rate_type,
+      m = m,
+      insurance_type = insurance_type,
+      benefit = benefit,
+      term_years = if (insurance_type == "whole") Inf else term_years,
+      premium_term_years = premium_horizon,
+      payments_per_year = 1L,
+      premium_timing = "due",
+      output = "value"
+    )
+  }
+
+  # -------------------------------------------------------------------------
+  # Durations
+  # -------------------------------------------------------------------------
+
+  if (is.null(durations)) {
+    duration_vec <- 0:contract_horizon
+  } else {
+    if (!is.numeric(durations) || any(is.na(durations)) ||
+        any(!is.finite(durations)) ||
+        any(abs(durations - round(durations)) > 1e-10)) {
+      stop("`durations` must be an integer vector.", call. = FALSE)
+    }
+
+    duration_vec <- sort(unique(as.integer(round(durations))))
+
+    if (any(duration_vec < 0) || any(duration_vec > contract_horizon)) {
+      stop(
+        "`durations` must lie between 0 and the contract horizon.",
+        call. = FALSE
+      )
     }
   }
 
-  v_fun <- function(tt) (1 + i)^(-tt)
-  d <- i / (1 + i)
+  # -------------------------------------------------------------------------
+  # Prospective method
+  # -------------------------------------------------------------------------
 
-  # -------------------------------------------------------
-  # PROSPECTIVE METHOD (Finan, Sec. 47)
-  # -------------------------------------------------------
   if (method == "prospective") {
-    reserves <- vapply(k_vec, function(k) {
-      # k = 0: reserve is 0 (equivalence principle)
-      if (k == 0) return(0)
+    reserves <- vapply(duration_vec, function(k) {
+      if (k >= contract_horizon) {
+        if (insurance_type == "endowment" && k == contract_horizon) {
+          return(benefit)
+        }
 
-      # k = n for endowment: maturity value
-      if (type == "endowment" && k == n) return(benefit)
+        return(0)
+      }
 
-      # k = n for term: 0 (coverage expired)
-      if (type == "term" && k >= n) return(0)
+      remaining_contract <- contract_horizon - k
 
-      # k >= n for whole: not applicable (dead)
-      if (k >= n) return(0)
-
-      # APV of future benefits at age x+k
-      apv_ben <- if (type == "whole") {
-        benefit * insurance_x(lt, x = x + k, i = i, type = "whole")
+      apv_benefits <- if (insurance_type == "whole") {
+        insurance_x(
+          mortality_table = mortality_table,
+          age = age + k,
+          rate = rate,
+          rate_type = rate_type,
+          m = m,
+          insurance_type = "whole",
+          benefit = benefit,
+          output = "value"
+        )
       } else {
-        benefit * insurance_x(
-          lt, x = x + k, i = i,
-          n = n - k, type = type
+        insurance_x(
+          mortality_table = mortality_table,
+          age = age + k,
+          rate = rate,
+          rate_type = rate_type,
+          m = m,
+          insurance_type = insurance_type,
+          term_years = remaining_contract,
+          benefit = benefit,
+          output = "value"
         )
       }
 
-      # APV of future premiums at age x+k
-      prem_term <- max(0L, h - k)
-      if (prem_term == 0L) {
-        apv_prem <- 0
+      remaining_premiums <- max(0L, premium_horizon - k)
+
+      apv_premiums <- if (remaining_premiums == 0L) {
+        0
       } else {
-        apv_prem <- premium * annuity_x(
-          lt, x = x + k, i = i,
-          n = prem_term, timing = "due"
+        premium * annuity_x(
+          mortality_table = mortality_table,
+          age = age + k,
+          rate = rate,
+          rate_type = rate_type,
+          m = m,
+          term_years = remaining_premiums,
+          payments_per_year = 1L,
+          timing = "due",
+          woolhouse = "none",
+          output = "value"
         )
       }
 
-      apv_ben - apv_prem
-    }, numeric(1))
+      apv_benefits - apv_premiums
+    }, numeric(1L))
 
-  # -------------------------------------------------------
-  # RECURSIVE METHOD (Finan, Sec. 52)
-  # -------------------------------------------------------
+    if (premium_was_computed && 0L %in% duration_vec) {
+      reserves[duration_vec == 0L] <- 0
+    }
   } else {
-    # Compute full schedule 0..n, then subset
-    V_full <- numeric(n + 1L)
-    V_full[1] <- 0  # 0V = 0
+    # -----------------------------------------------------------------------
+    # Recursive method
+    # -----------------------------------------------------------------------
 
-    for (kk in 0:(n - 1L)) {
-      # premium at start of year kk+1
-      pi_k <- if (kk < h) premium else 0
+    full_reserves <- numeric(contract_horizon + 1L)
+    full_reserves[[1]] <- 0
 
-      # benefit payable at end of year kk+1
-      b_k1 <- benefit
+    for (kk in 0:(contract_horizon - 1L)) {
+      premium_paid <- if (kk < premium_horizon) premium else 0
+      qx_k <- one_year_qx(age + kk)
 
-      # mortality at age x + kk
-      qxk <- 1 - t_px(lt, x = x + kk, t = 1,
-                       frac = "UDD", check = FALSE)
-      pxk <- 1 - qxk
+      if (is.na(qx_k)) {
+        stop("The life table does not support recursive reserve computation.", call. = FALSE)
+      }
 
-      if (pxk <= 0) {
-        # everyone dead: remaining reserves are 0
-        V_full[(kk + 2):(n + 1)] <- 0
+      px_k <- 1 - qx_k
+
+      if (px_k <= 0) {
+        if (kk + 2L <= length(full_reserves)) {
+          full_reserves[(kk + 2L):length(full_reserves)] <- 0
+        }
         break
       }
 
-      # Forward recursion (Finan, Sec. 52)
-      V_next <- ((V_full[kk + 1] + pi_k) * (1 + i) -
-                   b_k1 * qxk) / pxk
-      V_full[kk + 2] <- V_next
+      full_reserves[[kk + 2L]] <-
+        ((full_reserves[[kk + 1L]] + premium_paid) * (1 + i_effective) -
+           benefit * qx_k) / px_k
     }
 
-    # For endowment at k = n: reserve = benefit
-    if (type == "endowment") V_full[n + 1] <- benefit
+    if (insurance_type == "endowment") {
+      full_reserves[[contract_horizon + 1L]] <- benefit
+    }
 
-    # For term at k = n: reserve = 0
-    if (type == "term") V_full[n + 1] <- 0
+    if (insurance_type == "term") {
+      full_reserves[[contract_horizon + 1L]] <- 0
+    }
 
-    # Subset to requested durations
-    reserves <- V_full[k_vec + 1L]
+    reserves <- full_reserves[duration_vec + 1L]
   }
 
-  # --- output ---
-  if (!isTRUE(tidy)) {
-    names(reserves) <- paste0("k=", k_vec)
+  if (output == "value") {
+    names(reserves) <- paste0("duration=", duration_vec)
     return(reserves)
   }
 
-  # Build schedule
-  prem_paid <- vapply(k_vec, function(k) {
-    if (k >= n) return(0)
-    if (k < h) premium else 0
-  }, numeric(1))
+  premium_paid <- vapply(duration_vec, function(k) {
+    if (k >= contract_horizon) {
+      return(0)
+    }
 
-  ben_due <- vapply(k_vec, function(k) {
-    if (k >= n) return(0)
+    if (k < premium_horizon) premium else 0
+  }, numeric(1L))
+
+  benefit_due <- vapply(duration_vec, function(k) {
+    if (k >= contract_horizon) {
+      return(0)
+    }
+
     benefit
-  }, numeric(1))
+  }, numeric(1L))
 
   tibble::tibble(
-    k          = k_vec,
-    age        = x + k_vec,
-    reserve    = reserves,
-    premium_paid = prem_paid,
-    benefit_due  = ben_due
+    duration = duration_vec,
+    age = age + duration_vec,
+    reserve = reserves,
+    premium_paid = premium_paid,
+    benefit_due = benefit_due,
+    insurance_type = insurance_type,
+    benefit = benefit,
+    premium = premium,
+    premium_term_years = premium_horizon,
+    contract_horizon = contract_horizon,
+    method = method,
+    rate = rate,
+    rate_type = rate_type,
+    m = m,
+    i_effective = i_effective
   )
 }

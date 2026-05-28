@@ -6,7 +6,7 @@ and life contingencies. It bridges the gap between classical actuarial
 notation (SOA/CAS standards) and the modern **tidyverse** workflow.
 
 The package is designed for actuaries, students, and researchers who
-need reproducible, vectorized, and "tidy" actuarial calculations.
+need reproducible, vectorized, and “tidy” actuarial calculations.
 
 ## Key Features
 
@@ -26,13 +26,13 @@ Once the package is on CRAN, you can install it with:
 
 ``` r
 install.packages("tidyactuarial")
-#> Installing package into 'C:/Users/LENOVO/AppData/Local/Temp/RtmpG8Qiyo/temp_libpath3c505756476c'
+#> Installing package into 'C:/Users/LENOVO/AppData/Local/Temp/RtmpAPk2YU/temp_libpath1ae0798e3dc8'
 #> (as 'lib' is unspecified)
-#> Warning: package 'tidyactuarial' is not available for this version of R
 #> 
-#> A version of this package for your version of R might be available elsewhere,
-#> see the ideas at
-#> https://cran.r-project.org/doc/manuals/r-patched/R-admin.html#Installing-packages
+#>   There is a binary version available but the source version is later:
+#>               binary source needs_compilation
+#> tidyactuarial  0.1.1  0.1.2             FALSE
+#> installing the source package 'tidyactuarial'
 ```
 
 Alternatively, you can install the development version from
@@ -71,11 +71,11 @@ premium_x(
   benefit = 100000,
   tidy = TRUE
 )
-#> # A tibble: 1 x 15
+#> # A tibble: 1 × 15
 #>       x     m     n product benefit     k frac  premium_timing prem_start n_prem
 #>   <int> <int> <int> <chr>     <dbl> <int> <chr> <chr>          <chr>       <int>
-#> 1    35     0    20 endowm...  100000     1 UDD   due            issue          20
-#> # i 5 more variables: woolhouse <chr>, premium <dbl>, premium_annual <dbl>,
+#> 1    35     0    20 endowm…  100000     1 UDD   due            issue          20
+#> # ℹ 5 more variables: woolhouse <chr>, premium <dbl>, premium_annual <dbl>,
 #> #   apv_benefits <dbl>, apv_premiums <dbl>
 ```
 
@@ -90,7 +90,7 @@ bond_cash_flows(
   years_to_maturity = 5, 
   coupons_per_year = 2
 )
-#> # A tibble: 11 x 5
+#> # A tibble: 11 × 5
 #>    cashflow_id period  time cash_flow type      
 #>          <int>  <int> <dbl>     <dbl> <chr>     
 #>  1           1      1   0.5        30 coupon    

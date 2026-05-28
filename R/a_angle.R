@@ -10,8 +10,8 @@
 #' }
 #'
 #' For discrete annuities, \code{payments_per_year = k} means payments are made
-#' every \eqn{1/k} year. The function returns the annuity factor only, assuming
-#' a unit payment at each payment time.
+#' every \eqn{1/k} year. The function returns the annuity factor, assuming a
+#' unit payment at each payment time.
 #'
 #' Deferral is supported through \code{deferral_years = h}. For discrete
 #' annuities, the deferral must align with the payment grid, that is,
@@ -25,7 +25,7 @@
 #' @param payments_per_year Positive integer vector giving the number of
 #'   discrete payments per year. Ignored for continuous annuities.
 #' @param rate Numeric vector of rate values.
-#' @param type Character vector indicating the rate type.
+#' @param rate_type Character vector indicating the rate type.
 #'   Allowed values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param m Positive integer vector giving the compounding frequency
@@ -36,94 +36,101 @@
 #'   \code{"due"}, or \code{"continuous"}.
 #' @param perpetuity Logical vector. If \code{TRUE}, computes the perpetuity
 #'   factor.
+#' @param payment Numeric vector of level payment amounts. Used only when
+#'   \code{output = "table"} to report the corresponding present value.
+#'   The annuity factor itself is always computed for unit payments.
+#' @param output Character string. Use \code{"value"} to return a numeric
+#'   annuity factor, or \code{"table"} to return a tibble with intermediate
+#'   calculations.
 #'
-#' @return Numeric vector of annuity factors.
+#' @return
+#' If \code{output = "value"}, a numeric vector of annuity factors.
+#'
+#' If \code{output = "table"}, a tibble with input values, equivalent rates,
+#' annuity factors, payment amounts, and present values.
 #'
 #' @details
 #' The function first converts the supplied rate to the equivalent annual
 #' effective interest rate using \code{\link{standardize_interest}}.
 #'
 #' For finite discrete annuities:
-#' \deqn{a_{\overline{n|}} = \frac{1 - v^n}{i}}{a_n| = (1 - v^n)/(i)}
+#' \deqn{a_{\overline{n|}} = \frac{1 - v^n}{i}}
 #'
 #' For due annuities:
-#' \deqn{\ddot{a}_{\overline{n|}} = (1+i)a_{\overline{n|}}}{a_n| = (1+i)a_n|}
+#' \deqn{\ddot{a}_{\overline{n|}} = (1+i)a_{\overline{n|}}}
 #'
 #' For continuous annuities:
-#' \deqn{\bar{a}_{\overline{n|}} = \frac{1 - e^{-\delta n}}{\delta}}{a_n| = 1 - e^-delta ndelta}
+#' \deqn{\bar{a}_{\overline{n|}} = \frac{1 - e^{-\delta n}}{\delta}}
 #'
-#' Input vectors must have length 1 or a common length.
-#' Missing values are propagated.
+#' Input vectors must have length 1 or a common length. Missing values are
+#' propagated.
 #'
-#' @seealso \code{\link{a_angle_tbl}}, \code{\link{s_angle}}, \code{\link{Da_angle}}, \code{\link{Ia_angle}},
-#'   \code{\link{standardize_interest}}, \code{\link{present_value}}
+#' @seealso \code{\link{s_angle}}, \code{\link{standardize_interest}},
+#'   \code{\link{present_value}}
 #'
 #' @family annuities
 #'
 #' @examples
-#' # Simple scalar examples
-#' a_angle(n_years = 10, rate = 0.05, type = "effective")
-#' a_angle(n_years = 10, rate = 0.06, type = "nominal_interest", m = 12,
-#'         payments_per_year = 12)
-#' a_angle(n_years = 15, rate = 0.04, type = "force", timing = "continuous")
+#' # Numeric annuity factor
+#' a_angle(n_years = 10, rate = 0.05)
 #'
-#' # Medium vectorized example
+#' # Nominal interest converted monthly, with monthly payments
+#' a_angle(
+#'   n_years = 10,
+#'   rate = 0.06,
+#'   rate_type = "nominal_interest",
+#'   m = 12,
+#'   payments_per_year = 12
+#' )
+#'
+#' # Continuous annuity
+#' a_angle(
+#'   n_years = 15,
+#'   rate = 0.04,
+#'   rate_type = "force",
+#'   timing = "continuous"
+#' )
+#'
+#' # Tibble output for teaching or auditing
+#' a_angle(
+#'   n_years = 10,
+#'   rate = 0.05,
+#'   payment = 1000,
+#'   output = "table"
+#' )
+#'
+#' # Vectorized example
 #' a_angle(
 #'   n_years = c(5, 10, 20),
 #'   payments_per_year = c(1, 12, 1),
 #'   rate = c(0.05, 0.06, 0.04),
-#'   type = c("effective", "nominal_interest", "force"),
+#'   rate_type = c("effective", "nominal_interest", "force"),
 #'   m = c(1, 12, 1),
 #'   deferral_years = c(0, 0, 2),
 #'   timing = c("immediate", "immediate", "continuous"),
 #'   perpetuity = c(FALSE, FALSE, FALSE)
 #' )
 #'
-#' # Use inside a data pipeline
-#' if (requireNamespace("dplyr", quietly = TRUE) &&
-#'     requireNamespace("tibble", quietly = TRUE)) {
-#'   contracts <- tibble::tibble(
-#'     n_years = c(10, 15, 20),
-#'     rate = c(0.05, 0.06, 0.04),
-#'     type = c("effective", "nominal_interest", "force"),
-#'     m = c(1, 12, 1),
-#'     payments_per_year = c(1, 12, NA),
-#'     deferral_years = c(0, 0, 3),
-#'     timing = c("immediate", "immediate", "continuous"),
-#'     perpetuity = c(FALSE, FALSE, FALSE)
-#'   )
-#'
-#'   dplyr::mutate(
-#'     contracts,
-#'     factor = a_angle(
-#'       n_years = n_years,
-#'       payments_per_year = dplyr::coalesce(payments_per_year, 1L),
-#'       rate = rate,
-#'       type = type,
-#'       m = m,
-#'       deferral_years = deferral_years,
-#'       timing = timing,
-#'       perpetuity = perpetuity
-#'     )
-#'   )
-#' }
-#'
 #' @export
 a_angle <- function(
     n_years = NULL,
     payments_per_year = 1L,
     rate,
-    type = "effective",
+    rate_type = "effective",
     m = 1L,
     deferral_years = 0,
     timing = "immediate",
-    perpetuity = FALSE
+    perpetuity = FALSE,
+    payment = 1,
+    output = c("value", "table")
 ) {
+  output <- match.arg(output)
+
   if (missing(rate)) {
     stop("`rate` must be provided.", call. = FALSE)
   }
 
-  # --- Early type validation (before recycling) ---
+  # --- Early type validation ---
   if (!is.numeric(rate)) {
     stop("`rate` must be a numeric vector.", call. = FALSE)
   }
@@ -139,8 +146,8 @@ a_angle <- function(
   if (!is.numeric(deferral_years)) {
     stop("`deferral_years` must be numeric.", call. = FALSE)
   }
-  if (!is.character(type)) {
-    stop("`type` must be a character vector.", call. = FALSE)
+  if (!is.character(rate_type)) {
+    stop("`rate_type` must be a character vector.", call. = FALSE)
   }
   if (!is.character(timing)) {
     stop("`timing` must be a character vector.", call. = FALSE)
@@ -148,29 +155,39 @@ a_angle <- function(
   if (!is.logical(perpetuity)) {
     stop("`perpetuity` must be a logical vector.", call. = FALSE)
   }
+  if (!is.numeric(payment)) {
+    stop("`payment` must be a numeric vector.", call. = FALSE)
+  }
 
   # --- Determine common size and validate lengths ---
   size <- max(
-    length(n_years),
+    if (is.null(n_years)) 0L else length(n_years),
     length(payments_per_year),
     length(rate),
-    length(type),
+    length(rate_type),
     length(m),
     length(deferral_years),
     length(timing),
     length(perpetuity),
+    length(payment),
     1L
   )
 
   valid_size <- function(x) is.null(x) || length(x) %in% c(1L, size)
 
-  if (!valid_size(n_years) || !valid_size(payments_per_year) || !valid_size(rate) ||
-      !valid_size(type) || !valid_size(m) || !valid_size(deferral_years) ||
-      !valid_size(timing) || !valid_size(perpetuity)) {
+  if (!valid_size(n_years) ||
+      !valid_size(payments_per_year) ||
+      !valid_size(rate) ||
+      !valid_size(rate_type) ||
+      !valid_size(m) ||
+      !valid_size(deferral_years) ||
+      !valid_size(timing) ||
+      !valid_size(perpetuity) ||
+      !valid_size(payment)) {
     stop(
-      "`n_years`, `payments_per_year`, `rate`, `type`, `m`, ",
-      "`deferral_years`, `timing`, and `perpetuity` must have length 1 ",
-      "or a common length.",
+      "`n_years`, `payments_per_year`, `rate`, `rate_type`, `m`, ",
+      "`deferral_years`, `timing`, `perpetuity`, and `payment` must have ",
+      "length 1 or a common length.",
       call. = FALSE
     )
   }
@@ -184,14 +201,17 @@ a_angle <- function(
 
   payments_per_year <- rep_len(payments_per_year, size)
   rate              <- rep_len(rate, size)
-  type              <- rep_len(type, size)
+  rate_type         <- rep_len(rate_type, size)
   m                 <- rep_len(m, size)
   deferral_years    <- rep_len(deferral_years, size)
   timing            <- rep_len(timing, size)
   perpetuity        <- rep_len(perpetuity, size)
+  payment           <- rep_len(payment, size)
 
   # --- Value-level validation ---
-  bad_deferral <- !is.na(deferral_years) & (!is.finite(deferral_years) | deferral_years < 0)
+  bad_deferral <- !is.na(deferral_years) &
+    (!is.finite(deferral_years) | deferral_years < 0)
+
   if (any(bad_deferral)) {
     stop("`deferral_years` must contain only finite values >= 0 or NA.", call. = FALSE)
   }
@@ -200,26 +220,36 @@ a_angle <- function(
     stop("`perpetuity` must not contain NA.", call. = FALSE)
   }
 
+  bad_payment <- !is.na(payment) & !is.finite(payment)
+  if (any(bad_payment)) {
+    stop("`payment` must contain only finite numeric values or NA.", call. = FALSE)
+  }
+
   timing <- tolower(timing)
   valid_timing <- c("immediate", "due", "continuous")
+
   bad_timing <- !is.na(timing) & !(timing %in% valid_timing)
   if (any(bad_timing)) {
     stop("`timing` must be 'immediate', 'due', or 'continuous'.", call. = FALSE)
   }
 
   # --- Convert to effective annual rate ---
-  i_effective <- standardize_interest(type = type, rate = rate, m = m)
+  i_effective <- standardize_interest(type = rate_type, rate = rate, m = m)
   delta <- log1p(i_effective)
 
-  out <- rep(NA_real_, size)
+  annuity_factor <- rep(NA_real_, size)
   eps <- 1e-12
 
-  # --- Identify element-level NA (skip entirely) ---
-  is_na_elem <- is.na(rate) | is.na(i_effective) | is.na(deferral_years) | is.na(timing)
+  # --- Identify element-level NA ---
+  is_na_elem <- is.na(rate) |
+    is.na(i_effective) |
+    is.na(deferral_years) |
+    is.na(timing)
 
-  # --- Validate n_years for non-perpetuity, non-NA elements ---
+  # --- Validate n_years for finite annuities ---
   needs_n <- !is_na_elem & !perpetuity
   bad_n <- needs_n & (is.na(n_years) | !is.finite(n_years) | n_years <= 0)
+
   if (any(bad_n)) {
     stop(
       "When `perpetuity = FALSE`, `n_years` must be positive and finite.",
@@ -228,11 +258,10 @@ a_angle <- function(
   }
 
   # =========================================================
-  # CONTINUOUS timing (vectorized)
+  # Continuous timing
   # =========================================================
   is_cont <- !is_na_elem & timing == "continuous"
 
-  # Continuous perpetuity
   cont_perp <- is_cont & perpetuity
   if (any(cont_perp)) {
     if (any(delta[cont_perp] <= eps)) {
@@ -241,39 +270,56 @@ a_angle <- function(
         call. = FALSE
       )
     }
-    out[cont_perp] <- exp(-delta[cont_perp] * deferral_years[cont_perp]) / delta[cont_perp]
+
+    annuity_factor[cont_perp] <-
+      exp(-delta[cont_perp] * deferral_years[cont_perp]) / delta[cont_perp]
   }
 
-  # Continuous finite
   cont_fin <- is_cont & !perpetuity
   if (any(cont_fin)) {
     d_cf <- delta[cont_fin]
     n_cf <- n_years[cont_fin]
     h_cf <- deferral_years[cont_fin]
+
     near_zero <- abs(d_cf) < eps
-    base_cf <- ifelse(near_zero, n_cf, (1 - exp(-d_cf * n_cf)) / d_cf)
-    out[cont_fin] <- base_cf * exp(-d_cf * h_cf)
+
+    base_cf <- ifelse(
+      near_zero,
+      n_cf,
+      (1 - exp(-d_cf * n_cf)) / d_cf
+    )
+
+    annuity_factor[cont_fin] <- base_cf * exp(-d_cf * h_cf)
   }
 
   # =========================================================
-  # DISCRETE timing (immediate / due) - element-wise loop
-  #   (alignment checks require per-element validation)
+  # Discrete timing: immediate / due
   # =========================================================
   is_disc <- !is_na_elem & (timing == "immediate" | timing == "due")
   disc_idx <- which(is_disc)
 
+  i_period <- rep(NA_real_, size)
+  v_period <- rep(NA_real_, size)
+  n_periods <- rep(NA_real_, size)
+  deferral_periods <- rep(NA_real_, size)
+
   if (length(disc_idx) > 0L) {
     for (j in disc_idx) {
       k <- payments_per_year[j]
+
       if (is.na(k) || !is.finite(k) || k < 1 || k != floor(k)) {
-        stop("`payments_per_year` must be a positive integer for discrete annuities.",
-             call. = FALSE)
+        stop(
+          "`payments_per_year` must be a positive integer for discrete annuities.",
+          call. = FALSE
+        )
       }
+
       k <- as.integer(k)
 
       deferral_periods_raw <- deferral_years[j] * k
-      deferral_periods <- round(deferral_periods_raw)
-      if (abs(deferral_periods_raw - deferral_periods) > 1e-10) {
+      deferral_periods[j] <- round(deferral_periods_raw)
+
+      if (abs(deferral_periods_raw - deferral_periods[j]) > 1e-10) {
         stop(
           "For discrete annuities, `deferral_years * payments_per_year` ",
           "must be an integer.",
@@ -281,225 +327,67 @@ a_angle <- function(
         )
       }
 
-      i_period <- (1 + i_effective[j])^(1 / k) - 1
-      v_period <- 1 / (1 + i_period)
+      i_period[j] <- (1 + i_effective[j])^(1 / k) - 1
+      v_period[j] <- 1 / (1 + i_period[j])
 
       if (perpetuity[j]) {
-        if (i_period <= eps) {
+        if (i_period[j] <= eps) {
           stop(
             "Discrete perpetuity requires a strictly positive per-period rate.",
             call. = FALSE
           )
         }
-        base <- 1 / i_period
+
+        base <- 1 / i_period[j]
+
         if (timing[j] == "due") {
-          base <- base * (1 + i_period)
+          base <- base * (1 + i_period[j])
         }
-        out[j] <- base * v_period^deferral_periods
+
+        annuity_factor[j] <- base * v_period[j]^deferral_periods[j]
         next
       }
 
       n_periods_raw <- n_years[j] * k
-      n_periods <- round(n_periods_raw)
-      if (abs(n_periods_raw - n_periods) > 1e-10) {
+      n_periods[j] <- round(n_periods_raw)
+
+      if (abs(n_periods_raw - n_periods[j]) > 1e-10) {
         stop(
           "For discrete annuities, `n_years * payments_per_year` must be an integer.",
           call. = FALSE
         )
       }
 
-      base <- if (abs(i_period) < eps) {
-        n_periods
+      base <- if (abs(i_period[j]) < eps) {
+        n_periods[j]
       } else {
-        (1 - v_period^n_periods) / i_period
+        (1 - v_period[j]^n_periods[j]) / i_period[j]
       }
 
       if (timing[j] == "due") {
-        base <- base * (1 + i_period)
+        base <- base * (1 + i_period[j])
       }
 
-      out[j] <- base * v_period^deferral_periods
+      annuity_factor[j] <- base * v_period[j]^deferral_periods[j]
     }
   }
 
-  out
-}
-
-
-#' Level annuity details in tibble form
-#'
-#' Computes the actuarial present value factor for a level annuity and returns
-#' a tibble with the main input values, implied rates, annuity factor,
-#' payment amount, and present value.
-#'
-#' This is a reporting wrapper around \code{\link{a_angle}}. The annuity factor assumes
-#' unit payments. The present value is then computed as
-#' \deqn{PV = R \times a}{PV = R * a}
-#' where \eqn{R} is the payment amount and \eqn{a} is the annuity factor.
-#'
-#' @param n_years Numeric vector of payment durations in years.
-#' @param payments_per_year Positive integer vector giving the number of
-#'   discrete payments per year. Ignored for continuous annuities.
-#' @param rate Numeric vector of rate values.
-#' @param type Character vector indicating the rate type.
-#'   Allowed values are \code{"effective"}, \code{"nominal_interest"},
-#'   \code{"nominal_discount"}, and \code{"force"}.
-#' @param m Positive integer vector giving the compounding frequency
-#'   for nominal rates.
-#' @param deferral_years Numeric vector of deferral times in years.
-#' @param timing Character vector. One of \code{"immediate"},
-#'   \code{"due"}, or \code{"continuous"}.
-#' @param payment Numeric vector of level payment amounts.
-#' @param perpetuity Logical vector. If \code{TRUE}, computes the perpetuity
-#'   factor.
-#'
-#' @return A tibble with columns:
-#' \describe{
-#'   \item{n_years}{Payment duration in years.}
-#'   \item{payments_per_year}{Number of payments per year.}
-#'   \item{deferral_years}{Deferral period in years.}
-#'   \item{timing}{Payment timing convention.}
-#'   \item{perpetuity}{Whether the annuity is perpetual.}
-#'   \item{rate_input}{Original supplied rate.}
-#'   \item{rate_type}{Type of supplied rate.}
-#'   \item{m}{Compounding frequency for nominal rates.}
-#'   \item{i_effective}{Equivalent annual effective rate.}
-#'   \item{delta}{Equivalent force of interest.}
-#'   \item{i_period}{Equivalent per-payment effective rate for discrete annuities.}
-#'   \item{v_period}{Equivalent per-payment discount factor for discrete annuities.}
-#'   \item{n_periods}{Number of payment periods for finite discrete annuities.}
-#'   \item{deferral_periods}{Number of deferred periods for discrete annuities.}
-#'   \item{annuity_factor}{Computed annuity factor.}
-#'   \item{payment}{Level payment amount.}
-#'   \item{present_value}{Present value of the annuity.}
-#' }
-#'
-#' @seealso \code{\link{a_angle}}, \code{\link{s_angle}}, \code{\link{standardize_interest}}
-#'
-#' @family annuities
-#'
-#' @examples
-#' # Simple scalar example
-#' a_angle_tbl(n_years = 10, rate = 0.05, payment = 1000)
-#'
-#' # Medium vectorized example
-#' a_angle_tbl(
-#'   n_years = c(10, 15, 20),
-#'   payments_per_year = c(1, 12, 1),
-#'   rate = c(0.05, 0.06, 0.04),
-#'   type = c("effective", "nominal_interest", "force"),
-#'   m = c(1, 12, 1),
-#'   deferral_years = c(0, 0, 2),
-#'   timing = c("immediate", "immediate", "continuous"),
-#'   payment = c(1000, 200, 5000),
-#'   perpetuity = c(FALSE, FALSE, FALSE)
-#' )
-#'
-#' @export
-a_angle_tbl <- function(
-    n_years = NULL,
-    payments_per_year = 1L,
-    rate,
-    type = "effective",
-    m = 1L,
-    deferral_years = 0,
-    timing = "immediate",
-    payment = 1,
-    perpetuity = FALSE
-) {
-  if (missing(rate)) {
-    stop("`rate` must be provided.", call. = FALSE)
-  }
-  if (!is.numeric(payment)) {
-    stop("`payment` must be a numeric vector.", call. = FALSE)
-  }
-
-  # --- Determine common size (fixed: use length, not value, for n_years) ---
-  size <- max(
-    if (is.null(n_years)) 0L else length(n_years),
-    length(payments_per_year),
-    length(rate),
-    length(type),
-    length(m),
-    length(deferral_years),
-    length(timing),
-    length(payment),
-    length(perpetuity),
-    1L
-  )
-
-  valid_size <- function(x) is.null(x) || length(x) %in% c(1L, size)
-
-  if (!valid_size(n_years) || !valid_size(payments_per_year) || !valid_size(rate) ||
-      !valid_size(type) || !valid_size(m) || !valid_size(deferral_years) ||
-      !valid_size(timing) || !valid_size(payment) || !valid_size(perpetuity)) {
-    stop(
-      "`n_years`, `payments_per_year`, `rate`, `type`, `m`, ",
-      "`deferral_years`, `timing`, `payment`, and `perpetuity` must have ",
-      "length 1 or a common length.",
-      call. = FALSE
-    )
-  }
-
-  if (is.null(n_years)) {
-    n_years <- rep(NA_real_, size)
-  } else {
-    n_years <- rep_len(n_years, size)
-  }
-
-  payments_per_year <- rep_len(payments_per_year, size)
-  rate              <- rep_len(rate, size)
-  type              <- rep_len(type, size)
-  m                 <- rep_len(m, size)
-  deferral_years    <- rep_len(deferral_years, size)
-  timing            <- rep_len(timing, size)
-  payment           <- rep_len(payment, size)
-  perpetuity        <- rep_len(perpetuity, size)
-
-  bad_payment <- !is.na(payment) & !is.finite(payment)
-  if (any(bad_payment)) {
-    stop("`payment` must contain only finite numeric values or NA.", call. = FALSE)
-  }
-
-  annuity_factor <- a_angle(
-    n_years = n_years,
-    payments_per_year = payments_per_year,
-    rate = rate,
-    type = type,
-    m = m,
-    deferral_years = deferral_years,
-    timing = timing,
-    perpetuity = perpetuity
-  )
-
-  i_effective <- standardize_interest(type = type, rate = rate, m = m)
-  delta <- log1p(i_effective)
-
-  discrete <- tolower(timing) %in% c("immediate", "due")
-
-  i_period <- rep(NA_real_, size)
-  v_period <- rep(NA_real_, size)
-  n_periods <- rep(NA_real_, size)
-  deferral_periods <- rep(NA_real_, size)
-
-  if (any(discrete, na.rm = TRUE)) {
-    k <- payments_per_year[discrete]
-    i_period[discrete] <- (1 + i_effective[discrete])^(1 / k) - 1
-    v_period[discrete] <- 1 / (1 + i_period[discrete])
-    deferral_periods[discrete] <- deferral_years[discrete] * k
-
-    finite_disc <- discrete & !perpetuity
-    n_periods[finite_disc] <- n_years[finite_disc] * payments_per_year[finite_disc]
+  if (output == "value") {
+    return(annuity_factor)
   }
 
   tibble::tibble(
     n_years = n_years,
-    payments_per_year = ifelse(tolower(timing) == "continuous", NA_integer_, as.integer(payments_per_year)),
+    payments_per_year = ifelse(
+      timing == "continuous",
+      NA_integer_,
+      as.integer(payments_per_year)
+    ),
     deferral_years = deferral_years,
-    timing = tolower(timing),
+    timing = timing,
     perpetuity = perpetuity,
     rate_input = rate,
-    rate_type = type,
+    rate_type = rate_type,
     m = m,
     i_effective = i_effective,
     delta = delta,

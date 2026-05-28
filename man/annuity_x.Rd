@@ -5,75 +5,157 @@
 \title{Actuarial present value of a life annuity}
 \usage{
 annuity_x(
-  lt,
-  x,
-  i,
-  n = NULL,
-  m = 0L,
-  k = 1L,
+  mortality_table,
+  age,
+  rate,
+  rate_type = "effective",
+  m = 1L,
+  term_years = Inf,
+  deferral_years = 0L,
+  payments_per_year = 1L,
   timing = c("immediate", "due"),
   woolhouse = c("none", "first", "second"),
-  tidy = FALSE
+  output = c("value", "table")
 )
 }
 \arguments{
-\item{lt}{A lifetable object as produced by \code{\link{lifetable}}.
-Must contain columns \code{x} and \code{lx}.}
+\item{mortality_table}{A life table as produced by \code{\link{lifetable}}.
+It must contain columns \code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age.}
+\item{age}{Integer actuarial age.}
 
-\item{i}{Effective annual interest rate (must satisfy \code{i > -1}).}
+\item{rate}{Numeric scalar. Annual interest-rate input.}
 
-\item{n}{Integer term in years. If \code{NULL} (default), whole life to
-end of table.}
+\item{rate_type}{Character string indicating the rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Integer deferral in years (default \code{0}).}
+\item{m}{Positive integer. Compounding frequency for nominal rates. Ignored
+for \code{rate_type = "effective"} and \code{rate_type = "force"}.}
 
-\item{k}{Integer payments per year (default \code{1}). Example:
-\code{k = 12} for monthly.}
+\item{term_years}{Integer term in years. Use \code{Inf} for a whole-life
+annuity.}
 
-\item{timing}{\code{"immediate"} (payments at end of period) or
-\code{"due"} (beginning). Default \code{"immediate"}.}
+\item{deferral_years}{Integer deferral period in years.}
 
-\item{woolhouse}{For \code{k > 1}: \code{"none"} (exact UDD),
-\code{"first"} (2-term Woolhouse), or \code{"second"} (3-term Woolhouse).}
+\item{payments_per_year}{Positive integer. Number of payments per year.
+For example, use \code{12} for monthly payments.}
 
-\item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble.}
+\item{timing}{Character string. Either \code{"immediate"} for payments at
+the end of each payment period or \code{"due"} for payments at the
+beginning of each payment period.}
+
+\item{woolhouse}{Character string. For \code{payments_per_year > 1}, use
+\code{"none"} for exact UDD, \code{"first"} for the first-order Woolhouse
+approximation, or \code{"second"} for the second-order Woolhouse
+approximation.}
+
+\item{output}{Character string. Use \code{"value"} to return a numeric APV
+or \code{"table"} to return a one-row tibble with intermediate quantities.}
 }
 \value{
-A single numeric APV value, or a one-row tibble if
-\code{tidy = TRUE}.
+If \code{output = "value"}, a numeric scalar containing the actuarial present
+value.
+
+If \code{output = "table"}, a one-row tibble with the main input values,
+equivalent interest rate, deferral factor, pure endowment factor, and APV.
 }
 \description{
-Computes the APV of a discrete life annuity at actuarial age \eqn{x} using
-a life table. Supports term \eqn{n} (temporary), integer deferral \eqn{m},
-\eqn{k}-thly payments (exact under UDD), and Woolhouse approximations up
-to second order.
+Computes the actuarial present value of a discrete life annuity using a life
+table.
 }
 \details{
-\strong{Annual annuity-due} (Finan, Section 37.2, Example 37.9):
-\deqn{\ddot{a}_{x:\overline{n}|} = \sum_{j=0}^{n-1} v^j \times {}_j p_x}
-
-\strong{Annual annuity-immediate} (Finan, Section 37.5):
-\deqn{a_{x:\overline{n}|} = \sum_{j=1}^{n} v^j \times {}_j p_x}
-
-\strong{Deferral} (Finan, Section 37.3):
-\deqn{{}_{m|}\ddot{a}_x = v^m \times {}_m p_x \times \ddot{a}_{x+m}}
-
-\strong{k-thly exact under UDD} (Finan, Section 38): each \eqn{1/k}-year
-fractional survival is computed under UDD, giving an exact result:
-\deqn{\ddot{a}^{(k)}_{x:\overline{n}|} = \frac{1}{k}\sum_{j=0}^{kn-1}
-  v^{j/k} \times {}_{j/k} p_x}
-
-\strong{Woolhouse approximations} (Finan, Problems 38.9-38.10):
+The function supports:
 \itemize{
-\item 2-term (first order):
-\eqn{\ddot{a}^{(k)}_{x:\overline{n}|} \approx \ddot{a}_{x:\overline{n}|} - \frac{k-1}{2k}(1 - {}_n E_x)}
-\item 3-term (second order):
-\eqn{\ddot{a}^{(k)}_{x:\overline{n}|} \approx \ddot{a}_{x:\overline{n}|} - \frac{k-1}{2k}(1 - {}_n E_x) - \frac{k^2-1}{12k^2}[\delta + \mu_x - {}_n E_x(\delta + \mu_{x+n})]}
+\item whole-life annuities,
+\item temporary annuities,
+\item integer deferral,
+\item annual or k-thly payments,
+\item exact fractional survival under UDD,
+\item first- and second-order Woolhouse approximations.
 }
 
-Conversion from due to immediate for k-thly temporaries
-(Finan, Problem 38.6):
-\deqn{a^{(k)}_{x:\overline{n}|} = \ddot{a}^{(k)}_{x:\overline{n}|} - \frac{1}{k}(1 - {}_n E_x)}
+For annual annuities-due,
+\deqn{\ddot{a}_{x:\overline{n}|} =
+\sum_{j=0}^{n-1} v^j\,{}_jp_x.}
+
+For annual annuities-immediate,
+\deqn{a_{x:\overline{n}|} =
+\sum_{j=1}^{n} v^j\,{}_jp_x.}
+
+Deferral is handled through
+\deqn{v^h\,{}_hp_x}
+where \eqn{h} is \code{deferral_years}.
+
+For k-thly payments with \code{woolhouse = "none"}, fractional survival is
+computed under UDD.
 }
+\examples{
+lt <- data.frame(
+  x  = 60:65,
+  lx = c(100000, 99000, 97500, 95500, 93000, 90000)
+)
+
+# Annual annuity-immediate
+annuity_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  timing = "immediate"
+)
+
+# Annual annuity-due
+annuity_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  timing = "due"
+)
+
+# Temporary annuity
+annuity_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  term_years = 3,
+  timing = "due"
+)
+
+# Deferred annuity
+annuity_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  deferral_years = 2,
+  timing = "due"
+)
+
+# Table output
+annuity_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.06,
+  term_years = 3,
+  timing = "due",
+  output = "table"
+)
+
+}
+\seealso{
+\code{\link{insurance_x}}, \code{\link{premium_x}},
+\code{\link{reserve_x}}, \code{\link{t_px}}, \code{\link{t_Ex}}
+
+Other life-contingencies: 
+\code{\link{annuity_xy}()},
+\code{\link{insurance_x}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_x}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{reserve_xy}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
+}
+\concept{life-contingencies}

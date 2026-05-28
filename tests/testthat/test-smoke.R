@@ -34,17 +34,16 @@ test_that("premium_xy returns a finite numeric value", {
   )
 
   p <- premium_xy(
-    lt = lt,
-    x = 60,
-    y = 62,
-    i = 0.05,
-    product = "term",
+    mortality_table = lt,
+    age_x = 60,
+    age_y = 62,
+    rate = 0.05,
+    insurance_type = "term",
     cohort = "first",
-    n = 5,
-    n_prem = 3,
+    term_years = 5,
+    premium_term_years = 3,
     benefit = 100000
   )
-
   expect_type(p, "double")
   expect_length(p, 1)
   expect_true(is.finite(p))

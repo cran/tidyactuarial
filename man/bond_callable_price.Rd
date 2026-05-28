@@ -11,23 +11,23 @@ bond_callable_price(
   coupons_per_year = 1L,
   call_times,
   call_prices,
-  y_effective_per_period = NULL,
-  y_rate = NULL,
-  y_type = "effective",
-  y_m = 1L,
+  yield_effective_per_period = NULL,
+  yield_rate = NULL,
+  yield_rate_type = "effective",
+  yield_m = 1L,
   redemption = NULL,
   tol = 1e-10,
-  check = TRUE
+  check = TRUE,
+  output = c("value", "table")
 )
 }
 \arguments{
-\item{face}{Numeric scalar. Face (par) value of the bond.}
+\item{face}{Numeric scalar. Face or par value of the bond.}
 
 \item{coupon_rate}{Numeric scalar. Annual coupon rate as a proportion.}
 
 \item{years_to_maturity}{Numeric scalar. Final maturity in years.
-Must be strictly positive (a callable bond needs at least one call date
-before maturity).}
+Must be strictly positive.}
 
 \item{coupons_per_year}{Positive integer. Number of coupon payments per year.}
 
@@ -35,17 +35,19 @@ before maturity).}
 Each value must be strictly between \code{0} and \code{years_to_maturity},
 and must align with coupon dates.}
 
-\item{call_prices}{Numeric vector of call prices corresponding to \code{call_times}.}
+\item{call_prices}{Numeric vector of call prices corresponding to
+\code{call_times}.}
 
-\item{y_effective_per_period}{Optional numeric scalar. Effective yield per
+\item{yield_effective_per_period}{Optional numeric scalar. Effective yield per
 coupon period. If supplied, it is used directly.}
 
-\item{y_rate}{Optional numeric scalar. Annual yield rate value.}
+\item{yield_rate}{Optional numeric scalar. Annual yield rate value.}
 
-\item{y_type}{Character string indicating the annual yield type:
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.}
+\item{yield_rate_type}{Character string indicating the annual yield type:
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or
+\code{"force"}.}
 
-\item{y_m}{Positive integer. Compounding frequency for nominal annual yields.}
+\item{yield_m}{Positive integer. Compounding frequency for nominal annual yields.}
 
 \item{redemption}{Numeric scalar. Redemption value at final maturity.
 If \code{NULL}, defaults to \code{face}.}
@@ -53,10 +55,17 @@ If \code{NULL}, defaults to \code{face}.}
 \item{tol}{Numeric scalar. Tolerance used in alignment checks.}
 
 \item{check}{Logical scalar. If \code{TRUE}, performs input validation.}
+
+\item{output}{Character string. Use \code{"value"} to return the worst-case
+callable-bond price, or \code{"table"} to return a tibble with all redemption
+scenarios.}
 }
 \value{
-Numeric scalar: the worst-case callable-bond price consistent with
-the target yield.
+If \code{output = "value"}, a numeric scalar: the worst-case callable-bond
+price consistent with the target yield.
+
+If \code{output = "table"}, a tibble with one row per redemption scenario,
+including scenario prices and the worst-case indicator.
 }
 \description{
 Computes the maximum price an investor should pay for a callable bond in
@@ -85,17 +94,17 @@ Assumptions:
 \item \code{years_to_maturity * coupons_per_year} must be an integer.
 \item Each \code{call_times * coupons_per_year} must be an integer.
 \item Stub periods are not supported.
-\item Pricing is performed at a coupon date (dirty price, no accrued interest).
+\item Pricing is performed at a coupon date; no accrued interest is included.
 }
 
 Yield input conventions:
 \itemize{
-\item If \code{y_effective_per_period} is supplied, it takes precedence over
-\code{y_rate}, \code{y_type}, and \code{y_m}, and is interpreted as the effective
-yield per coupon period.
-\item Otherwise, \code{y_rate}, \code{y_type}, and \code{y_m} define an annual yield
-specification, which is converted first to annual effective yield and
-then to effective yield per coupon period.
+\item If \code{yield_effective_per_period} is supplied, it takes precedence over
+\code{yield_rate}, \code{yield_rate_type}, and \code{yield_m}, and is interpreted
+as the effective yield per coupon period.
+\item Otherwise, \code{yield_rate}, \code{yield_rate_type}, and \code{yield_m} define
+an annual yield specification, which is converted first to annual effective
+yield and then to effective yield per coupon period.
 }
 
 Let the callable bond have possible redemption scenarios indexed by
@@ -106,7 +115,7 @@ scenario time and value.
 
 Then this function returns
 \deqn{\min_j P_j(y)}{min_j P_j(y)}
-that is, the smallest price across all redemption scenarios.
+when \code{output = "value"}.
 
 This is the maximum price an investor can pay while still guaranteeing
 at least the target yield under the least favorable redemption scenario.
@@ -120,8 +129,21 @@ bond_callable_price(
   coupons_per_year = 2,
   call_times = c(5, 7),
   call_prices = c(105, 102),
-  y_rate = 0.06,
-  y_type = "effective"
+  yield_rate = 0.06,
+  yield_rate_type = "effective"
+)
+
+# Table output with all redemption scenarios
+bond_callable_price(
+  face = 100,
+  coupon_rate = 0.08,
+  years_to_maturity = 10,
+  coupons_per_year = 2,
+  call_times = c(5, 7),
+  call_prices = c(105, 102),
+  yield_rate = 0.06,
+  yield_rate_type = "effective",
+  output = "table"
 )
 
 # Target yield given directly per coupon period
@@ -132,23 +154,21 @@ bond_callable_price(
   coupons_per_year = 2,
   call_times = c(4, 8),
   call_prices = c(1030, 1015),
-  y_effective_per_period = 0.028
+  yield_effective_per_period = 0.028
 )
 
 }
 \seealso{
-\code{\link{bond_callable_price_tbl}}, \code{\link{bond_price}}, \code{\link{bond_cash_flows}},
+\code{\link{bond_price}}, \code{\link{bond_cash_flows}},
 \code{\link{bond_book_value}}, \code{\link{bond_ytm}}
 
 Other bonds: 
 \code{\link{bond_book_value}()},
-\code{\link{bond_book_value_tbl}()},
-\code{\link{bond_callable_price_tbl}()},
 \code{\link{bond_convexity}()},
 \code{\link{bond_duration}()},
 \code{\link{bond_price}()},
 \code{\link{bond_ytm}()},
-\code{\link{portfolio_convexity_tbl}()},
-\code{\link{portfolio_duration_tbl}()}
+\code{\link{portfolio_convexity}()},
+\code{\link{portfolio_duration}()}
 }
 \concept{bonds}

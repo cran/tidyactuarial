@@ -5,102 +5,105 @@
 \title{Net premium for life insurance by the equivalence principle}
 \usage{
 premium_x(
-  lt,
-  x,
-  i,
-  product = c("whole", "term", "endowment", "variable_k"),
-  benefit,
-  n = NULL,
-  m = 0,
-  k = 1,
+  mortality_table,
+  age,
+  rate,
+  rate_type = "effective",
+  m = 1L,
+  insurance_type = c("whole", "term", "endowment", "variable_k"),
+  benefit = 1,
+  term_years = Inf,
+  deferral_years = 0L,
+  payments_per_year = 1L,
   frac = c("UDD", "CF", "CML", "Balducci"),
   premium_timing = c("due", "immediate"),
-  prem_start = c("issue", "deferred"),
-  n_prem = NULL,
+  premium_start = c("issue", "deferred"),
+  premium_term_years = NULL,
   woolhouse = c("none", "first", "second"),
-  tidy = FALSE,
+  output = c("value", "table"),
   check = TRUE
 )
 }
 \arguments{
-\item{lt}{A life table data frame containing at least columns \code{x}
-and \code{lx}.}
+\item{mortality_table}{A life table data frame containing at least columns
+\code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age at issue.}
+\item{age}{Integer actuarial age at issue.}
 
-\item{i}{Effective annual interest rate (must be \code{> -1}).}
+\item{rate}{Numeric scalar. Annual interest-rate input.}
 
-\item{product}{Type of insurance: \code{"whole"}, \code{"term"},
-\code{"endowment"}, or \code{"variable_k"}.}
+\item{rate_type}{Character string indicating the rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
 
-\item{benefit}{Benefit amount. For standard products, a single numeric
-value. For \code{"variable_k"}, a numeric vector or a function of time.}
+\item{m}{Positive integer. Compounding frequency for nominal rates. Ignored
+for \code{rate_type = "effective"} and \code{rate_type = "force"}.}
 
-\item{n}{Optional insurance term in years. Required for \code{"term"}
-and \code{"endowment"}.}
+\item{insurance_type}{Type of insurance contract. One of \code{"whole"},
+\code{"term"}, \code{"endowment"}, or \code{"variable_k"}.}
 
-\item{m}{Nonnegative integer deferral period in years (default \code{0}).}
+\item{benefit}{Benefit amount. For standard products, a single nonnegative
+numeric value. For \code{insurance_type = "variable_k"}, a numeric vector
+or a function of time may be supplied and is passed to
+\code{\link{insurance_variable_k}}.}
 
-\item{k}{Number of premium payments per year (default \code{1}).}
+\item{term_years}{Term of the insurance contract in years. Use \code{Inf}
+for whole-life insurance. Required as a finite integer for term and
+endowment insurance.}
 
-\item{frac}{Fractional-age assumption for survival probabilities:
-\code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.}
+\item{deferral_years}{Integer deferral period in years.}
 
-\item{premium_timing}{Timing of premium payments:
-\code{"due"} (in advance, default) or \code{"immediate"} (in arrears).}
+\item{payments_per_year}{Positive integer. Number of premium payments per
+year.}
 
-\item{prem_start}{Start of premium payments:
-\code{"issue"} (start at issue, time 0) or \code{"deferred"} (start at
-time \code{m}).}
+\item{frac}{Fractional-age assumption used only for
+\code{insurance_type = "variable_k"}. One of \code{"UDD"}, \code{"CF"},
+\code{"CML"}, or \code{"Balducci"}.}
 
-\item{n_prem}{Optional premium-paying term in years, counted from
-\code{prem_start}. If \code{NULL}, defaults to whole-life to the end of
-the table (for \code{"whole"}) or to the insurance term \code{n}
-(for temporary products).}
+\item{premium_timing}{Timing of premium payments. Use \code{"due"} for
+payments in advance or \code{"immediate"} for payments in arrears.}
 
-\item{woolhouse}{Woolhouse order for the premium annuity when \code{k > 1}:
-\code{"none"} (exact UDD, default), \code{"first"}, or \code{"second"}.
-Passed to \code{\link{annuity_x}}.}
+\item{premium_start}{Start of premium payments. Use \code{"issue"} for
+premiums starting at issue, or \code{"deferred"} for premiums starting
+after \code{deferral_years}.}
 
-\item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble with details.}
+\item{premium_term_years}{Optional premium-paying term in years, counted from
+\code{premium_start}. If \code{NULL}, it defaults to whole life for whole
+life insurance and to \code{term_years} for temporary products. For finite
+term contracts, premiums must not extend beyond the end of coverage.}
 
-\item{check}{Logical. If \code{TRUE}, performs basic input validation.}
+\item{woolhouse}{Woolhouse order for the premium annuity when
+\code{payments_per_year > 1}. One of \code{"none"}, \code{"first"}, or
+\code{"second"}.}
+
+\item{output}{Character string. Use \code{"value"} to return a numeric
+premium, or \code{"table"} to return a one-row tibble with details.}
+
+\item{check}{Logical. If \code{TRUE}, performs input validation.}
 }
 \value{
-A numeric net premium per payment, or a one-row tibble if
-\code{tidy = TRUE}.
+If \code{output = "value"}, a numeric scalar with the net premium per
+payment.
+
+If \code{output = "table"}, a one-row tibble with the main inputs, APV of
+benefits, APV of premiums, premium per payment, and annualized premium.
 }
 \description{
 Computes the net benefit premium of a life insurance contract using the
-equivalence principle (Finan, Section 41):
+equivalence principle:
 \deqn{P = \frac{\text{APV of benefits}}{\text{APV of premium annuity}}.}
 }
 \details{
-The premium returned corresponds to one premium payment
-(annual if \code{k = 1}, monthly if \code{k = 12}, etc.).
+The premium returned corresponds to one premium payment. For example, when
+\code{payments_per_year = 12}, the returned value is the monthly premium.
 
-The benefit premium is the level payment that satisfies the equivalence
+The benefit premium is the level payment satisfying the equivalence
 principle: the APV of premiums equals the APV of benefits at issue.
 
-For standard products, the APV of benefits is (Finan, Sections 27 and 41):
-\itemize{
-\item Whole life: \eqn{A_x} (Finan, Sec. 41.1)
-\item n-year term: \eqn{A^1_{x:\overline{n}|}} (Finan, Sec. 41.2)
-\item n-year endowment: \eqn{A_{x:\overline{n}|}} (Finan, Sec. 41.4)
-}
-
-The APV of the premium annuity is computed via \code{\link{annuity_x}},
-supporting \code{k}-thly payments and Woolhouse approximations.
-
-\strong{Premium payment start} (Finan, Sec. 41.5):
-\itemize{
-\item \code{prem_start = "issue"}: premiums start at age \eqn{x}
-(time 0). The premium annuity is \eqn{\ddot{a}_{x:\overline{n_p}|}}.
-\item \code{prem_start = "deferred"}: premiums start at age \eqn{x+m}
-(after the deferral period). The premium annuity, valued at time 0,
-is \eqn{v^m \cdot {}_mp_x \cdot \ddot{a}_{x+m:\overline{n_p}|}}
-which equals a deferred annuity with \code{m} years of deferral.
-}
+For standard products, the APV of benefits is computed with
+\code{\link{insurance_x}}. The APV of the premium annuity is computed with
+\code{\link{annuity_x}}, supporting k-thly payments and Woolhouse
+approximations.
 }
 \examples{
 lt <- data.frame(
@@ -108,44 +111,82 @@ lt <- data.frame(
   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 86000)
 )
 
-# Whole life insurance, annual premium (Finan, Sec. 41.1):
-# P(A_x) = A_x / \ddot{a}_x
-premium_x(lt, x = 60, i = 0.05, product = "whole", benefit = 100000)
+# Whole life insurance, annual premium
+premium_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.05,
+  insurance_type = "whole",
+  benefit = 100000
+)
 
-# Verify manually: P = A / \ddot{a}
-A  <- insurance_x(lt, x = 60, i = 0.05, type = "whole")
-ad <- annuity_x(lt, x = 60, i = 0.05, timing = "due")
-100000 * A / ad
+# Verify manually: P = A / a-double-dot
+A <- insurance_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.05,
+  insurance_type = "whole",
+  benefit = 100000
+)
 
-# 5-year term insurance, annual premium (Finan, Sec. 41.2):
-# P(A^1_{x:n}) = A^1_{x:n} / \ddot{a}_{x:n}
-premium_x(lt, x = 60, i = 0.05, product = "term", n = 5, benefit = 100000)
+ad <- annuity_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.05,
+  timing = "due"
+)
 
-# 5-year endowment insurance (Finan, Sec. 41.4):
-# P(A_{x:n}) = A_{x:n} / \ddot{a}_{x:n}
-premium_x(lt, x = 60, i = 0.05, product = "endowment", n = 5,
-          benefit = 100000)
+A / ad
 
-# Deferred whole life: premiums start after deferral (Finan, Sec. 41.5)
-premium_x(lt, x = 60, i = 0.05, product = "whole", benefit = 100000,
-          m = 2, prem_start = "deferred")
+# Five-year term insurance
+premium_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.05,
+  insurance_type = "term",
+  term_years = 5,
+  benefit = 100000
+)
 
-# t-payment whole life: 3 years of premiums for whole life coverage
-premium_x(lt, x = 60, i = 0.05, product = "whole", benefit = 100000,
-          n_prem = 3)
+# Table output
+premium_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.05,
+  insurance_type = "term",
+  term_years = 5,
+  benefit = 100000,
+  output = "table"
+)
 
-# Monthly premiums with Woolhouse
-premium_x(lt, x = 60, i = 0.05, product = "whole", benefit = 100000,
-          k = 12, woolhouse = "first")
-
-# Tidy output with all details
-premium_x(lt, x = 60, i = 0.05, product = "term", n = 5,
-          benefit = 100000, tidy = TRUE)
+# Monthly premiums paid for a shorter period than the coverage term
+premium_x(
+  mortality_table = lt,
+  age = 60,
+  rate = 0.05,
+  insurance_type = "term",
+  term_years = 5,
+  benefit = 100000,
+  payments_per_year = 12,
+  premium_term_years = 3
+)
 
 }
 \seealso{
-\code{\link{insurance_x}} for the APV of benefits,
-\code{\link{annuity_x}} for the APV of the premium annuity,
-\code{\link{premium_xy}} for two-life premiums,
-\code{\link{premium_gross}} for gross premiums with expenses.
+\code{\link{insurance_x}}, \code{\link{annuity_x}},
+\code{\link{premium_xy}}, \code{\link{premium_gross}}
+
+Other life-contingencies: 
+\code{\link{annuity_x}()},
+\code{\link{annuity_xy}()},
+\code{\link{insurance_x}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{reserve_xy}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
 }
+\concept{life-contingencies}

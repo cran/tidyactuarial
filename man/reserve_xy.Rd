@@ -5,93 +5,98 @@
 \title{Benefit reserve schedule for two-life insurance}
 \usage{
 reserve_xy(
-  lt,
-  x,
-  y,
-  i,
-  type = c("whole", "term", "endowment"),
+  mortality_table,
+  age_x = NULL,
+  age_y = NULL,
+  rate = NULL,
+  rate_type = NULL,
+  m = NULL,
+  insurance_type = c("whole", "term", "endowment"),
   cohort = c("first", "last"),
-  n = NULL,
+  term_years = Inf,
   benefit = 1,
   premium = NULL,
-  h = NULL,
+  premium_term_years = NULL,
+  payments_per_year = 1L,
+  premium_timing = c("due", "immediate"),
   at = NULL,
   method = c("prospective", "recursive"),
-  tidy = TRUE
+  output = c("table", "value")
 )
 }
 \arguments{
-\item{lt}{Either a single life table data frame (used for both lives) or
-a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
-Each life table must contain columns \code{x} and \code{lx}.}
+\item{mortality_table}{Either a single life table used for both lives, or a
+list of two life tables \code{list(table_x, table_y)}. Each table must contain
+columns \code{x} and \code{lx}. A \code{tidyact_life_contract} object created by
+\code{\link[=life_contract]{life_contract()}} is also accepted.}
 
-\item{x}{Integer actuarial age for life 1 at issue.}
+\item{age_x}{Integer actuarial age for the first life at issue.}
 
-\item{y}{Integer actuarial age for life 2 at issue.}
+\item{age_y}{Integer actuarial age for the second life at issue.}
 
-\item{i}{Annual effective interest rate (must be \code{> -1}).}
+\item{rate}{Numeric scalar. Annual interest-rate input.}
 
-\item{type}{Insurance type: \code{"whole"}, \code{"term"}, or
+\item{rate_type}{Character string indicating the rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Compounding frequency for nominal rates.}
+
+\item{insurance_type}{Insurance type. One of \code{"whole"}, \code{"term"}, or
 \code{"endowment"}.}
 
-\item{cohort}{Status cohort: \code{"first"} (joint-life, first death)
-or \code{"last"} (last-survivor, second death).}
+\item{cohort}{Status definition. Use \code{"first"} for joint-life status or
+\code{"last"} for last-survivor status.}
 
-\item{n}{Integer insurance term in years. Required for \code{"term"}
-and \code{"endowment"}. For \code{"whole"}, determined from the
-life table.}
+\item{term_years}{Insurance term in years. Required for term and endowment
+insurance. For whole life insurance, use \code{Inf} or omit it.}
 
-\item{benefit}{Numeric benefit amount (default \code{1}).}
+\item{benefit}{Numeric benefit amount.}
 
-\item{premium}{Net premium per payment. If \code{NULL} (default),
-computed internally via the equivalence principle using
-\code{\link{premium_xy}}.}
+\item{premium}{Net premium per payment. If \code{NULL}, it is computed internally
+using \code{\link[=premium_xy]{premium_xy()}}.}
 
-\item{h}{Integer premium-paying term in years. If \code{NULL},
-premiums are payable for the full duration of the contract.
-Set \code{h < n} for limited-payment policies.}
+\item{premium_term_years}{Premium-paying term in years. If \code{NULL}, premiums
+are payable for the full contract term.}
 
-\item{at}{Integer vector of policy durations at which to compute
-the reserve. Default \code{NULL} computes for all integer
-durations \code{0, 1, ..., n}.}
+\item{payments_per_year}{Number of premium payments per year. Default is 1.}
 
-\item{method}{Computation method: \code{"prospective"} (default)
-or \code{"recursive"}.}
+\item{premium_timing}{Timing of premium payments. Use \code{"due"} or
+\code{"immediate"}. The recursive method currently requires annual due
+premiums.}
 
-\item{tidy}{Logical. If \code{TRUE} (default), returns a tibble
-schedule. If \code{FALSE}, returns a named numeric vector.}
+\item{at}{Integer vector of policy durations at which to compute reserves.
+If \code{NULL}, reserves are computed for all integer durations.}
+
+\item{method}{Computation method. Use \code{"prospective"} or \code{"recursive"}.}
+
+\item{output}{Character string. Use \code{"table"} for a tibble schedule or
+\code{"value"} for a named numeric vector.}
 }
 \value{
-If \code{tidy = TRUE}, a tibble with columns \code{k},
-\code{age_x}, \code{age_y}, \code{reserve}, \code{premium_paid},
-\code{benefit_due}. If \code{tidy = FALSE}, a named numeric
-vector of reserves.
+If \code{output = "table"}, a tibble with reserve schedule details.
+If \code{output = "value"}, a named numeric vector.
 }
 \description{
-Computes the terminal benefit reserve \eqn{{}_kV} at one or more
-policy durations for a fully discrete two-life insurance contract
-(independent lives), using the prospective or recursive method.
-Generalizes Finan, Sections 47 and 52 to the joint-life (Sec. 58)
-and last-survivor (Sec. 59) statuses.
+Computes terminal benefit reserves at selected policy durations for a
+fully discrete two-life insurance contract, assuming independent future
+lifetimes.
 }
 \details{
-\strong{Prospective method} (generalizing Finan, Sec. 47 to two lives):
-\deqn{{}_kV = \text{APV(future benefits at ages } x+k, y+k\text{)}
-  - P \cdot \text{APV(future premiums at ages } x+k, y+k\text{)}}
+The prospective reserve at duration \code{k} is computed as:
 
-The APV of future benefits uses \code{\link{insurance_xy}} at
-shifted ages \eqn{(x+k, y+k)}, and the APV of future premiums
-uses \code{\link{annuity_xy}} on the same status.
+\deqn{
+{}_kV = APV(\text{future benefits}) -
+P \cdot APV(\text{future premiums}).
+}
 
-For endowment insurance at \eqn{k = n}: \eqn{{}_nV = \text{benefit}}.
+Future benefit values are computed with \code{\link[=insurance_xy]{insurance_xy()}} at shifted ages
+\code{age_x + k} and \code{age_y + k}. Future premium values are computed with
+\code{\link[=annuity_xy]{annuity_xy()}} on the same two-life status.
 
-\strong{Recursive method} (generalizing Finan, Sec. 52):
-\deqn{{}_{k+1}V = \frac{({}_kV + \pi_k)(1+i) - b_{k+1} \cdot
-  q_{\text{status}}(x+k, y+k)}{p_{\text{status}}(x+k, y+k)}}
+The recursive method is implemented for annual due premiums and follows the
+usual one-year recursion for the selected two-life status.
 
-where \eqn{q_{\text{status}}} and \eqn{p_{\text{status}}} are
-the one-year death and survival probabilities of the two-life
-status, computed via \code{\link{t_pxy}}.
+This function assumes independent future lifetimes.
 }
 \examples{
 lt <- data.frame(
@@ -100,47 +105,43 @@ lt <- data.frame(
          86000, 81000, 75000, 68000, 60000)
 )
 
-# Joint-life whole life reserve
-reserve_xy(lt, x = 60, y = 62, i = 0.06,
-           type = "whole", cohort = "first")
+reserve_xy(
+  mortality_table = lt,
+  age_x = 60,
+  age_y = 62,
+  rate = 0.06,
+  insurance_type = "term",
+  cohort = "first",
+  term_years = 4
+)
 
-# Last-survivor 5-year endowment
-reserve_xy(lt, x = 60, y = 62, i = 0.06,
-           type = "endowment", cohort = "last", n = 5)
-
-# Joint-life 4-year term
-reserve_xy(lt, x = 60, y = 62, i = 0.06,
-           type = "term", cohort = "first", n = 4)
-
-# Limited payment: 3-payment, 5-year endowment, joint
-reserve_xy(lt, x = 60, y = 62, i = 0.06,
-           type = "endowment", cohort = "first",
-           n = 5, h = 3)
-
-# Verify: prospective = recursive
-r_pro <- reserve_xy(lt, x = 60, y = 62, i = 0.06,
-                    type = "endowment", cohort = "first",
-                    n = 5, method = "prospective")
-r_rec <- reserve_xy(lt, x = 60, y = 62, i = 0.06,
-                    type = "endowment", cohort = "first",
-                    n = 5, method = "recursive")
-all.equal(r_pro$reserve, r_rec$reserve)
-
-# Benefit of $100,000
-reserve_xy(lt, x = 60, y = 62, i = 0.06,
-           type = "whole", cohort = "first",
-           benefit = 100000)
-
-# Specific durations
-reserve_xy(lt, x = 60, y = 62, i = 0.06,
-           type = "endowment", cohort = "first",
-           n = 5, at = c(0, 3, 5))
+reserve_xy(
+  mortality_table = lt,
+  age_x = 60,
+  age_y = 62,
+  rate = 0.06,
+  insurance_type = "endowment",
+  cohort = "last",
+  term_years = 5,
+  benefit = 100000
+)
 
 }
 \seealso{
-\code{\link{reserve_x}} for single-life reserves,
-\code{\link{premium_xy}} for two-life premiums,
-\code{\link{insurance_xy}} for two-life insurance APVs,
-\code{\link{annuity_xy}} for two-life annuity APVs,
-\code{\link{t_pxy}} for two-life survival.
+\code{\link[=reserve_x]{reserve_x()}}, \code{\link[=premium_xy]{premium_xy()}}, \code{\link[=insurance_xy]{insurance_xy()}}, \code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=t_pxy]{t_pxy()}}
+
+Other life-contingencies: 
+\code{\link{annuity_x}()},
+\code{\link{annuity_xy}()},
+\code{\link{insurance_x}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_x}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
 }
+\concept{life-contingencies}

@@ -106,7 +106,7 @@ insurance_variable_k(
 # Level benefit = 1 should match a term insurance
 # (approximately, since insurance_x uses annual and this uses k-thly)
 insurance_variable_k(lt, x = 60, i = 0.05, benefit = 1, n = 5, k = 1)
-insurance_x(lt, x = 60, i = 0.05, n = 5, type = "term")
+insurance_x(mortality_table = lt, age = 60, rate = 0.05, term_years = 5, insurance_type = "term")
 
 # 2-year deferred, 3-year term with monthly varying benefits
 insurance_variable_k(
@@ -126,5 +126,5 @@ insurance_variable_k(
 \code{\link{insurance_x}} for level-benefit life insurance,
 \code{\link{annuity_x}} for life annuity APVs,
 \code{\link{t_px}} for survival probabilities,
-\code{\link{Var_insurance_x}} for variance of level insurance.
+Monte Carlo simulation tools may be used for empirical variance estimation.
 }

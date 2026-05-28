@@ -36,14 +36,14 @@
 #'   If \code{plot = TRUE}, it also adds a list-column named by \code{.out_plot}
 #'   containing \code{ggplot2} objects.
 #'
-#' @seealso \code{\link{forward_rate_tbl}},
+#' @seealso \code{\link{forward_rate}},
 #'   \code{\link{discount_factor_spot}}, \code{\link{standardize_interest}}
 #'
 #' @family interest
 #'
 #' @examples
 #' # Simple example
-#' res <- yield_curve_tbl(
+#' res <- yield_curve(
 #'   term = c(1, 2, 3, 4, 5),
 #'   spot = c(0.040, 0.045, 0.048, 0.050, 0.051),
 #'   plot = TRUE
@@ -58,7 +58,7 @@
 #'   spot = list(c(0.04, 0.05, 0.06), c(0.03, 0.035, 0.04))
 #' )
 #'
-#' res2 <- yield_curve_tbl(
+#' res2 <- yield_curve(
 #'   curves,
 #'   col_term = "term",
 #'   col_spot = "spot",
@@ -77,7 +77,7 @@
 #' Kellison, S. G. *The Theory of Interest*.
 #'
 #' @export
-yield_curve_tbl <- function(
+yield_curve <- function(
     .data = NULL,
     term = NULL,
     spot = NULL,
@@ -207,39 +207,64 @@ yield_curve_tbl <- function(
   # --- Per-row validation ---
   validate_curve <- function(ti, si, row_id) {
     if (!is.numeric(ti)) {
-      abort(paste0("`", term_name, "` must contain numeric vectors. Problem at row ", row_id, "."))
+      abort(paste0(
+        "`", term_name, "` must contain numeric vectors. ",
+        "Problem at row ", row_id, "."
+      ))
     }
+
     if (!is.numeric(si)) {
-      abort(paste0("`", spot_name, "` must contain numeric vectors. Problem at row ", row_id, "."))
+      abort(paste0(
+        "`", spot_name, "` must contain numeric vectors. ",
+        "Problem at row ", row_id, "."
+      ))
     }
+
     if (length(ti) == 0L) {
       abort(paste0("Empty curve detected at row ", row_id, "."))
     }
+
     if (length(ti) != length(si)) {
       abort(paste0(
         "`", term_name, "` and `", spot_name,
         "` must have the same length at row ", row_id, "."
       ))
     }
+
     if (!anyNA(ti) && any(!is.finite(ti))) {
       abort(paste0("`", term_name, "` must be finite at row ", row_id, "."))
     }
+
     if (!anyNA(si) && any(!is.finite(si))) {
       abort(paste0("`", spot_name, "` must be finite at row ", row_id, "."))
     }
+
     if (!anyNA(ti) && any(ti < 0)) {
-      abort(paste0("All maturities in `", term_name, "` must satisfy t >= 0. Problem at row ", row_id, "."))
+      abort(paste0(
+        "All maturities in `", term_name,
+        "` must satisfy t >= 0. Problem at row ", row_id, "."
+      ))
     }
+
     if (!anyNA(si) && any(si <= -1)) {
-      abort(paste0("All spot rates in `", spot_name, "` must satisfy i > -1. Problem at row ", row_id, "."))
+      abort(paste0(
+        "All spot rates in `", spot_name,
+        "` must satisfy i > -1. Problem at row ", row_id, "."
+      ))
     }
+
     if (!anyNA(ti) && length(ti) >= 2L && any(diff(ti) <= 0)) {
-      abort(paste0("`", term_name, "` must be strictly increasing without duplicates at row ", row_id, "."))
+      abort(paste0(
+        "`", term_name,
+        "` must be strictly increasing without duplicates at row ",
+        row_id, "."
+      ))
     }
+
     invisible(TRUE)
   }
 
-  # --- Plot helper (uses .data pronoun to avoid NSE NOTEs) ---
+  # --- Plot helper ---
   make_plot <- function(ti, si) {
     plot_df <- tibble::tibble(term = ti, spot = si)
 

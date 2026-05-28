@@ -8,10 +8,12 @@ s_angle(
   n_years,
   payments_per_year = 1L,
   rate,
-  type = "effective",
+  rate_type = "effective",
   m = 1L,
   deferral_years = 0,
-  timing = "immediate"
+  timing = "immediate",
+  payment = 1,
+  output = c("value", "table")
 )
 }
 \arguments{
@@ -23,7 +25,7 @@ discrete payments per year. Ignored for continuous annuities.}
 
 \item{rate}{Numeric vector of rate values.}
 
-\item{type}{Character vector indicating the rate type.
+\item{rate_type}{Character vector indicating the rate type.
 Allowed values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
@@ -36,9 +38,20 @@ this is metadata only for accumulation factors.}
 
 \item{timing}{Character vector. One of \code{"immediate"},
 \code{"due"}, or \code{"continuous"}.}
+
+\item{payment}{Numeric vector of level payment amounts. Used only when
+\code{output = "table"} to report the corresponding future value.
+The accumulation factor itself is always computed for unit payments.}
+
+\item{output}{Character string. Use \code{"value"} to return a numeric
+accumulation factor, or \code{"table"} to return a tibble with intermediate
+calculations.}
 }
 \value{
-Numeric vector of accumulation factors.
+If \code{output = "value"}, a numeric vector of accumulation factors.
+
+If \code{output = "table"}, a tibble with input values, equivalent rates,
+accumulation factors, payment amounts, and future values.
 }
 \description{
 Computes the actuarial accumulation factor for a level annuity.
@@ -52,8 +65,8 @@ Supported timing conventions:
 }
 
 For discrete annuities, \code{payments_per_year = k} means payments are made
-every \eqn{1/k} year. The function returns the accumulation factor only,
-assuming a unit payment at each payment time.
+every \eqn{1/k} year. The function returns the accumulation factor, assuming
+a unit payment at each payment time.
 
 Horizon convention:
 the future value is measured at the time of the last payment. Under this
@@ -69,79 +82,65 @@ The function first converts the supplied rate to the equivalent annual
 effective interest rate using \code{\link{standardize_interest}}.
 
 For finite discrete annuities:
-\deqn{s_n = \frac{(1+i)^n - 1}{i}}{s_n = ((1+i)^n - 1) / i}
+\deqn{s_{\overline{n|}} = \frac{(1+i)^n - 1}{i}}
 
 For due annuities:
-\deqn{\ddot{s}_n = (1+i) s_n}{s_n_due = (1+i) * s_n}
+\deqn{\ddot{s}_{\overline{n|}} = (1+i)s_{\overline{n|}}}
 
 For continuous annuities:
-\deqn{\bar{s}_n = \frac{e^{\delta n} - 1}{\delta}}{s_n_bar = (exp(delta*n) - 1) / delta}
+\deqn{\bar{s}_{\overline{n|}} = \frac{e^{\delta n} - 1}{\delta}}
 
-Input vectors must have length 1 or a common length.
-Missing values are propagated.
+Input vectors must have length 1 or a common length. Missing values are
+propagated.
 }
 \examples{
-# Simple scalar examples
-s_angle(n_years = 10, rate = 0.05, type = "effective")
-s_angle(n_years = 10, rate = 0.06, type = "nominal_interest", m = 12,
-        payments_per_year = 12)
-s_angle(n_years = 15, rate = 0.04, type = "force", timing = "continuous")
+# Numeric accumulation factor
+s_angle(n_years = 10, rate = 0.05)
 
-# Medium vectorized example
+# Nominal interest converted monthly, with monthly payments
+s_angle(
+  n_years = 10,
+  rate = 0.06,
+  rate_type = "nominal_interest",
+  m = 12,
+  payments_per_year = 12
+)
+
+# Continuous annuity
+s_angle(
+  n_years = 15,
+  rate = 0.04,
+  rate_type = "force",
+  timing = "continuous"
+)
+
+# Tibble output for teaching or auditing
+s_angle(
+  n_years = 10,
+  rate = 0.05,
+  payment = 1000,
+  output = "table"
+)
+
+# Vectorized example
 s_angle(
   n_years = c(5, 10, 20),
   payments_per_year = c(1, 12, 1),
   rate = c(0.05, 0.06, 0.04),
-  type = c("effective", "nominal_interest", "force"),
+  rate_type = c("effective", "nominal_interest", "force"),
   m = c(1, 12, 1),
   deferral_years = c(0, 2, 3),
   timing = c("immediate", "due", "continuous")
 )
 
-# Use inside a data pipeline
-if (requireNamespace("dplyr", quietly = TRUE) &&
-    requireNamespace("tibble", quietly = TRUE)) {
-  contracts <- tibble::tibble(
-    n_years = c(10, 15, 20),
-    rate = c(0.05, 0.06, 0.04),
-    type = c("effective", "nominal_interest", "force"),
-    m = c(1, 12, 1),
-    payments_per_year = c(1, 12, NA),
-    deferral_years = c(0, 2, 3),
-    timing = c("immediate", "due", "continuous")
-  )
-
-  dplyr::mutate(
-    contracts,
-    factor = s_angle(
-      n_years = n_years,
-      payments_per_year = dplyr::coalesce(payments_per_year, 1L),
-      rate = rate,
-      type = type,
-      m = m,
-      deferral_years = deferral_years,
-      timing = timing
-    )
-  )
-}
-
 }
 \seealso{
-\code{\link{s_angle_tbl}}, \code{\link{a_angle}},
-\code{\link{standardize_interest}}
+\code{\link{a_angle}}, \code{\link{standardize_interest}},
+\code{\link{future_value}}
 
 Other annuities: 
-\code{\link{Da_angle}()},
-\code{\link{Da_angle_tbl}()},
-\code{\link{Ia_angle}()},
 \code{\link{a_angle}()},
-\code{\link{a_angle_tbl}()},
-\code{\link{arithmetic_annuity_av_tbl}()},
-\code{\link{arithmetic_annuity_pv_tbl}()},
-\code{\link{ga_angle}()},
-\code{\link{ga_angle_tbl}()},
-\code{\link{gs_angle}()},
-\code{\link{gs_angle_tbl}()},
-\code{\link{s_angle_tbl}()}
+\code{\link{annuity_arith}()},
+\code{\link{annuity_geom}()}
 }
 \concept{annuities}

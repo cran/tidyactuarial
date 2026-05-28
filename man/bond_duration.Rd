@@ -128,13 +128,11 @@ bond_duration(
 
 Other bonds: 
 \code{\link{bond_book_value}()},
-\code{\link{bond_book_value_tbl}()},
 \code{\link{bond_callable_price}()},
-\code{\link{bond_callable_price_tbl}()},
 \code{\link{bond_convexity}()},
 \code{\link{bond_price}()},
 \code{\link{bond_ytm}()},
-\code{\link{portfolio_convexity_tbl}()},
-\code{\link{portfolio_duration_tbl}()}
+\code{\link{portfolio_convexity}()},
+\code{\link{portfolio_duration}()}
 }
 \concept{bonds}

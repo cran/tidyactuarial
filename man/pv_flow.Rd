@@ -116,12 +116,10 @@ pv_flow(
 
 Other time-value: 
 \code{\link{future_value}()},
-\code{\link{future_value_tbl}()},
 \code{\link{fv_flow}()},
 \code{\link{irr_flow}()},
 \code{\link{irr_flow_multi}()},
 \code{\link{plot_cash_flow}()},
-\code{\link{present_value}()},
-\code{\link{present_value_tbl}()}
+\code{\link{present_value}()}
 }
 \concept{time-value}

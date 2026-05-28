@@ -74,9 +74,8 @@ if (requireNamespace("purrr", quietly = TRUE) &&
 
 Other interest: 
 \code{\link{discount_factor_spot}()},
-\code{\link{discount_factor_spot_tbl}()},
-\code{\link{forward_rate_tbl}()},
+\code{\link{forward_rate}()},
 \code{\link{standardize_interest}()},
-\code{\link{yield_curve_tbl}()}
+\code{\link{yield_curve}()}
 }
 \concept{interest}

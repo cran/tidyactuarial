@@ -5,94 +5,75 @@
 \title{Actuarial present value of a two-life annuity}
 \usage{
 annuity_xy(
-  lt,
-  x,
-  y,
-  i,
+  mortality_table,
+  age_x = NULL,
+  age_y = NULL,
+  rate = NULL,
+  rate_type = NULL,
+  m = NULL,
   cohort = c("first", "last"),
   benefit = NULL,
-  n = NULL,
-  m = 0L,
-  k = 1L,
+  term_years = Inf,
+  deferment_years = 0L,
+  payments_per_year = 1L,
   timing = c("immediate", "due"),
   woolhouse = c("none", "first", "second"),
   frac,
-  tidy = FALSE
+  output = c("value", "table")
 )
 }
 \arguments{
-\item{lt}{Either:
-\itemize{
-\item a single life table data frame, used for both lives; or
-\item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
-}
-Each life table must contain columns \code{x} and \code{lx}.}
+\item{mortality_table}{Either a single life table used for both lives, a list
+of two life tables \code{list(table_x, table_y)}, or a \code{tidyact_life_contract}
+object created by \code{\link[=life_contract]{life_contract()}}. Each life table must contain columns
+\code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age for life 1.}
+\item{age_x}{Integer actuarial age for the first life.}
 
-\item{y}{Integer actuarial age for life 2.}
+\item{age_y}{Integer actuarial age for the second life.}
 
-\item{i}{Annual effective interest rate (must be \code{> -1}).}
+\item{rate}{Numeric scalar. Annual interest-rate input.}
 
-\item{cohort}{Status cohort: \code{"first"} (pays while both alive) or
-\code{"last"} (pays while at least one alive). Ignored if \code{benefit}
-is explicitly supplied.}
+\item{rate_type}{Character string indicating the rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{benefit}{Optional list with weights \code{both}, \code{x_only},
-\code{y_only}. If supplied, the payment at time \eqn{t} is weighted by
-the probability of each state at \eqn{t}.}
+\item{m}{Positive integer. Compounding frequency for nominal rates.}
 
-\item{n}{Integer term (years). If \code{NULL}, whole life to the relevant
-horizon implied by the supplied table(s) and benefit structure.}
+\item{cohort}{Character string. Use \code{"first"} for joint-life payments while
+both lives are alive, or \code{"last"} for last-survivor payments while at least
+one life is alive. Ignored when \code{benefit} is supplied.}
 
-\item{m}{Integer deferment (years). Default \code{0}.}
+\item{benefit}{Optional list with weights \code{both}, \code{x_only}, and \code{y_only}.}
 
-\item{k}{Integer payments per year. Default \code{1}.}
+\item{term_years}{Term in years. Use \code{Inf} for the maximum horizon allowed
+by the life tables.}
 
-\item{timing}{Payment timing: \code{"immediate"} or \code{"due"}.}
+\item{deferment_years}{Integer deferment period in years.}
 
-\item{woolhouse}{Woolhouse approximation for \code{k > 1}:
-\code{"none"} (exact UDD/CF/Balducci k-thly), \code{"first"}, or
-\code{"second"}.}
+\item{payments_per_year}{Positive integer. Number of payments per year.}
 
-\item{frac}{Fractional-age assumption for \code{k > 1} exact computation:
-\code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.
-If not specified and the supplied life table(s) carry a \code{frac}
-attribute, that value is used. If two tables are supplied and their
-\code{frac} attributes differ, \code{frac} must be supplied explicitly.}
+\item{timing}{Payment timing. Use \code{"immediate"} or \code{"due"}.}
 
-\item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble.}
+\item{woolhouse}{Woolhouse approximation for \code{payments_per_year > 1}:
+\code{"none"}, \code{"first"}, or \code{"second"}.}
+
+\item{frac}{Fractional-age assumption for exact k-thly computation:
+\code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.}
+
+\item{output}{Character string. Use \code{"value"} for a numeric APV or \code{"table"}
+for a one-row tibble.}
 }
 \value{
-A single numeric APV value, or a one-row tibble if
-\code{tidy = TRUE}.
+If \code{output = "value"}, a numeric scalar. If \code{output = "table"},
+a one-row tibble.
 }
 \description{
-Computes the APV of a discrete annuity contingent on two independent lives
-aged \code{x} and \code{y}. Supports joint-life, last-survivor, and
-reversionary-style benefits via state-based weights.
+Computes the actuarial present value of a discrete annuity contingent on two
+independent lives. Supports joint-life, last-survivor, and state-based
+reversionary-style payments.
 }
 \details{
-This function assumes independence between lives (Finan, Sections 56--59).
-
-\strong{Joint-life annuity-due} (Finan, Section 58):
-\deqn{\ddot{a}_{xy} = \sum_{k=0}^{\infty} v^k \cdot {}_kp_{xy}.}
-
-\strong{Last-survivor annuity-due} (Finan, Section 59):
-\deqn{\ddot{a}_{\overline{xy}} = \ddot{a}_x + \ddot{a}_y -
-  \ddot{a}_{xy}.}
-
-\strong{State-based benefits}: for reversionary annuities, use
-\code{benefit = list(both = 1, x_only = alpha, y_only = alpha)} where
-\eqn{\alpha} is the fraction paid to the survivor.
-
-When \code{lt} is a list of two tables, the first table is used for life
-\code{x} and the second for life \code{y}. Marginal survival probabilities
-are always computed via \code{\link{t_px}} on the corresponding life table.
-
-For \code{k > 1} with \code{woolhouse = "none"}, exact k-thly computation
-is performed under the selected fractional-age assumption using
-\code{\link{t_px}}.
+This function assumes independent future lifetimes.
 }
 \examples{
 lt <- data.frame(
@@ -100,50 +81,34 @@ lt <- data.frame(
   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 86000)
 )
 
-# Joint-life annuity-due (Finan, Sec. 58)
-annuity_xy(lt, x = 60, y = 62, i = 0.05, cohort = "first", timing = "due")
-
-# Last-survivor annuity-due (Finan, Sec. 59)
-annuity_xy(lt, x = 60, y = 62, i = 0.05, cohort = "last", timing = "due")
-
-# Verify identity: a_{xy-bar} = a_x + a_y - a_{xy}
-a_joint <- annuity_xy(lt, x = 60, y = 62, i = 0.05,
-                      cohort = "first", timing = "due")
-a_last  <- annuity_xy(lt, x = 60, y = 62, i = 0.05,
-                      cohort = "last", timing = "due")
-a_x <- annuity_x(lt, x = 60, i = 0.05, timing = "due")
-a_y <- annuity_x(lt, x = 62, i = 0.05, timing = "due")
-c(last = a_last, sum_minus_joint = a_x + a_y - a_joint)
-
-# Reversionary: full while both alive, 60\% to survivor
-annuity_xy(lt, x = 60, y = 62, i = 0.05,
-           benefit = list(both = 1, x_only = 0.6, y_only = 0.6),
-           timing = "due")
-
-# 2-year deferred joint-life annuity
-annuity_xy(lt, x = 60, y = 62, i = 0.05, m = 2,
-           cohort = "first", timing = "due")
-
-# Different life tables for the two lives
-lt_m <- data.frame(
-  x  = 60:66,
-  lx = c(100000, 98500, 96800, 94800, 92400, 89500, 86000)
+annuity_xy(
+  mortality_table = lt,
+  age_x = 60,
+  age_y = 62,
+  rate = 0.05,
+  cohort = "first",
+  timing = "due"
 )
-lt_f <- data.frame(
-  x  = 60:66,
-  lx = c(100000, 99000, 97800, 96400, 94700, 92700, 90300)
-)
-annuity_xy(list(lt_m, lt_f), x = 60, y = 62, i = 0.05,
-           cohort = "first", timing = "due")
 
-# Tidy output
-annuity_xy(lt, x = 60, y = 62, i = 0.05, cohort = "first",
-           timing = "due", tidy = TRUE)
+lt |>
+  life_contract(lives = "joint", age_x = 60, age_y = 62, rate = 0.05) |>
+  annuity_xy(cohort = "last", timing = "due")
 
 }
 \seealso{
-\code{\link{annuity_x}} for single-life annuity APVs,
-\code{\link{insurance_xy}} for two-life insurance,
-\code{\link{t_pxy}} for two-life survival,
-\code{\link{premium_xy}} for two-life premiums.
+\code{\link[=annuity_x]{annuity_x()}}, \code{\link[=insurance_xy]{insurance_xy()}}, \code{\link[=premium_xy]{premium_xy()}}, \code{\link[=t_pxy]{t_pxy()}}
+
+Other life-contingencies: 
+\code{\link{annuity_x}()},
+\code{\link{insurance_x}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_x}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{reserve_xy}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
 }
+\concept{life-contingencies}
