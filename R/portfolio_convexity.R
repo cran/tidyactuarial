@@ -1,43 +1,56 @@
 #' Compute portfolio convexity as a market-value-weighted average
 #'
 #' Computes portfolio convexity from individual position convexities using
-#' market values as weights.
+#' present values or market values as weights, using compact actuarial notation.
 #'
 #' This is a summarise-style tibble-first function. Each input row represents
 #' one position, and each output row represents one portfolio.
 #'
-#' The function does not compute individual convexities from bond terms
-#' or yields. Instead, it assumes that the input convexity column already
-#' contains valid convexity measures on a common basis within each portfolio.
+#' The function does not compute individual convexities from bond terms or
+#' yields. Instead, it assumes that the input convexity column already contains
+#' valid convexity measures on a common basis within each portfolio.
 #'
 #' The portfolio convexity is computed as:
-#' \deqn{C_P = \frac{\sum_{k=1}^n P_k C_k}{\sum_{k=1}^n P_k}}{C_P = sum(P_k * C_k) / sum(P_k)}
-#' where \eqn{P_k}{P_k} is the market value of position \eqn{k} and
-#' \eqn{C_k}{C_k} is its convexity.
+#' \deqn{C_P = \frac{\sum_{j=1}^r P_j C_j}{\sum_{j=1}^r P_j}}
+#' where \eqn{P_j} is the present value or market value of position \eqn{j},
+#' and \eqn{C_j} is its convexity.
 #'
-#' @param .data A data.frame or tibble. If \code{NULL}, \code{market_value} and
-#'   \code{convexity} must be supplied as vectors.
+#' @param .data A data.frame or tibble. If \code{NULL}, \code{P} and
+#'   \code{C} must be supplied as vectors.
 #' @param portfolio_id Optional vector of portfolio identifiers when
 #'   \code{.data = NULL}. If omitted, all positions are treated as belonging to
 #'   a single portfolio.
-#' @param market_value Numeric vector of market values when \code{.data = NULL}.
-#' @param convexity Numeric vector of individual convexities when
+#' @param P Numeric vector of present values, prices, or market values when
 #'   \code{.data = NULL}.
+#' @param C Numeric vector of individual convexities when \code{.data = NULL}.
 #' @param col_portfolio Name of the portfolio identifier column. If \code{NULL},
 #'   all rows are treated as one portfolio.
-#' @param col_market_value Name of the numeric column containing market values.
-#' @param col_convexity Name of the numeric column containing individual
-#'   convexities.
+#' @param col_P Name of the numeric column containing present values, prices, or
+#'   market values.
+#' @param col_C Name of the numeric column containing individual convexities.
 #' @param .out Name of the output column containing portfolio convexity.
-#' @param .out_value Name of the output column containing total portfolio
-#'   market value.
+#' @param .out_value Name of the output column containing total portfolio value.
 #' @param .out_n Name of the output column containing the number of positions
 #'   used in the calculation.
 #' @param .na NA handling policy: \code{"propagate"}, \code{"error"}, or
 #'   \code{"drop"}.
+#' @param ... Transitional compatibility for older calls using
+#'   \code{market_value}, \code{convexity}, \code{col_market_value}, and
+#'   \code{col_convexity}. These names are mapped to \code{P}, \code{C},
+#'   \code{col_P}, and \code{col_C}.
 #'
 #' @return A tibble with one row per portfolio and columns for portfolio
-#'   convexity, total market value, and number of positions used.
+#'   convexity, total portfolio value, and number of positions used.
+#'
+#' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{P} denotes price, present value, or market value,
+#' and \code{C} denotes convexity.
+#'
+#' The function is deliberately agnostic about the convexity convention, but all
+#' individual convexities must be expressed on the same basis within each
+#' portfolio. For example, do not mix convexities measured in coupon periods
+#' with convexities measured in years.
 #'
 #' @seealso \code{\link{portfolio_duration}},
 #'   \code{\link{bond_convexity}}, \code{\link{bond_duration}}
@@ -47,54 +60,112 @@
 #' @examples
 #' # Simple example: one portfolio
 #' portfolio_convexity(
-#'   market_value = c(1000, 2000, 500),
-#'   convexity = c(20, 12, 35)
+#'   P = c(1000, 2000, 500),
+#'   C = c(20, 12, 35)
 #' )
 #'
 #' # Medium example: two portfolios
 #' positions <- tibble::tibble(
 #'   portfolio_id = c("A", "A", "B", "B"),
-#'   market_value = c(1000, 2000, 1000 / 1.08^2, 1000 / 1.08^4),
-#'   convexity = c(20, 12, 6, 18)
+#'   P = c(1000, 2000, 1000 / 1.08^2, 1000 / 1.08^4),
+#'   C = c(20, 12, 6, 18)
 #' )
 #'
 #' portfolio_convexity(
 #'   positions,
 #'   col_portfolio = "portfolio_id",
-#'   col_market_value = "market_value",
-#'   col_convexity = "convexity"
+#'   col_P = "P",
+#'   col_C = "C"
 #' )
 #'
 #' @references
-#' Marcel B. Finan, *A Basic Course in the Theory of Interest and
-#' Derivatives Markets: A Preparation for the Actuarial Exam FM/2*,
+#' Marcel B. Finan, \emph{A Basic Course in the Theory of Interest and
+#' Derivatives Markets: A Preparation for the Actuarial Exam FM/2},
 #' Section 55: Redington Immunization and Convexity.
 #'
-#' Kellison, S. G. *The Theory of Interest*, Chapter 11:
+#' Kellison, S. G. \emph{The Theory of Interest}, Chapter 11:
 #' Duration, Convexity and Immunization.
 #'
 #' @export
 portfolio_convexity <- function(
     .data = NULL,
     portfolio_id = NULL,
-    market_value = NULL,
-    convexity = NULL,
+    P = NULL,
+    C = NULL,
     col_portfolio = "portfolio_id",
-    col_market_value = "market_value",
-    col_convexity = "convexity",
-    .out = "portfolio_convexity",
-    .out_value = "portfolio_market_value",
+    col_P = "P",
+    col_C = "C",
+    .out = "C_P",
+    .out_value = "P_total",
     .out_n = "n_positions",
-    .na = c("propagate", "error", "drop")
+    .na = c("propagate", "error", "drop"),
+    ...
 ) {
   .na <- match.arg(.na)
+  dots <- list(...)
 
   abort <- function(msg) rlang::abort(msg)
 
+  # --- Transitional compatibility with old argument names ---
+  allowed_old <- c(
+    "market_value",
+    "convexity",
+    "col_market_value",
+    "col_convexity"
+  )
+  bad_dots <- setdiff(names(dots), allowed_old)
+
+  if (length(bad_dots) > 0L) {
+    abort(paste0(
+      "Unused argument(s): ",
+      paste(sprintf("`%s`", bad_dots), collapse = ", "),
+      "."
+    ))
+  }
+
+  if (!is.null(dots$market_value)) {
+    if (!is.null(P)) {
+      abort("Provide only one of `P` or deprecated `market_value`.")
+    }
+    P <- dots$market_value
+  }
+
+  if (!is.null(dots$convexity)) {
+    if (!is.null(C)) {
+      abort("Provide only one of `C` or deprecated `convexity`.")
+    }
+    C <- dots$convexity
+  }
+
+  if (!is.null(dots$col_market_value)) {
+    if (!identical(col_P, "P")) {
+      abort("Provide only one of `col_P` or deprecated `col_market_value`.")
+    }
+    col_P <- dots$col_market_value
+  }
+
+  if (!is.null(dots$col_convexity)) {
+    if (!identical(col_C, "C")) {
+      abort("Provide only one of `col_C` or deprecated `col_convexity`.")
+    }
+    col_C <- dots$col_convexity
+  }
+
+  # --- Validate names ---
   if (!is.null(col_portfolio) &&
       (!is.character(col_portfolio) || length(col_portfolio) != 1L ||
        is.na(col_portfolio) || !nzchar(col_portfolio))) {
     abort("`col_portfolio` must be NULL or a single non-empty string.")
+  }
+
+  if (!is.character(col_P) || length(col_P) != 1L ||
+      is.na(col_P) || !nzchar(col_P)) {
+    abort("`col_P` must be a single non-empty string.")
+  }
+
+  if (!is.character(col_C) || length(col_C) != 1L ||
+      is.na(col_C) || !nzchar(col_C)) {
+    abort("`col_C` must be a single non-empty string.")
   }
 
   for (nm in c(".out", ".out_value", ".out_n")) {
@@ -111,23 +182,24 @@ portfolio_convexity <- function(
     abort("`.out`, `.out_value`, and `.out_n` must have different names.")
   }
 
+  # --- Build internal working data ---
   if (is.null(.data)) {
-    if (is.null(market_value) || is.null(convexity)) {
-      abort("When `.data = NULL`, `market_value` and `convexity` must be supplied.")
+    if (is.null(P) || is.null(C)) {
+      abort("When `.data = NULL`, `P` and `C` must be supplied.")
     }
 
-    if (!is.numeric(market_value)) {
-      abort("`market_value` must be a numeric vector when `.data = NULL`.")
+    if (!is.numeric(P)) {
+      abort("`P` must be a numeric vector when `.data = NULL`.")
     }
 
-    if (!is.numeric(convexity)) {
-      abort("`convexity` must be a numeric vector when `.data = NULL`.")
+    if (!is.numeric(C)) {
+      abort("`C` must be a numeric vector when `.data = NULL`.")
     }
 
-    n <- length(market_value)
+    n <- length(P)
 
-    if (length(convexity) != n) {
-      abort("`market_value` and `convexity` must have the same length.")
+    if (length(C) != n) {
+      abort("`P` and `C` must have the same length.")
     }
 
     if (is.null(portfolio_id)) {
@@ -135,7 +207,7 @@ portfolio_convexity <- function(
       has_portfolio_output <- FALSE
     } else {
       if (length(portfolio_id) != n) {
-        abort("`portfolio_id` must have the same length as `market_value` and `convexity`.")
+        abort("`portfolio_id` must have the same length as `P` and `C`.")
       }
 
       has_portfolio_output <- TRUE
@@ -143,8 +215,8 @@ portfolio_convexity <- function(
 
     data_in <- tibble::tibble(
       .portfolio = portfolio_id,
-      .market_value = market_value,
-      .convexity = convexity,
+      .P = P,
+      .C = C,
       .row_id = seq_len(n)
     )
   } else {
@@ -155,17 +227,17 @@ portfolio_convexity <- function(
     data_in <- tibble::as_tibble(.data)
     data_in$.row_id <- seq_len(nrow(data_in))
 
-    if (!col_market_value %in% names(data_in)) {
+    if (!col_P %in% names(data_in)) {
       abort(paste0(
-        "Column `", col_market_value, "` was not found. ",
-        "Pass the correct column name via `col_market_value`."
+        "Column `", col_P, "` was not found. ",
+        "Pass the correct column name via `col_P`."
       ))
     }
 
-    if (!col_convexity %in% names(data_in)) {
+    if (!col_C %in% names(data_in)) {
       abort(paste0(
-        "Column `", col_convexity, "` was not found. ",
-        "Pass the correct column name via `col_convexity`."
+        "Column `", col_C, "` was not found. ",
+        "Pass the correct column name via `col_C`."
       ))
     }
 
@@ -176,8 +248,8 @@ portfolio_convexity <- function(
       if (!col_portfolio %in% names(data_in)) {
         abort(paste0(
           "Column `", col_portfolio, "` was not found. ",
-          "Pass the correct column name via `col_portfolio`, or set `col_portfolio = NULL` ",
-          "to treat all rows as one portfolio."
+          "Pass the correct column name via `col_portfolio`, or set ",
+          "`col_portfolio = NULL` to treat all rows as one portfolio."
         ))
       }
 
@@ -185,20 +257,21 @@ portfolio_convexity <- function(
       has_portfolio_output <- TRUE
     }
 
-    data_in$.market_value <- data_in[[col_market_value]]
-    data_in$.convexity <- data_in[[col_convexity]]
+    data_in$.P <- data_in[[col_P]]
+    data_in$.C <- data_in[[col_C]]
 
-    if (!is.numeric(data_in$.market_value)) {
-      abort(paste0("`", col_market_value, "` must be numeric."))
+    if (!is.numeric(data_in$.P)) {
+      abort(paste0("`", col_P, "` must be numeric."))
     }
 
-    if (!is.numeric(data_in$.convexity)) {
-      abort(paste0("`", col_convexity, "` must be numeric."))
+    if (!is.numeric(data_in$.C)) {
+      abort(paste0("`", col_C, "` must be numeric."))
     }
   }
 
-  data_in$.bad_na <- is.na(data_in$.market_value) |
-    is.na(data_in$.convexity) |
+  # --- Missing-value handling ---
+  data_in$.bad_na <- is.na(data_in$.P) |
+    is.na(data_in$.C) |
     is.na(data_in$.portfolio)
 
   if (.na == "error" && any(data_in$.bad_na)) {
@@ -229,33 +302,34 @@ portfolio_convexity <- function(
   data_valid <- data_work[!data_work$.bad_na, , drop = FALSE]
 
   if (nrow(data_valid) > 0L) {
-    bad_mv <- !is.finite(data_valid$.market_value) |
-      data_valid$.market_value < 0
+    bad_P <- !is.finite(data_valid$.P) |
+      data_valid$.P < 0
 
-    if (any(bad_mv)) {
-      bad_rows <- data_valid$.row_id[bad_mv]
+    if (any(bad_P)) {
+      bad_rows <- data_valid$.row_id[bad_P]
 
       abort(paste0(
-        "`", if (is.null(.data)) "market_value" else col_market_value,
+        "`", if (is.null(.data)) "P" else col_P,
         "` must be finite and >= 0. Problem at row(s): ",
         paste(bad_rows, collapse = ", "), "."
       ))
     }
 
-    bad_cx <- !is.finite(data_valid$.convexity) |
-      data_valid$.convexity < 0
+    bad_C <- !is.finite(data_valid$.C) |
+      data_valid$.C < 0
 
-    if (any(bad_cx)) {
-      bad_rows <- data_valid$.row_id[bad_cx]
+    if (any(bad_C)) {
+      bad_rows <- data_valid$.row_id[bad_C]
 
       abort(paste0(
-        "`", if (is.null(.data)) "convexity" else col_convexity,
+        "`", if (is.null(.data)) "C" else col_C,
         "` must be finite and >= 0. Problem at row(s): ",
         paste(bad_rows, collapse = ", "), "."
       ))
     }
   }
 
+  # --- Empty output ---
   if (nrow(data_work) == 0L) {
     out <- tibble::tibble()
 
@@ -271,6 +345,7 @@ portfolio_convexity <- function(
     return(out)
   }
 
+  # --- Summarise by portfolio ---
   split_all <- split(data_work, data_work$.portfolio, drop = TRUE)
 
   res_list <- lapply(split_all, function(df_port) {
@@ -279,17 +354,17 @@ portfolio_convexity <- function(
     if (.na == "propagate" && has_na_port) {
       tibble::tibble(
         .portfolio = df_port$.portfolio[[1]],
-        .portfolio_convexity = NA_real_,
-        .portfolio_market_value = NA_real_,
+        .C_P = NA_real_,
+        .P_total = NA_real_,
         .n_positions = NA_integer_
       )
     } else {
       df_ok <- df_port[!df_port$.bad_na, , drop = FALSE]
-      total_mv <- sum(df_ok$.market_value)
+      P_total <- sum(df_ok$.P)
 
-      if (!is.finite(total_mv) || total_mv <= 0) {
+      if (!is.finite(P_total) || P_total <= 0) {
         abort(paste0(
-          "Each portfolio must have strictly positive total market value. ",
+          "Each portfolio must have strictly positive total value. ",
           "Problem detected for portfolio `",
           as.character(df_port$.portfolio[[1]]),
           "`."
@@ -298,8 +373,8 @@ portfolio_convexity <- function(
 
       tibble::tibble(
         .portfolio = df_port$.portfolio[[1]],
-        .portfolio_convexity = sum(df_ok$.market_value * df_ok$.convexity) / total_mv,
-        .portfolio_market_value = total_mv,
+        .C_P = sum(df_ok$.P * df_ok$.C) / P_total,
+        .P_total = P_total,
         .n_positions = nrow(df_ok)
       )
     }
@@ -307,8 +382,8 @@ portfolio_convexity <- function(
 
   out <- dplyr::bind_rows(res_list)
 
-  names(out)[names(out) == ".portfolio_convexity"] <- .out
-  names(out)[names(out) == ".portfolio_market_value"] <- .out_value
+  names(out)[names(out) == ".C_P"] <- .out
+  names(out)[names(out) == ".P_total"] <- .out_value
   names(out)[names(out) == ".n_positions"] <- .out_n
 
   if (has_portfolio_output) {

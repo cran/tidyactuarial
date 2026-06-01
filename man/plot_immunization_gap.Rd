@@ -2,34 +2,44 @@
 % Please edit documentation in R/plot_inmunization_gap.R
 \name{plot_immunization_gap}
 \alias{plot_immunization_gap}
-\title{Plot immunization performance under interest rate shifts}
+\title{Plot immunization performance under interest-rate shifts}
 \usage{
 plot_immunization_gap(
-  liabilities,
-  t_liabilities,
+  L,
+  t,
   asset_cashflows,
-  weights,
-  i0,
+  w,
+  i,
+  i_type = "effective",
+  m = 1L,
   delta = 0.01,
   n_grid = 200L
 )
 }
 \arguments{
-\item{liabilities}{Numeric vector of liability payments.}
+\item{L}{Numeric vector of liability payments.}
 
-\item{t_liabilities}{Numeric vector of times (periods) of each liability
-payment.}
+\item{t}{Numeric vector of times of each liability payment.}
 
 \item{asset_cashflows}{A list where each element is a list with components
-\code{$payment} and \code{$time}, defining each asset's cash flow.}
+\code{$cf} and \code{$t}, defining each asset's cash flow.}
 
-\item{weights}{Numeric vector of portfolio weights (amount invested in each
-asset). Must have same length as \code{asset_cashflows}.}
+\item{w}{Numeric vector of portfolio weights or units. Must have the same
+length as \code{asset_cashflows}.}
 
-\item{i0}{Base effective interest rate per period.}
+\item{i}{Base interest-rate input.}
 
-\item{delta}{A numeric value defining the range of rates: from
-\code{i0 - delta} to \code{i0 + delta}.}
+\item{i_type}{Character string indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
+for \code{i_type = "effective"} and \code{i_type = "force"}.}
+
+\item{delta}{A numeric value defining the range of annual effective rates:
+from \code{i_effective - delta} to \code{i_effective + delta}, where
+\code{i_effective} is the annual effective rate equivalent to
+\code{i}, \code{i_type}, and \code{m}.}
 
 \item{n_grid}{Number of rate values to evaluate.}
 }
@@ -40,10 +50,17 @@ A \code{ggplot2} object showing the PV difference curve
 \description{
 Computes and plots the difference between the present value of liabilities
 and the present value of an immunized asset portfolio under small interest
-rate changes. This allows visual evaluation of duration or duration-convexity
-immunization quality.
+rate changes. This allows visual evaluation of duration or
+duration-convexity immunization quality.
 }
 \details{
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{L} denotes liabilities, \code{t} denotes payment
+times, \code{w} denotes asset weights, \code{cf} denotes cash flows,
+\code{i} denotes the interest-rate input, \code{i_type} denotes the
+interest-rate type, and \code{m} denotes the conversion frequency for
+nominal rates.
+
 Let \eqn{v(i) = 1/(1+i)}{v(i) = 1/(1+i)}. For a liability stream
 \eqn{L_k}{L_k} at time \eqn{t_k}{t_k}:
 \deqn{PV_L(i) = \sum_k L_k \, v(i)^{t_k}}{PV_L(i) = sum(L_k * v(i)^t_k)}
@@ -53,20 +70,20 @@ For a portfolio of assets with weights \eqn{w_j}{w_j}:
 
 The curve \eqn{\Delta(i) = PV_A(i) - PV_L(i)}{Delta(i) = PV_A(i) - PV_L(i)}
 illustrates immunization robustness. Under perfect duration immunization,
-this curve is tangent to zero at \eqn{i = i_0}{i = i0} and non-negative
-nearby if the convexity condition is also met.
+this curve is tangent to zero at the base rate and non-negative nearby if
+the convexity condition is also met.
 }
 \examples{
 # Two-asset duration immunization gap
 plot_immunization_gap(
-  liabilities = c(5000, 8000),
-  t_liabilities = c(3, 7),
+  L = c(5000, 8000),
+  t = c(3, 7),
   asset_cashflows = list(
-    list(payment = c(0, 0, 100), time = c(1, 2, 3)),
-    list(payment = c(0, 0, 0, 0, 0, 0, 200), time = 1:7)
+    list(cf = c(0, 0, 100), t = c(1, 2, 3)),
+    list(cf = c(0, 0, 0, 0, 0, 0, 200), t = 1:7)
   ),
-  weights = c(5, 2.5),
-  i0 = 0.05,
+  w = c(5, 2.5),
+  i = 0.05,
   delta = 0.02
 )
 

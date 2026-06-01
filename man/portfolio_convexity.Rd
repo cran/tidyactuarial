@@ -7,89 +7,103 @@
 portfolio_convexity(
   .data = NULL,
   portfolio_id = NULL,
-  market_value = NULL,
-  convexity = NULL,
+  P = NULL,
+  C = NULL,
   col_portfolio = "portfolio_id",
-  col_market_value = "market_value",
-  col_convexity = "convexity",
-  .out = "portfolio_convexity",
-  .out_value = "portfolio_market_value",
+  col_P = "P",
+  col_C = "C",
+  .out = "C_P",
+  .out_value = "P_total",
   .out_n = "n_positions",
-  .na = c("propagate", "error", "drop")
+  .na = c("propagate", "error", "drop"),
+  ...
 )
 }
 \arguments{
-\item{.data}{A data.frame or tibble. If \code{NULL}, \code{market_value} and
-\code{convexity} must be supplied as vectors.}
+\item{.data}{A data.frame or tibble. If \code{NULL}, \code{P} and
+\code{C} must be supplied as vectors.}
 
 \item{portfolio_id}{Optional vector of portfolio identifiers when
 \code{.data = NULL}. If omitted, all positions are treated as belonging to
 a single portfolio.}
 
-\item{market_value}{Numeric vector of market values when \code{.data = NULL}.}
-
-\item{convexity}{Numeric vector of individual convexities when
+\item{P}{Numeric vector of present values, prices, or market values when
 \code{.data = NULL}.}
+
+\item{C}{Numeric vector of individual convexities when \code{.data = NULL}.}
 
 \item{col_portfolio}{Name of the portfolio identifier column. If \code{NULL},
 all rows are treated as one portfolio.}
 
-\item{col_market_value}{Name of the numeric column containing market values.}
+\item{col_P}{Name of the numeric column containing present values, prices, or
+market values.}
 
-\item{col_convexity}{Name of the numeric column containing individual
-convexities.}
+\item{col_C}{Name of the numeric column containing individual convexities.}
 
 \item{.out}{Name of the output column containing portfolio convexity.}
 
-\item{.out_value}{Name of the output column containing total portfolio
-market value.}
+\item{.out_value}{Name of the output column containing total portfolio value.}
 
 \item{.out_n}{Name of the output column containing the number of positions
 used in the calculation.}
 
 \item{.na}{NA handling policy: \code{"propagate"}, \code{"error"}, or
 \code{"drop"}.}
+
+\item{...}{Transitional compatibility for older calls using
+\code{market_value}, \code{convexity}, \code{col_market_value}, and
+\code{col_convexity}. These names are mapped to \code{P}, \code{C},
+\code{col_P}, and \code{col_C}.}
 }
 \value{
 A tibble with one row per portfolio and columns for portfolio
-convexity, total market value, and number of positions used.
+convexity, total portfolio value, and number of positions used.
 }
 \description{
 Computes portfolio convexity from individual position convexities using
-market values as weights.
+present values or market values as weights, using compact actuarial notation.
 }
 \details{
 This is a summarise-style tibble-first function. Each input row represents
 one position, and each output row represents one portfolio.
 
-The function does not compute individual convexities from bond terms
-or yields. Instead, it assumes that the input convexity column already
-contains valid convexity measures on a common basis within each portfolio.
+The function does not compute individual convexities from bond terms or
+yields. Instead, it assumes that the input convexity column already contains
+valid convexity measures on a common basis within each portfolio.
 
 The portfolio convexity is computed as:
-\deqn{C_P = \frac{\sum_{k=1}^n P_k C_k}{\sum_{k=1}^n P_k}}{C_P = sum(P_k * C_k) / sum(P_k)}
-where \eqn{P_k}{P_k} is the market value of position \eqn{k} and
-\eqn{C_k}{C_k} is its convexity.
+\deqn{C_P = \frac{\sum_{j=1}^r P_j C_j}{\sum_{j=1}^r P_j}}
+where \eqn{P_j} is the present value or market value of position \eqn{j},
+and \eqn{C_j} is its convexity.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{P} denotes price, present value, or market value,
+and \code{C} denotes convexity.
+
+The function is deliberately agnostic about the convexity convention, but all
+individual convexities must be expressed on the same basis within each
+portfolio. For example, do not mix convexities measured in coupon periods
+with convexities measured in years.
 }
 \examples{
 # Simple example: one portfolio
 portfolio_convexity(
-  market_value = c(1000, 2000, 500),
-  convexity = c(20, 12, 35)
+  P = c(1000, 2000, 500),
+  C = c(20, 12, 35)
 )
 
 # Medium example: two portfolios
 positions <- tibble::tibble(
   portfolio_id = c("A", "A", "B", "B"),
-  market_value = c(1000, 2000, 1000 / 1.08^2, 1000 / 1.08^4),
-  convexity = c(20, 12, 6, 18)
+  P = c(1000, 2000, 1000 / 1.08^2, 1000 / 1.08^4),
+  C = c(20, 12, 6, 18)
 )
 
 portfolio_convexity(
   positions,
   col_portfolio = "portfolio_id",
-  col_market_value = "market_value",
-  col_convexity = "convexity"
+  col_P = "P",
+  col_C = "C"
 )
 
 }

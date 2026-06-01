@@ -6,30 +6,31 @@
 \usage{
 forward_rate(
   .data = NULL,
-  term = NULL,
-  spot = NULL,
+  t = NULL,
+  i = NULL,
   t_start = NULL,
   t_end = NULL,
-  col_term = "term",
-  col_spot = "spot",
+  col_t = "t",
+  col_i = "i",
   col_t_start = "t_start",
   col_t_end = "t_end",
+  i_type = "effective",
+  m = 1L,
   method = c("exact", "linear"),
   plot = FALSE,
-  .out = "forward_rate",
+  .out = "f",
   .out_plot = "forward_rate_plot",
   .keep = c("all", "used", "none"),
   .na = c("propagate", "error", "drop")
 )
 }
 \arguments{
-\item{.data}{A data.frame or tibble. If \code{NULL}, \code{term},
-\code{spot}, \code{t_start}, and \code{t_end} must be supplied.}
+\item{.data}{A data.frame or tibble. If \code{NULL}, \code{t}, \code{i},
+\code{t_start}, and \code{t_end} must be supplied.}
 
-\item{term}{Numeric vector of maturities when \code{.data = NULL}.}
+\item{t}{Numeric vector of maturities in years when \code{.data = NULL}.}
 
-\item{spot}{Numeric vector of annual effective spot rates when
-\code{.data = NULL}.}
+\item{i}{Numeric vector of spot-rate values when \code{.data = NULL}.}
 
 \item{t_start}{Numeric scalar giving the start maturity when
 \code{.data = NULL}.}
@@ -37,18 +38,26 @@ forward_rate(
 \item{t_end}{Numeric scalar giving the end maturity when
 \code{.data = NULL}.}
 
-\item{col_term}{Name of the list-column containing maturities.}
+\item{col_t}{Name of the list-column containing maturities.}
 
-\item{col_spot}{Name of the list-column containing spot rates.}
+\item{col_i}{Name of the list-column containing spot rates.}
 
 \item{col_t_start}{Name of the numeric column containing the start maturity.}
 
 \item{col_t_end}{Name of the numeric column containing the end maturity.}
 
+\item{i_type}{Character vector indicating the spot-rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}. May have length 1 or the
+same length as each curve.}
+
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+spot rates. May have length 1 or the same length as each curve.}
+
 \item{method}{Spot extraction method: \code{"exact"} or \code{"linear"}.}
 
-\item{plot}{Logical; if \code{TRUE}, adds a list-column of
-\code{ggplot2} objects.}
+\item{plot}{Logical; if \code{TRUE}, adds a list-column of \code{ggplot2}
+objects.}
 
 \item{.out}{Name of the output column containing the forward rate.}
 
@@ -66,19 +75,22 @@ numeric column named by \code{.out}. If \code{plot = TRUE}, it also adds
 a list-column named by \code{.out_plot} containing \code{ggplot2} objects.
 }
 \description{
-Returns the annual effective forward rate implied between two maturities
-from a discrete yield curve stored in tibble-first format.
+Returns the annual effective forward rate implied between two maturities from
+a discrete yield curve stored in tibble-first format, using compact
+actuarial notation.
 }
 \details{
-Each row is treated as one curve (one case). For tibble input,
-\code{col_term} and \code{col_spot} must be list-columns of equal-length
-numeric vectors, and \code{col_t_start} and \code{col_t_end} must be
-numeric columns giving the forward interval for each row.
+Each row is treated as one curve. For tibble input, \code{col_t} and
+\code{col_i} must be list-columns of equal-length numeric vectors, and
+\code{col_t_start} and \code{col_t_end} must be numeric columns giving the
+forward interval for each row.
 
-The implied forward rate is computed from the spot curve through:
-\deqn{(1+i_1)^{t_1}(1+f)^{t_2-t_1}=(1+i_2)^{t_2}}{(1+i1)^t1 * (1+f)^(t2-t1) = (1+i2)^t2}
+The implied forward rate is computed from the standardized annual effective
+spot curve through:
+\deqn{(1+i_1)^{t_1}(1+f)^{t_2-t_1}=(1+i_2)^{t_2}}
 so that
-\deqn{f_{t_1,t_2} = \left(\frac{(1+i_2)^{t_2}}{(1+i_1)^{t_1}}\right)^{1/(t_2-t_1)} - 1}{f = ((1+i2)^t2 / (1+i1)^t1)^(1/(t2-t1)) - 1}
+\deqn{f_{t_1,t_2} =
+\left(\frac{(1+i_2)^{t_2}}{(1+i_1)^{t_1}}\right)^{1/(t_2-t_1)} - 1.}
 
 Two extraction methods are supported for the spot rates:
 \itemize{
@@ -88,22 +100,32 @@ match curve nodes.
 }
 
 No extrapolation is performed outside the observed maturity range.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{t} denotes maturity, \code{i} denotes the spot
+rate, \code{i_type} denotes the interest-rate type, and \code{m} denotes the
+conversion frequency for nominal spot rates. The output column \code{f}
+denotes the implied annual effective forward rate.
+
+Spot-rate inputs are converted to annual effective form using
+\code{\link{standardize_interest}} before interpolation and forward-rate
+calculation.
 }
 \examples{
 # Simple example: exact forward rate
 forward_rate(
-  term = c(1, 2, 3, 4, 5),
-  spot = c(0.040, 0.045, 0.048, 0.050, 0.051),
+  t = c(1, 2, 3, 4, 5),
+  i = c(0.040, 0.045, 0.048, 0.050, 0.051),
   t_start = 2,
   t_end = 5
 )
 
-# Medium example: interpolated forward rates for multiple curves
+# Interpolated forward rates for multiple curves
 curves <- tibble::tibble(
   curve_id = c("A", "B"),
-  term = list(c(1, 2, 3, 5), c(1, 3, 5, 7)),
-  spot = list(c(0.04, 0.05, 0.055, 0.06),
-              c(0.03, 0.035, 0.04, 0.045)),
+  t = list(c(1, 2, 3, 5), c(1, 3, 5, 7)),
+  i = list(c(0.04, 0.05, 0.055, 0.06),
+           c(0.03, 0.035, 0.04, 0.045)),
   t_start = c(2, 2),
   t_end = c(4, 6)
 )
@@ -114,10 +136,20 @@ forward_rate(
   plot = TRUE
 )
 
+# Nominal annual spot rates convertible semiannually
+forward_rate(
+  t = c(1, 2, 3),
+  i = c(0.05, 0.055, 0.06),
+  i_type = "nominal_interest",
+  m = 2,
+  t_start = 1,
+  t_end = 3
+)
+
 }
 \references{
-Marcel B. Finan, \emph{A Basic Course in the Theory of Interest and Derivatives
-Markets: A Preparation for the Actuarial Exam FM/2}, Section 53:
+Marcel B. Finan, \emph{A Basic Course in the Theory of Interest and
+Derivatives Markets: A Preparation for the Actuarial Exam FM/2}, Section 53:
 The Term Structure of Interest Rates and Yield Curves.
 
 Kellison, S. G. \emph{The Theory of Interest}, Chapter 10:

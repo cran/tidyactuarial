@@ -10,39 +10,53 @@ insurance_variable_k(
   i,
   benefit,
   n = NULL,
-  m = 0,
+  h = 0,
   k = 12,
+  i_type = "effective",
+  m = 1L,
   frac,
   tidy = FALSE,
-  check = TRUE
+  check = TRUE,
+  tol = 1e-10
 )
 }
 \arguments{
-\item{lt}{A life table object or data frame containing at least \code{x}
-and \code{lx}.}
+\item{lt}{A life table object or data frame containing at least columns
+\code{x} and \code{lx}.}
 
 \item{x}{Integer actuarial age at issue.}
 
-\item{i}{Effective annual interest rate (must be \code{> -1}).}
+\item{i}{Annual interest-rate input.}
 
 \item{benefit}{Numeric vector of benefits by subperiod, or a function of
 time returning the benefit at time \eqn{t}.}
 
-\item{n}{Optional term in years. If \code{NULL}, the term is inferred
-from the length of \code{benefit} (when numeric).}
+\item{n}{Optional term in years. If \code{NULL}, the term is inferred from
+the length of \code{benefit} when \code{benefit} is numeric. If
+\code{benefit} is a function, \code{n} must be supplied.}
 
-\item{m}{Nonnegative integer deferral period in years (default \code{0}).}
+\item{h}{Nonnegative deferment period in years. Default is \code{0}.}
 
-\item{k}{Number of subperiods per year (default \code{12}).}
+\item{k}{Positive integer. Number of subperiods per year. Default is
+\code{12}.}
+
+\item{i_type}{Character vector indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+interest-rate inputs. Ignored for \code{"effective"} and \code{"force"}.}
 
 \item{frac}{Fractional-age assumption used in survival probabilities:
-\code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.
-If not specified and \code{lt} carries a \code{frac} attribute, that
-value is used.}
+\code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}. If not
+specified and \code{lt} carries a \code{frac} attribute, that value is
+used.}
 
 \item{tidy}{Logical. If \code{TRUE}, returns a one-row tibble.}
 
 \item{check}{Logical. If \code{TRUE}, performs basic input checks.}
+
+\item{tol}{Numeric tolerance used for integer-grid checks.}
 }
 \value{
 A numeric actuarial present value, or a one-row tibble if
@@ -50,37 +64,42 @@ A numeric actuarial present value, or a one-row tibble if
 }
 \description{
 Computes the actuarial present value of a life insurance where the death
-benefit may vary by subperiod (\eqn{k} payments per year) and is payable
-at the end of the subperiod of death.
+benefit may vary by subperiod and is payable at the end of the subperiod of
+death, using compact actuarial notation.
 }
 \details{
-Let \eqn{k} be the number of subperiods per year and \eqn{N = nk} the
-total number of subperiods. With deferral \eqn{m}, the actuarial present
-value at age \eqn{x} is (generalizing Finan, Section 29):
+This function is useful for level, increasing, decreasing, and credit-style
+life insurance benefits when benefits are specified at a subannual frequency.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age at
+issue, \code{i} is the interest-rate input, \code{i_type} is the
+interest-rate type, \code{m} is the conversion frequency for nominal rates,
+\code{n} is the term, \code{h} is the deferment period, and \code{k} is the
+number of subperiods per year.
+
+Let \eqn{k} be the number of subperiods per year and \eqn{N = nk} the total
+number of subperiods in the insurance term. With deferment \eqn{h}, the
+actuarial present value at age \eqn{x} is:
 \deqn{
-  \text{APV} = \sum_{j=1}^{N} v^{m + t_j} \cdot b_j \cdot
-  \left({{}_{m + t_{j-1}}}p_x - {{}_{m + t_j}}p_x\right)
-}
-where \eqn{t_j = j/k} and \eqn{b_j} is the benefit payable if death
-occurs in the interval \eqn{(m + t_{j-1},\, m + t_j]}.
-
-This is the general form that encompasses:
-\itemize{
-\item \strong{Level insurance}: constant \eqn{b_j = 1} reduces to
-\eqn{A^{(k)1}_{x:\overline{n}|}} (Finan, Section 31).
-\item \strong{Increasing insurance}: \eqn{b_j = \lceil j/k \rceil}
-gives \eqn{(IA)^{(k)}_{x:\overline{n}|}} (Finan, Section 29.3).
-\item \strong{Decreasing insurance}: \eqn{b_j = n - \lfloor(j-1)/k\rfloor}
-gives \eqn{(DA)^{(k)}_{x:\overline{n}|}} (Finan, Section 29.3).
-\item \strong{Credit insurance}: \eqn{b_j = B(t_j)} where \eqn{B(t)}
-is the outstanding loan balance.
+  APV =
+  \sum_{j=1}^{N}
+  v^{h + j/k} b_j
+  \left({}_{h + (j-1)/k}p_x - {}_{h + j/k}p_x\right).
 }
 
-The benefit may be supplied either as a numeric vector indexed by
-subperiod or as a function of time.
+Here \eqn{b_j} is the benefit payable if death occurs in subperiod
+\eqn{j}, and \eqn{v = (1+i_e)^{-1}}, where \eqn{i_e} is the annual
+effective interest rate equivalent to the input \code{i}, \code{i_type}, and
+\code{m}.
 
-Fractional survival probabilities are computed via \code{\link{t_px}}
-under the selected assumption (Finan, Section 24).
+If \code{benefit} is numeric of length 1, it is recycled to all subperiods.
+If it is numeric with length greater than 1, its length must equal
+\eqn{n k}. If \code{benefit} is a function, it is evaluated at the end of
+each subperiod, at times \eqn{1/k, 2/k, \ldots, n}.
+
+Fractional survival probabilities are computed via \code{\link{t_px}} under
+the selected fractional-age assumption.
 }
 \examples{
 lt <- data.frame(
@@ -88,43 +107,91 @@ lt <- data.frame(
   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 86000)
 )
 
-# Monthly insurance with increasing benefits (Finan, Sec. 29.3 style)
+# Monthly insurance with increasing benefits
 insurance_variable_k(
-  lt, x = 60, i = 0.05,
+  lt = lt,
+  x = 60,
+  i = 0.05,
   benefit = seq(100, 1200, length.out = 12),
-  n = 1, k = 12
+  n = 1,
+  k = 12
 )
 
 # Credit-style insurance with declining outstanding balance
 balance <- function(t) 2000 * exp(-0.3 * t)
+
 insurance_variable_k(
-  lt, x = 60, i = 0.05,
+  lt = lt,
+  x = 60,
+  i = 0.05,
   benefit = balance,
-  n = 1, k = 12
+  n = 1,
+  k = 12
 )
 
-# Level benefit = 1 should match a term insurance
-# (approximately, since insurance_x uses annual and this uses k-thly)
-insurance_variable_k(lt, x = 60, i = 0.05, benefit = 1, n = 5, k = 1)
-insurance_x(mortality_table = lt, age = 60, rate = 0.05, term_years = 5, insurance_type = "term")
+# Level benefit with annual payments
+insurance_variable_k(
+  lt = lt,
+  x = 60,
+  i = 0.05,
+  benefit = 1,
+  n = 5,
+  k = 1
+)
 
 # 2-year deferred, 3-year term with monthly varying benefits
 insurance_variable_k(
-  lt, x = 60, i = 0.05,
+  lt = lt,
+  x = 60,
+  i = 0.05,
   benefit = rep(1000, 36),
-  n = 3, m = 2, k = 12
+  n = 3,
+  h = 2,
+  k = 12
+)
+
+# Nominal annual interest convertible monthly
+insurance_variable_k(
+  lt = lt,
+  x = 60,
+  i = 0.06,
+  i_type = "nominal_interest",
+  m = 12,
+  benefit = rep(1000, 12),
+  n = 1,
+  k = 12
 )
 
 # Tidy output
 insurance_variable_k(
-  lt, x = 60, i = 0.05,
-  benefit = rep(1000, 12), n = 1, k = 12, tidy = TRUE
+  lt = lt,
+  x = 60,
+  i = 0.05,
+  benefit = rep(1000, 12),
+  n = 1,
+  k = 12,
+  tidy = TRUE
 )
 
 }
 \seealso{
 \code{\link{insurance_x}} for level-benefit life insurance,
 \code{\link{annuity_x}} for life annuity APVs,
-\code{\link{t_px}} for survival probabilities,
-Monte Carlo simulation tools may be used for empirical variance estimation.
+\code{\link{t_px}} for survival probabilities.
+
+Other life-contingencies: 
+\code{\link{annuity_multi}()},
+\code{\link{annuity_x}()},
+\code{\link{annuity_xy}()},
+\code{\link{insurance_x}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_x}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{reserve_xy}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
 }
+\concept{life-contingencies}

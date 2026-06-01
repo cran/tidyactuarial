@@ -5,249 +5,247 @@
 \title{Compute simulated present values for life annuities}
 \usage{
 mc_annuity(
-  data,
-  rate,
+  .data = NULL,
+  i,
   payment = 1,
-  payments_per_year = 1,
-  annuity = c("whole_life", "temporary", "deferred", "deferred_temporary", "certain",
-    "guaranteed"),
-  term = NULL,
-  deferral_years = 0,
-  guarantee_years = NULL,
+  k = 1L,
+  type = c("whole", "temporary", "deferred", "deferred_temporary", "certain",
+    "guaranteed", "whole_life"),
+  n = NULL,
+  h = 0,
+  n_guar = NULL,
   timing = c("immediate", "due"),
-  interest_type = c("effective", "nominal", "force"),
+  i_type = c("effective", "nominal_interest", "nominal_discount", "force", "nominal"),
   m = 1,
-  k_col = "Kx",
-  tx_col = "Tx",
-  annuity_col = "pv_annuity"
+  col_K = "Kx",
+  col_T = "Tx",
+  col_pv = "pv_annuity",
+  ...
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing simulated future lifetimes,
-typically returned by \code{\link[=simulate_lifetime]{simulate_lifetime()}} or by \code{\link[=mc_multilife_status]{mc_multilife_status()}}
-when working with multiple-life statuses.}
+\item{.data}{A data frame or tibble containing simulated future lifetimes,
+typically returned by \code{\link{simulate_lifetime}} or by
+\code{\link{mc_multilife_status}} when working with multiple-life statuses.}
 
-\item{rate}{Numeric scalar. Interest rate used for discounting.}
+\item{i}{Numeric scalar. Interest-rate input used for discounting.}
 
 \item{payment}{Numeric scalar. Amount of each annuity payment. Default is
 \code{1}.}
 
-\item{payments_per_year}{Positive integer-like scalar. Number of annuity
-payments per year. Default is \code{1}, corresponding to annual payments. For
-example, use \code{payments_per_year = 12} for monthly payments, \code{4} for
-quarterly payments, and \code{2} for semiannual payments.}
+\item{k}{Positive integer. Number of annuity payments per year. Default is
+\code{1}, corresponding to annual payments.}
 
-\item{annuity}{Character string specifying the annuity type. Available
-options are \code{"whole_life"}, \code{"temporary"}, \code{"deferred"},
-\code{"deferred_temporary"}, \code{"certain"}, and \code{"guaranteed"}.}
+\item{type}{Character string specifying the annuity type. Canonical options
+are \code{"whole"}, \code{"temporary"}, \code{"deferred"},
+\code{"deferred_temporary"}, \code{"certain"}, and
+\code{"guaranteed"}. The transitional alias \code{"whole_life"} is also
+accepted and mapped to \code{"whole"}.}
 
-\item{term}{Numeric scalar. Term of the annuity in years. Required for
-\code{"temporary"}, \code{"deferred_temporary"}, and \code{"certain"} annuities.}
+\item{n}{Numeric scalar. Term of the annuity in years. Required for
+\code{"temporary"}, \code{"deferred_temporary"}, and \code{"certain"}
+annuities.}
 
-\item{deferral_years}{Numeric scalar. Deferral period in years. Default is
-\code{0}. Required to be positive for \code{"deferred"} and
+\item{h}{Numeric scalar. Deferral period in years. Default is \code{0}.
+Required to be positive for \code{"deferred"} and
 \code{"deferred_temporary"} annuities.}
 
-\item{guarantee_years}{Numeric scalar. Guaranteed payment period in years.
-Required for \code{"guaranteed"} annuities.}
+\item{n_guar}{Numeric scalar. Guaranteed payment period in years. Required
+for \code{type = "guaranteed"}.}
 
 \item{timing}{Character string specifying the annuity payment timing.
-Available options are \code{"immediate"} and \code{"due"}. Default is \code{"immediate"}.}
+Available options are \code{"immediate"} and \code{"due"}.}
 
-\item{interest_type}{Character string specifying the interest rate convention.
-Available options are \code{"effective"}, \code{"nominal"}, and \code{"force"}.
-Default is \code{"effective"}.}
+\item{i_type}{Character string specifying the interest-rate convention.
+Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}. The transitional value
+\code{"nominal"} is accepted and treated as \code{"nominal_interest"}.}
 
-\item{m}{Numeric scalar. Number of interest conversion periods per year when
-\code{interest_type = "nominal"}. Default is \code{1}. This argument controls the
+\item{m}{Positive integer. Number of interest conversion periods per year
+for nominal annual rates. Default is \code{1}. This argument controls the
 interest-rate conversion frequency only. It does not represent annuity
 payment frequency.}
 
-\item{k_col}{Character string. Name of the column containing simulated
+\item{col_K}{Character string. Name of the column containing simulated
 curtate future lifetimes. Default is \code{"Kx"}.}
 
-\item{tx_col}{Character string. Name of the column containing simulated
-complete future lifetimes. Default is \code{"Tx"}. This column is required when
-\code{payments_per_year > 1}, except for annuities certain.}
+\item{col_T}{Character string. Name of the column containing simulated
+complete future lifetimes. Default is \code{"Tx"}. This column is required
+when \code{k > 1}, except for annuities certain.}
 
-\item{annuity_col}{Character string. Name of the output column containing
-simulated present values of annuity payments. Default is \code{"pv_annuity"}.}
+\item{col_pv}{Character string. Name of the output column containing
+simulated present values of annuity payments. Default is
+\code{"pv_annuity"}.}
+
+\item{...}{Transitional compatibility for older calls using \code{data},
+\code{rate}, \code{payments_per_year}, \code{annuity}, \code{term},
+\code{deferral_years}, \code{guarantee_years}, \code{interest_type},
+\code{k_col}, \code{tx_col}, and \code{annuity_col}.}
 }
 \value{
 A tibble with the original simulation columns and additional columns:
-\itemize{
-\item \code{rate}: original rate supplied.
-\item \code{interest_type}: interest rate convention.
-\item \code{m}: interest conversion frequency.
-\item \code{effective_rate}: equivalent annual effective interest rate.
-\item \code{discount_factor}: annual discount factor.
-\item \code{annuity}: annuity type.
-\item \code{payment}: amount of each annuity payment.
-\item \code{payments_per_year}: annuity payment frequency.
-\item \code{term}: annuity term, if applicable.
-\item \code{deferral_years}: deferral period.
-\item \code{guarantee_years}: guaranteed period, if applicable.
-\item \code{timing}: annuity payment timing.
-\item \code{n_payments}: number of payments made in the simulated scenario.
-\item \code{first_payment_time}: first payment time in the simulated scenario.
-\item \code{last_payment_time}: last payment time in the simulated scenario.
-\item \code{pv_annuity}: simulated present value of annuity payments, or another
-name supplied through \code{annuity_col}.
+\describe{
+\item{i}{Original interest-rate input.}
+\item{i_type}{Interest-rate convention.}
+\item{m}{Interest conversion frequency.}
+\item{i_effective}{Equivalent annual effective interest rate.}
+\item{v}{Annual discount factor.}
+\item{type}{Canonical annuity type.}
+\item{payment}{Amount of each annuity payment.}
+\item{k}{Annuity payment frequency.}
+\item{n}{Annuity term, if applicable.}
+\item{h}{Deferral period.}
+\item{n_guar}{Guaranteed period, if applicable.}
+\item{timing}{Annuity payment timing.}
+\item{n_payments}{Number of payments made in the simulated scenario.}
+\item{first_payment_time}{First payment time in the simulated scenario.}
+\item{last_payment_time}{Last payment time in the simulated scenario.}
+\item{pv_annuity}{Simulated present value of annuity payments, or another
+name supplied through \code{col_pv}.}
 }
+
+For transition, the output also includes legacy columns such as
+\code{rate}, \code{interest_type}, \code{effective_rate},
+\code{discount_factor}, \code{annuity}, \code{payments_per_year},
+\code{term}, \code{deferral_years}, and \code{guarantee_years}.
 }
 \description{
 Computes Monte Carlo simulated present values of life annuity payments from
-simulated future lifetimes.
+simulated future lifetimes, using compact actuarial notation.
 }
 \details{
-This function is designed to be used after \code{\link[=simulate_lifetime]{simulate_lifetime()}}. It takes
-simulated values of the curtate future lifetime \eqn{K_x}, and when needed
-the complete future lifetime \eqn{T_x}, and evaluates the present value
-random variable associated with several classical annuity benefits.
+This function is designed to be used after \code{\link{simulate_lifetime}},
+\code{\link{simulate_lifetimes}}, or \code{\link{mc_multilife_status}}. It
+takes simulated values of the curtate future lifetime \eqn{K_x}, and when
+needed the complete future lifetime \eqn{T_x}, and evaluates the present
+value random variable associated with classical annuity benefits.
 
-Let \eqn{K_x} denote the curtate future lifetime of a life aged \eqn{x},
-let \eqn{T_x} denote the complete future lifetime, and let \eqn{v} denote
-the annual discount factor.
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} is the interest-rate input, \code{i_type}
+is the interest-rate convention, \code{m} is the nominal conversion
+frequency, \code{k} is the annuity payment frequency, \code{n} is the
+annuity term, and \code{h} is the deferral period.
 
-The arguments \code{m} and \code{payments_per_year} have different meanings:
+The arguments \code{m} and \code{k} have different meanings:
 \itemize{
-\item \code{m} is used only when \code{interest_type = "nominal"} and controls the
-frequency of interest conversion.
-\item \code{payments_per_year} controls how frequently annuity payments are made.
+\item \code{m} is used only for nominal interest-rate conversion.
+\item \code{k} controls how frequently annuity payments are made.
 }
 
-The argument \code{payment} represents the amount of each annuity payment. Thus,
-for a monthly annuity with total annual payment equal to 1, use
-\code{payment = 1 / 12} and \code{payments_per_year = 12}.
+The argument \code{payment} represents the amount of each annuity payment.
+Thus, for a monthly annuity with total annual payment equal to 1, use
+\code{payment = 1 / 12} and \code{k = 12}.
 
-For annual payments, \code{payments_per_year = 1}, the function works directly
-with \eqn{K_x}. For fractional payments, such as monthly, quarterly, or
+For annual payments, \code{k = 1}, the function works directly with
+\eqn{K_x}. For fractional payments, such as monthly, quarterly, or
 semiannual payments, the function uses \eqn{T_x} to determine whether the
 life is alive at each fractional payment time.
 
-For annual whole life annuity-immediate, the simulated present value is
-
+For annual whole-life annuity-immediate, the simulated present value is
 \deqn{
   Y = \sum_{j=1}^{K_x} c v^j,
 }
-
 where \eqn{c} is the amount of each payment.
 
-For annual whole life annuity-due, the simulated present value is
-
+For annual whole-life annuity-due, the simulated present value is
 \deqn{
   \ddot{Y} = \sum_{j=0}^{K_x} c v^j.
 }
 
-For fractional payments with payment frequency \eqn{m_p}, annuity-immediate
-payments are made at times \eqn{1/m_p, 2/m_p, \ldots} while the life is
-alive. Annuity-due payments are made at times
-\eqn{0, 1/m_p, 2/m_p, \ldots} while the life is alive.
-
-The following annuity types are supported:
-\itemize{
-\item \code{"whole_life"}: payments continue while the life is alive.
-\item \code{"temporary"}: payments continue while the life is alive, but for at most
-\code{term} years.
-\item \code{"deferred"}: payments begin after \code{deferral_years} years and continue
-while the life is alive.
-\item \code{"deferred_temporary"}: payments begin after \code{deferral_years} years and
-continue while the life is alive, but for at most \code{term} years after the
-deferral period.
-\item \code{"certain"}: payments are made for \code{term} years regardless of survival.
-\item \code{"guaranteed"}: payments continue while the life is alive, with at least
-\code{guarantee_years} years of payments guaranteed.
-}
-
 The function returns simulated present values, not only their expected value.
-Therefore the resulting column can be summarized with \code{\link[=summary_mc]{summary_mc()}},
-plotted with \code{ggplot2}, or used to construct premiums, losses, and reserves.
+Therefore the resulting column can be summarized with \code{\link{summary_mc}},
+plotted with \code{ggplot2}, or used to construct premiums, losses, and
+reserves.
 }
 \examples{
-life_table <- tibble::tibble(
-  age = 40:100,
+lt <- tibble::tibble(
+  x = 40:100,
   qx = seq(0.002, 1, length.out = 61)
 )
 
-# Annual whole life annuity-due
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
-  mc_annuity(
-    rate = 0.05,
-    annuity = "whole_life",
-    payment = 1,
-    payments_per_year = 1,
-    timing = "due"
-  )
-
-# Monthly whole life annuity-due with total annual payment equal to 1
-life_table |>
+# Annual whole-life annuity-due
+lt |>
   simulate_lifetime(
-    age = 40,
-    n_sim = 1000,
-    fractional = "udd",
+    x = 40,
+    n_sim = 25,
     seed = 123
   ) |>
   mc_annuity(
-    rate = 0.05,
-    annuity = "whole_life",
+    i = 0.05,
+    type = "whole",
+    payment = 1,
+    k = 1,
+    timing = "due"
+  )
+
+# Monthly whole-life annuity-due with total annual payment equal to 1
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    frac = "udd",
+    seed = 123
+  ) |>
+  mc_annuity(
+    i = 0.05,
+    type = "whole",
     payment = 1 / 12,
-    payments_per_year = 12,
+    k = 12,
     timing = "due"
   )
 
 # Quarterly temporary life annuity-immediate
-life_table |>
+lt |>
   simulate_lifetime(
-    age = 40,
-    n_sim = 1000,
-    fractional = "udd",
+    x = 40,
+    n_sim = 25,
+    frac = "udd",
     seed = 123
   ) |>
   mc_annuity(
-    rate = 0.05,
-    annuity = "temporary",
-    term = 20,
+    i = 0.05,
+    type = "temporary",
+    n = 20,
     payment = 1 / 4,
-    payments_per_year = 4,
+    k = 4,
     timing = "immediate"
   )
 
-# Monthly joint-life annuity using a multiple-life status
-life_table |>
-  simulate_lifetimes(
-    ages = c(60, 58),
-    n_sim = 1000,
-    fractional = "udd",
+# Nominal interest convertible monthly, with quarterly payments
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    frac = "udd",
     seed = 123
   ) |>
-  mc_multilife_status(status = "joint_life") |>
   mc_annuity(
-    rate = 0.04,
-    annuity = "whole_life",
-    payment = 1 / 12,
-    payments_per_year = 12,
-    timing = "due",
-    k_col = "K_status",
-    tx_col = "T_status"
+    i = 0.06,
+    i_type = "nominal_interest",
+    m = 12,
+    type = "whole",
+    payment = 1 / 4,
+    k = 4,
+    timing = "due"
   )
 
-# Nominal rate convertible monthly, with quarterly payments
-life_table |>
-  simulate_lifetime(
-    age = 40,
-    n_sim = 1000,
-    fractional = "udd",
+# Multiple-life status workflow
+lt |>
+  simulate_lifetimes(
+    x = c(60, 58),
+    n_sim = 25,
+    frac = "udd",
     seed = 123
   ) |>
+  mc_multilife_status(status = "joint") |>
   mc_annuity(
-    rate = 0.06,
-    interest_type = "nominal",
-    m = 12,
-    annuity = "whole_life",
-    payment = 1 / 4,
-    payments_per_year = 4,
-    timing = "due"
+    i = 0.04,
+    type = "whole",
+    payment = 1,
+    k = 1,
+    timing = "due",
+    col_K = "K_status",
+    col_T = "T_status"
   )
 
 }
@@ -257,7 +255,17 @@ and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 Society of Actuaries.
 }
 \seealso{
-\code{\link[=simulate_lifetime]{simulate_lifetime()}}, \code{\link[=simulate_lifetimes]{simulate_lifetimes()}}, \code{\link[=mc_multilife_status]{mc_multilife_status()}},
-\code{\link[=mc_insurance]{mc_insurance()}}, \code{\link[=mc_premium]{mc_premium()}}, \code{\link[=mc_loss]{mc_loss()}}, \code{\link[=mc_reserve]{mc_reserve()}},
-\code{\link[=summary_mc]{summary_mc()}}
+\code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
+\code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
+\code{\link{mc_premium}}, \code{\link{mc_loss}}, \code{\link{mc_reserve}},
+\code{\link{summary_mc}}
+
+Other monte-carlo: 
+\code{\link{mc_insurance}()},
+\code{\link{mc_loss}()},
+\code{\link{mc_premium}()},
+\code{\link{mc_reserve}()},
+\code{\link{simulate_lifetime}()},
+\code{\link{summary_mc}()}
 }
+\concept{monte-carlo}

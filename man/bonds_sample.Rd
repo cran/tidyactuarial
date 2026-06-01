@@ -8,25 +8,25 @@
 A tibble with 5 rows and 8 variables:
 \describe{
 \item{bond_id}{Bond identifier.}
-\item{face_value}{Face value of the bond.}
-\item{coupon_rate}{Annual coupon rate.}
-\item{coupon_frequency}{Number of coupon payments per year.}
-\item{maturity_years}{Maturity in years.}
-\item{yield_rate}{Annual nominal yield rate consistent with coupon frequency.}
+\item{face}{Face value of the bond.}
+\item{c}{Annual coupon rate.}
+\item{k}{Number of coupon payments per year.}
+\item{n}{Maturity in years.}
+\item{y}{Annual nominal yield rate consistent with coupon frequency.}
 \item{bond_type}{Short bond type label.}
-\item{price}{Theoretical bond price computed from the listed yield rate.}
+\item{P}{Theoretical bond price computed from the listed yield rate.}
 }
 
 A tibble with 5 rows and 8 variables:
 \describe{
 \item{bond_id}{Bond identifier.}
-\item{face_value}{Face value of the bond.}
-\item{coupon_rate}{Annual coupon rate.}
-\item{coupon_frequency}{Number of coupon payments per year.}
-\item{maturity_years}{Maturity in years.}
-\item{yield_rate}{Annual nominal yield rate consistent with coupon frequency.}
+\item{face}{Face value of the bond.}
+\item{c}{Annual coupon rate.}
+\item{k}{Number of coupon payments per year.}
+\item{n}{Maturity in years.}
+\item{y}{Annual nominal yield rate consistent with coupon frequency.}
 \item{bond_type}{Short bond type label.}
-\item{price}{Theoretical bond price computed from the listed yield rate.}
+\item{P}{Theoretical bond price computed from the listed yield rate.}
 }
 }
 \source{
@@ -46,16 +46,27 @@ yield-to-maturity, duration, and convexity examples.
 A small pedagogical dataset containing bond contracts for pricing,
 yield-to-maturity, duration, and convexity examples.
 }
+\details{
+This dataset uses the compact bond notation adopted in \code{tidyactuarial}:
+\code{face} is the face value, \code{c} is the annual coupon rate,
+\code{k} is the coupon frequency, \code{n} is the maturity, \code{y} is the
+yield input, and \code{P} is the bond price.
+
+This dataset uses the compact bond notation adopted in \code{tidyactuarial}:
+\code{face} is the face value, \code{c} is the annual coupon rate,
+\code{k} is the coupon frequency, \code{n} is the maturity, \code{y} is the
+yield input, and \code{P} is the bond price.
+}
 \examples{
 data(bonds_sample)
 
 bonds_sample |>
-  dplyr::select(bond_id, face_value, coupon_rate, maturity_years, price)
+  dplyr::select(bond_id, face, c, k, n, y, P)
 
 data(bonds_sample)
 
 bonds_sample |>
-  dplyr::select(bond_id, face_value, coupon_rate, maturity_years, price)
+  dplyr::select(bond_id, face, c, k, n, y, P)
 
 }
 \keyword{datasets}

@@ -2,151 +2,57 @@
 % Please edit documentation in R/simulate_lifetimes.R
 \name{simulate_lifetimes}
 \alias{simulate_lifetimes}
-\title{Simulate multiple independent future lifetimes}
+\title{Simulate future lifetimes from a life table}
 \usage{
-simulate_lifetimes(
-  data,
-  ages,
-  n_sim = 10000,
-  life_id = NULL,
-  age_col = "age",
-  qx_col = "qx",
-  method = c("inverse", "multinomial", "antithetic"),
-  fractional = c("udd", "constant_force", "none"),
-  seed = NULL
-)
+simulate_lifetimes(data, x, n_sim = 1000, frac = "udd", seed = NULL)
 }
 \arguments{
-\item{data}{A life table data frame or a list of life table data frames.
-If a single data frame is supplied, the same life table is used for all
-lives. If a list is supplied, it must have length 1 or the same length as
-\code{ages}.}
+\item{data}{A data frame or tibble containing a life table.}
 
-\item{ages}{Numeric vector. Initial ages of the lives to simulate.}
+\item{x}{Numeric vector of initial ages.}
 
-\item{n_sim}{Positive integer. Number of Monte Carlo simulations per life.
-Default is \code{10000}.}
+\item{n_sim}{Number of simulations per life.}
 
-\item{life_id}{Optional character vector identifying each life. If \code{NULL},
-IDs are created automatically as \code{"life_1"}, \code{"life_2"}, and so on. If
-\code{data} is a named list and \code{life_id = NULL}, the list names are used when
-possible.}
+\item{frac}{Fractional age assumption. One of \code{"udd"}, \code{"constant"},
+\code{"cfm"}, or \code{"balducci"}.}
 
-\item{age_col}{Character string. Name of the age column in the life table or
-life tables. Default is \code{"age"}.}
-
-\item{qx_col}{Character string. Name of the one-year death probability
-column in the life table or life tables. Default is \code{"qx"}.}
-
-\item{method}{Character string specifying the simulation method for each
-curtate future lifetime. Available options are \code{"inverse"},
-\code{"multinomial"}, and \code{"antithetic"}. Default is \code{"inverse"}.}
-
-\item{fractional}{Character string specifying how the fractional part of the
-complete future lifetime is generated within the year of death. Available
-options are \code{"udd"}, \code{"constant_force"}, and \code{"none"}. Default is \code{"udd"}.}
-
-\item{seed}{Optional integer seed for reproducibility. Default is \code{NULL}.}
+\item{seed}{Optional random seed.}
 }
 \value{
-A tibble with one row per simulation and per life. It contains:
-\itemize{
-\item \code{sim_id}: simulation identifier.
-\item \code{life_id}: life identifier.
-\item \code{life_index}: position of the life in \code{ages}.
-\item \code{age}: initial age of the life.
-\item \code{method}: simulation method used.
-\item \code{fractional}: fractional age assumption.
-\item \code{Kx}: simulated curtate future lifetime.
-\item \code{Tx}: simulated complete future lifetime. If \code{fractional = "none"},
-this column contains \code{NA}.
-}
+A tibble with simulated curtate and complete future lifetimes.
 }
 \description{
-Simulates curtate and complete future lifetimes for several lives under an
-independence assumption.
+Simulates curtate and complete future lifetimes from a life table.
+
+This version is intentionally simple and defensive. It avoids using
+\code{findInterval()} on a cumulative distribution that may contain missing values,
+while preserving the column names expected by the Monte Carlo workflow:
+\code{sim_id}, \code{life_id}, \code{Kx}, and \code{Tx}.
 }
 \details{
-This function extends \code{\link[=simulate_lifetime]{simulate_lifetime()}} to multiple lives. It is designed
-as the simulation engine for Monte Carlo multiple-life actuarial calculations.
-Each life is simulated independently, and the output is returned in tidy long
-format with one row per simulation and per life.
+The input life table must contain an age column named \code{x}, \code{age}, or \code{Age},
+and at least one mortality column among \code{qx}, \code{px}, or \code{lx}.
 
-For lives aged \eqn{x_1, x_2, \ldots, x_r}, the function simulates
+If \code{qx} is not available, it is obtained from \code{px} as \code{1 - px}, or from
+consecutive \code{lx} values as \code{1 - lx[x + 1] / lx[x]}.
 
-\deqn{
-  K_{x_1}, K_{x_2}, \ldots, K_{x_r}
-}
-
-independently. The same applies to the complete future lifetimes
-\eqn{T_{x_1}, T_{x_2}, \ldots, T_{x_r}} when \code{fractional} is not \code{"none"}.
-
-The independence assumption means that no common shock, copula, frailty, or
-other dependence structure is imposed. This is a natural first model for
-multiple-life Monte Carlo calculations and allows direct construction of
-joint-life, last-survivor, first-death, last-death, and k-th death quantities
-through downstream functions.
-
-The output is intentionally long:
-
-\if{html}{\out{<div class="sourceCode">}}\preformatted{sim_id | life_id | life_index | age | Kx | Tx
-}\if{html}{\out{</div>}}
-
-This format works naturally with \code{\link[dplyr:group_by]{dplyr::group_by()}},
-\code{\link[dplyr:summarise]{dplyr::summarise()}}, \code{\link[tidyr:pivot_wider]{tidyr::pivot_wider()}}, and downstream functions such
-as \code{mc_multilife_status()}.
-
-If different mortality tables are needed for different lives, pass \code{data} as
-a list of life tables. For example, one table may be used for a male life and
-another for a female life.
+Invalid mortality values are handled defensively. Non-finite values, negative
+values, and values greater than one are removed from the mortality basis.
+Missing values are then treated as zero, and the final available age is forced
+to have \code{qx = 1} so that the lifetime distribution is closed.
 }
 \examples{
-life_table <- tibble::tibble(
-  age = 40:110,
-  qx = seq(0.002, 1, length.out = 71)
+lt <- tibble::tibble(
+  x = 40:100,
+  qx = seq(0.002, 1, length.out = 61)
 )
 
-# Two independent lives using the same life table
-life_table |>
-  simulate_lifetimes(
-    ages = c(60, 58),
-    n_sim = 1000,
-    seed = 123
-  )
-
-# Three independent lives
-life_table |>
-  simulate_lifetimes(
-    ages = c(60, 58, 55),
-    life_id = c("x", "y", "z"),
-    n_sim = 1000,
-    seed = 123
-  )
-
-# Different life tables for different lives
-male_table <- tibble::tibble(
-  age = 40:110,
-  qx = seq(0.003, 1, length.out = 71)
+simulate_lifetimes(
+  data = lt,
+  x = c(60, 58),
+  n_sim = 25,
+  frac = "udd",
+  seed = 123
 )
 
-female_table <- tibble::tibble(
-  age = 40:110,
-  qx = seq(0.002, 1, length.out = 71)
-)
-
-list(male = male_table, female = female_table) |>
-  simulate_lifetimes(
-    ages = c(60, 58),
-    n_sim = 1000,
-    seed = 123
-  )
-
-}
-\references{
-Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
-and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
-Society of Actuaries.
-}
-\seealso{
-\code{\link[=simulate_lifetime]{simulate_lifetime()}}, \code{\link[=summary_mc]{summary_mc()}}
 }

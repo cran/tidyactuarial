@@ -4,35 +4,48 @@
 \alias{bond_cash_flows}
 \title{Cash flow structure of a level coupon bond}
 \usage{
-bond_cash_flows(
-  face,
-  coupon_rate,
-  years_to_maturity,
-  coupons_per_year = 1L,
-  redemption = NULL,
-  tol = 1e-10,
-  check = TRUE
-)
+bond_cash_flows(face, c, n, k = 1L, R = NULL, tol = 1e-10, check = TRUE)
 }
 \arguments{
-\item{face}{Numeric scalar. Face value.}
+\item{face}{Numeric scalar. Face value of the bond.}
 
-\item{coupon_rate}{Numeric scalar. Annual coupon rate.}
+\item{c}{Numeric scalar. Annual coupon rate.}
 
-\item{years_to_maturity}{Numeric scalar. Years to maturity.}
+\item{n}{Numeric scalar. Years to maturity.}
 
-\item{coupons_per_year}{Positive integer. Payments per year.}
+\item{k}{Positive integer. Number of coupon payments per year.}
 
-\item{redemption}{Numeric scalar. Redemption value.}
+\item{R}{Numeric scalar. Redemption value. If \code{NULL}, it is set equal
+to \code{face}.}
 
 \item{tol}{Numeric scalar. Tolerance.}
 
 \item{check}{Logical scalar. Input validation.}
 }
 \value{
-A tibble with the bond schedule.
+A tibble with the bond cash-flow schedule. The main actuarial
+columns are \code{t} for payment time and \code{cf} for cash flow.
 }
 \description{
-Builds the cash flow schedule of a level coupon bond with constant coupon
-rate and a single redemption payment at maturity.
+Builds the cash-flow schedule of a level coupon bond with constant coupon
+rate and a single redemption payment at maturity, using compact actuarial
+notation.
+}
+\details{
+This function follows the compact bond notation used in
+\code{tidyactuarial}: \code{face} is the face value, \code{c} is the annual
+coupon rate, \code{n} is the term to maturity, \code{k} is the number of
+coupon payments per year, and \code{R} is the redemption value.
+
+Stub periods are not supported; therefore, \code{n * k} must be an integer.
+}
+\examples{
+bond_cash_flows(
+  face = 1000,
+  c = 0.05,
+  n = 10,
+  k = 2,
+  R = 1000
+)
+
 }

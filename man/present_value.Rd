@@ -4,42 +4,35 @@
 \alias{present_value}
 \title{Present value of a single payment}
 \usage{
-present_value(
-  amount,
-  rate,
-  rate_type = "effective",
-  m = 1,
-  time,
-  output = c("value", "table")
-)
+present_value(C, i, i_type = "effective", m = 1, t, tidy = FALSE)
 }
 \arguments{
-\item{amount}{Numeric vector of future payment amounts.}
+\item{C}{Numeric vector of future payment amounts or capitals.}
 
-\item{rate}{Numeric vector of rate values.}
+\item{i}{Numeric vector of interest-rate values.}
 
-\item{rate_type}{Character vector indicating the rate type.
+\item{i_type}{Character vector indicating the interest-rate type.
 Allowed values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Positive integer vector giving the compounding frequency
-for nominal rates. Ignored for \code{"effective"} and \code{"force"}.}
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. Ignored for \code{"effective"} and \code{"force"}.}
 
-\item{time}{Numeric vector of times in years until payment.}
+\item{t}{Numeric vector of times in years until payment.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric
-present value, or \code{"table"} to return a tibble with intermediate
-calculations.}
+\item{tidy}{Logical scalar. If \code{FALSE}, returns a numeric present
+value. If \code{TRUE}, returns a tibble with intermediate calculations.}
 }
 \value{
-If \code{output = "value"}, a numeric vector of present values.
+If \code{tidy = FALSE}, a numeric vector of present values.
 
-If \code{output = "table"}, a tibble with input values, equivalent rates,
+If \code{tidy = TRUE}, a tibble with input values, equivalent rates,
 discount factors, and present values.
 }
 \description{
 Computes the present value of a future payment due at a given time, using
-the annual effective interest rate implied by the supplied rate specification.
+the annual effective interest rate implied by the supplied interest-rate
+specification and compact actuarial notation.
 }
 \details{
 The present value is computed as
@@ -58,42 +51,50 @@ The input interest rate may be supplied as:
 Internally, all rate specifications are first converted to the equivalent
 annual effective interest rate using \code{\link{standardize_interest}}.
 
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{C} denotes the future payment amount or capital,
+\code{t} denotes time, \code{i} denotes the interest-rate input,
+\code{i_type} denotes the interest-rate type, and \code{m} denotes the
+conversion frequency for nominal rates.
+
 Input vectors must have length 1 or a common length. Missing values are
-propagated. This function does not accept dates.
+propagated. This function does not accept dates; use \code{\link{pv_flow}}
+for dated cash flows.
 }
 \examples{
 # Numeric present value
-present_value(amount = 1000, rate = 0.08, time = 3)
+present_value(C = 1000, i = 0.08, t = 3)
 
 # Nominal interest converted monthly
 present_value(
-  amount = 1000,
-  rate = 0.12,
-  rate_type = "nominal_interest",
+  C = 1000,
+  i = 0.12,
+  i_type = "nominal_interest",
   m = 12,
-  time = 5
+  t = 5
 )
 
 # Tibble output for teaching or auditing
 present_value(
-  amount = 1000,
-  rate = 0.08,
-  time = 3,
-  output = "table"
+  C = 1000,
+  i = 0.08,
+  t = 3,
+  tidy = TRUE
 )
 
 # Vectorized example
 present_value(
-  amount = c(1000, 2500, 4000),
-  rate = c(0.08, 0.10, 0.12),
-  rate_type = c("effective", "nominal_interest", "force"),
+  C = c(1000, 2500, 4000),
+  i = c(0.08, 0.10, 0.12),
+  i_type = c("effective", "nominal_interest", "force"),
   m = c(1, 12, 1),
-  time = c(3, 5, 2)
+  t = c(3, 5, 2)
 )
 
 }
 \seealso{
-\code{\link{standardize_interest}}, \code{\link{future_value}}
+\code{\link{standardize_interest}}, \code{\link{future_value}},
+\code{\link{pv_flow}}
 
 Other time-value: 
 \code{\link{future_value}()},

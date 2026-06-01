@@ -4,47 +4,56 @@
 \alias{standardize_interest}
 \title{Standardize an interest rate to the annual effective rate i}
 \usage{
-standardize_interest(type = "effective", rate, m = 1)
+standardize_interest(i_type = "effective", i, m = 1, ...)
 }
 \arguments{
-\item{type}{Character vector indicating the rate type.
-Must be one of \code{"effective"}, \code{"nominal_interest"},
+\item{i_type}{Character vector indicating the interest-rate type. Must be one
+of \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, or \code{"force"}.}
 
-\item{rate}{Numeric vector of rate values.}
+\item{i}{Numeric vector of interest-rate values.}
 
-\item{m}{Positive integer vector giving the compounding frequency
-for nominal rates. Ignored for \code{"effective"} and \code{"force"}.}
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. Ignored for \code{"effective"} and \code{"force"}.}
+
+\item{...}{Transitional compatibility for older internal calls using
+\code{type = } and \code{rate = }. These names are accepted and mapped to
+\code{i_type} and \code{i}.}
 }
 \value{
-Numeric vector of annual effective rates.
-Missing values are propagated.
+Numeric vector of annual effective rates. Missing values are
+propagated.
 }
 \description{
-Converts common interest-rate specifications to the equivalent
-annual effective interest rate \code{i}.
+Converts common interest-rate specifications to the equivalent annual
+effective interest rate \code{i}, using compact actuarial notation.
 }
 \details{
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} denotes the interest-rate value,
+\code{i_type} denotes the interest-rate type, and \code{m} denotes the
+conversion frequency for nominal rates.
+
 The conversion formulas are:
 \describe{
-\item{effective:}{\eqn{i = \text{rate}}{i = rate} (identity)}
-\item{nominal_interest:}{\eqn{i = (1 + j^{(m)}/m)^m - 1}{i = (1 + j(m)/m)^m - 1}}
-\item{nominal_discount:}{\eqn{i = (1 - d^{(m)}/m)^{-m} - 1}{i = (1 - d(m)/m)^(-m) - 1}}
-\item{force:}{\eqn{i = e^{\delta} - 1}{i = exp(delta) - 1}}
+\item{effective:}{\eqn{i = i}{i = i} (identity)}
+\item{nominal_interest:}{\eqn{i_e = (1 + j^{(m)}/m)^m - 1}{i_e = (1 + j(m)/m)^m - 1}}
+\item{nominal_discount:}{\eqn{i_e = (1 - d^{(m)}/m)^{-m} - 1}{i_e = (1 - d(m)/m)^(-m) - 1}}
+\item{force:}{\eqn{i_e = e^{\delta} - 1}{i_e = exp(delta) - 1}}
 }
 
 Input vectors must have length 1 or a common length.
 }
 \examples{
 # Scalar cases
-standardize_interest("nominal_interest", rate = 0.18, m = 4)
-standardize_interest("nominal_discount", rate = 0.10, m = 12)
-standardize_interest("force", rate = 0.12)
+standardize_interest(i_type = "nominal_interest", i = 0.18, m = 4)
+standardize_interest(i_type = "nominal_discount", i = 0.10, m = 12)
+standardize_interest(i_type = "force", i = 0.12)
 
 # Vectorized case
 standardize_interest(
-  type = c("nominal_interest", "force", "effective"),
-  rate = c(0.06, 0.05, 0.04),
+  i_type = c("nominal_interest", "force", "effective"),
+  i = c(0.06, 0.05, 0.04),
   m = c(12, 1, 1)
 )
 
@@ -52,18 +61,18 @@ standardize_interest(
 if (requireNamespace("dplyr", quietly = TRUE) &&
     requireNamespace("tibble", quietly = TRUE)) {
   portfolio <- tibble::tibble(
-    policy_id  = 1:3,
-    gross_rate = c(0.05, 0.08, 0.10),
-    rate_type  = c("force", "nominal_interest", "nominal_discount"),
-    frequency  = c(NA, 4, 12)
+    policy_id = 1:3,
+    i = c(0.05, 0.08, 0.10),
+    i_type = c("force", "nominal_interest", "nominal_discount"),
+    m = c(1, 4, 12)
   )
 
   dplyr::mutate(
     portfolio,
-    effective_rate = standardize_interest(
-      type = rate_type,
-      rate = gross_rate,
-      m = frequency
+    i_effective = standardize_interest(
+      i_type = i_type,
+      i = i,
+      m = m
     )
   )
 }

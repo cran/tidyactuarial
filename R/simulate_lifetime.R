@@ -1,14 +1,13 @@
 #' Simulate future lifetimes from a life table
 #'
-#' Simulates curtate and, optionally, complete future lifetimes from a life
-#' table containing one-year death probabilities.
+#' Simulates curtate and, optionally, complete future lifetimes from a life table
+#' containing one-year death probabilities, using compact actuarial notation.
 #'
 #' This function is designed as the simulation engine for Monte Carlo life
-#' contingency calculations in `tidyactuarial`. It generates simulated values
-#' of the curtate future lifetime \eqn{K_x} and a simulated complete future
-#' lifetime \eqn{T_x}. The output is a tidy tibble that can be used naturally
-#' with pipes and downstream functions such as [mc_insurance()],
-#' [mc_annuity()], [mc_premium()], and [mc_loss()].
+#' contingency calculations in \code{tidyactuarial}. It generates simulated
+#' values of the curtate future lifetime \eqn{K_x} and a simulated complete
+#' future lifetime \eqn{T_x}. The output is a tidy tibble that can be used
+#' naturally with pipes and downstream Monte Carlo functions.
 #'
 #' For a life aged \eqn{x}, the curtate future lifetime \eqn{K_x} follows
 #'
@@ -17,173 +16,210 @@
 #' }
 #'
 #' where \eqn{{}_k p_x} is the probability of surviving \eqn{k} complete years
-#' from age \eqn{x}, and \eqn{q_{x+k}} is the one-year probability of death
-#' at attained age \eqn{x+k}.
+#' from age \eqn{x}, and \eqn{q_{x+k}} is the one-year probability of death at
+#' attained age \eqn{x+k}.
 #'
-#' @param data A data frame or tibble containing the life table.
-#' @param age Numeric scalar. Initial age \eqn{x} of the individual.
-#' @param n_sim Positive integer. Number of Monte Carlo simulations.
-#'   Default is `10000`.
-#' @param age_col Character string. Name of the age column in `data`.
-#'   Default is `"age"`.
+#' @param lt A data frame or tibble containing the life table.
+#' @param x Numeric scalar. Initial actuarial age of the individual.
+#' @param n_sim Positive integer. Number of Monte Carlo simulations. Default is
+#'   \code{10000}.
+#' @param x_col Character string. Name of the age column in \code{lt}. Default
+#'   is \code{"x"}.
 #' @param qx_col Character string. Name of the one-year death probability
-#'   column in `data`. Default is `"qx"`.
+#'   column in \code{lt}. Default is \code{"qx"}.
 #' @param method Character string specifying the simulation method for
-#'   \eqn{K_x}. Available options are `"inverse"`, `"multinomial"`, and
-#'   `"antithetic"`. Default is `"inverse"`.
-#' @param fractional Character string specifying how the fractional part of
-#'   the complete future lifetime is generated within the year of death.
-#'   Available options are `"udd"`, `"constant_force"`, and `"none"`.
-#'   Default is `"udd"`.
-#' @param seed Optional integer seed for reproducibility. Default is `NULL`.
-#' @param include_distribution Logical. If `TRUE`, the probability mass
+#'   \eqn{K_x}. Available options are \code{"inverse"}, \code{"multinomial"},
+#'   and \code{"antithetic"}.
+#' @param frac Character string specifying how the fractional part of the
+#'   complete future lifetime is generated within the year of death. Available
+#'   options are \code{"udd"}, \code{"constant_force"}, and \code{"none"}.
+#' @param seed Optional integer seed for reproducibility. Default is
+#'   \code{NULL}.
+#' @param include_distribution Logical. If \code{TRUE}, the probability mass
 #'   function used to simulate \eqn{K_x} is attached as a list-column named
-#'   `distribution`. Default is `FALSE`.
+#'   \code{distribution}.
 #'
 #' @details
-#' The function first constructs the conditional distribution of \eqn{K_x}
-#' from the selected age onward. Then it generates simulated values according
-#' to the selected method.
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{lt} denotes the life table, \code{x} denotes the
+#' actuarial age, and \code{frac} denotes the fractional-age simulation
+#' assumption.
+#'
+#' The function first constructs the conditional distribution of \eqn{K_x} from
+#' the selected age onward. Then it generates simulated values according to the
+#' selected method.
 #'
 #' The available simulation methods are:
-#'
-#' * `"inverse"`: inverse transform simulation using the cumulative
+#' \itemize{
+#'   \item \code{"inverse"}: inverse transform simulation using the cumulative
 #'   distribution of \eqn{K_x}.
-#' * `"multinomial"`: direct sampling from the probability mass function of
-#'   \eqn{K_x}.
-#' * `"antithetic"`: inverse transform simulation using antithetic uniforms
-#'   \eqn{U} and \eqn{1-U}, a basic variance reduction technique.
+#'   \item \code{"multinomial"}: direct sampling from the probability mass
+#'   function of \eqn{K_x}.
+#'   \item \code{"antithetic"}: inverse transform simulation using antithetic
+#'   uniforms \eqn{U} and \eqn{1-U}.
+#' }
 #'
-#' The `fractional` argument controls the simulated complete future lifetime
-#' \eqn{T_x}. If `fractional = "udd"`, a uniform fractional lifetime is added
-#' to \eqn{K_x}. If `fractional = "constant_force"`, the fractional lifetime
-#' within the year of death is generated under a constant force of mortality
-#' assumption conditional on death during that year. If `fractional = "none"`,
-#' the complete lifetime is returned as `NA`.
+#' The \code{frac} argument controls the simulated complete future lifetime
+#' \eqn{T_x}. If \code{frac = "udd"}, a uniform fractional lifetime is added to
+#' \eqn{K_x}. If \code{frac = "constant_force"}, the fractional lifetime within
+#' the year of death is generated under a constant force of mortality
+#' assumption conditional on death during that year. If \code{frac = "none"},
+#' the complete lifetime is returned as \code{NA}.
 #'
-#' The probabilities are normalized internally to handle finite life tables.
-#' If the life table is truncated, the simulated distribution is conditional
-#' on death occurring within the available range of ages. In practical work,
-#' it is recommended that the last available death probability be equal to 1.
+#' The probabilities are normalized internally to handle finite life tables. If
+#' the life table is truncated, the simulated distribution is conditional on
+#' death occurring within the available range of ages. In practical work, it is
+#' recommended that the last available death probability be equal to 1.
 #'
-#' @return A tibble with one row per simulation and the following columns:
+#' @return A tibble with one row per simulation and columns:
+#' \describe{
+#'   \item{sim_id}{Simulation identifier.}
+#'   \item{x}{Initial actuarial age.}
+#'   \item{age}{Compatibility column equal to \code{x}.}
+#'   \item{method}{Simulation method used.}
+#'   \item{frac}{Fractional-age simulation assumption.}
+#'   \item{fractional}{Compatibility column equal to \code{frac}.}
+#'   \item{Kx}{Simulated curtate future lifetime.}
+#'   \item{Tx}{Simulated complete future lifetime. If \code{frac = "none"},
+#'   this column contains \code{NA}.}
+#' }
 #'
-#' * `sim_id`: simulation identifier.
-#' * `age`: initial age.
-#' * `method`: simulation method used.
-#' * `fractional`: fractional age assumption used for \eqn{T_x}.
-#' * `Kx`: simulated curtate future lifetime.
-#' * `Tx`: simulated complete future lifetime. If `fractional = "none"`,
-#'   this column contains `NA`.
+#' If \code{include_distribution = TRUE}, the output also includes a list-column
+#' named \code{distribution} containing the probability mass function used for
+#' the simulation.
 #'
-#' If `include_distribution = TRUE`, the output also includes a list-column
-#' named `distribution` containing the probability mass function used for the
-#' simulation.
-#'
-#' @seealso
-#' [mc_insurance()], [mc_annuity()], [mc_premium()], [mc_loss()]
+#' @seealso \code{\link{mc_insurance}}, \code{\link{mc_annuity}},
+#'   \code{\link{mc_premium}}, \code{\link{mc_loss}}
 #'
 #' @references
 #' Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
-#' and Nesbitt, C. J. (1997). *Actuarial Mathematics*. Second Edition.
+#' and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 #' Society of Actuaries.
 #'
+#' @family monte-carlo
+#'
 #' @examples
-#' life_table <- tibble::tibble(
-#'   age = 40:100,
+#' lt <- tibble::tibble(
+#'   x = 40:100,
 #'   qx = seq(0.002, 1, length.out = 61)
 #' )
 #'
 #' # Basic simulation using inverse transform sampling
-#' life_table |>
+#' lt |>
 #'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 1000,
+#'     x = 40,
+#'     n_sim = 25,
 #'     method = "inverse",
 #'     seed = 123
 #'   )
 #'
 #' # Antithetic simulation
-#' life_table |>
+#' lt |>
 #'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 1000,
+#'     x = 40,
+#'     n_sim = 25,
 #'     method = "antithetic",
 #'     seed = 123
 #'   )
 #'
 #' # Returning the distribution used for simulation
-#' life_table |>
+#' lt |>
 #'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 100,
+#'     x = 40,
+#'     n_sim = 25,
 #'     include_distribution = TRUE,
 #'     seed = 123
 #'   )
 #'
-#' # Full pipeline with a life insurance present value
-#' life_table |>
-#'   simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
-#'   mc_insurance(
-#'     rate = 0.05,
-#'     insurance = "whole_life",
-#'     benefit = 1
-#'   )
-#'
-#' # Complete future lifetime for benefits payable at the moment of death
-#' life_table |>
-#'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 1000,
-#'     fractional = "udd",
-#'     seed = 123
-#'   ) |>
-#'   mc_insurance(
-#'     rate = 0.05,
-#'     insurance = "whole_life",
-#'     payment_timing = "moment_of_death",
-#'     tx_col = "Tx"
-#'   )
-#'
 #' @export
-simulate_lifetime <- function(data,
-                              age,
-                              n_sim = 10000,
-                              age_col = "age",
-                              qx_col = "qx",
-                              method = c("inverse", "multinomial", "antithetic"),
-                              fractional = c("udd", "constant_force", "none"),
-                              seed = NULL,
-                              include_distribution = FALSE) {
+simulate_lifetime <- function(
+    lt,
+    x,
+    n_sim = 10000L,
+    x_col = "x",
+    qx_col = "qx",
+    method = c("inverse", "multinomial", "antithetic"),
+    frac = c("udd", "constant_force", "none"),
+    seed = NULL,
+    include_distribution = FALSE
+) {
   method <- match.arg(method)
-  fractional <- match.arg(fractional)
+  frac <- match.arg(frac)
 
-  if (!is.data.frame(data)) {
-    stop("`data` must be a data frame or tibble.", call. = FALSE)
+  if (!is.data.frame(lt)) {
+    stop("`lt` must be a data frame or tibble.", call. = FALSE)
   }
 
-  .mc_assert_numeric_scalar(age, "age")
-  .mc_assert_positive_integer(n_sim, "n_sim")
-  .mc_assert_numeric_column(data, age_col, "age_col")
-  .mc_assert_numeric_column(data, qx_col, "qx_col")
+  if (missing(x) ||
+      !is.numeric(x) ||
+      length(x) != 1L ||
+      is.na(x) ||
+      !is.finite(x)) {
+    stop("`x` must be a single finite numeric value.", call. = FALSE)
+  }
 
-  if (!is.logical(include_distribution) || length(include_distribution) != 1) {
+  if (!is.numeric(n_sim) ||
+      length(n_sim) != 1L ||
+      is.na(n_sim) ||
+      !is.finite(n_sim) ||
+      n_sim <= 0 ||
+      abs(n_sim - round(n_sim)) > 1e-10) {
+    stop("`n_sim` must be a single positive integer.", call. = FALSE)
+  }
+
+  n_sim <- as.integer(round(n_sim))
+
+  if (!is.character(x_col) || length(x_col) != 1L || is.na(x_col)) {
+    stop("`x_col` must be a single character string.", call. = FALSE)
+  }
+
+  if (!is.character(qx_col) || length(qx_col) != 1L || is.na(qx_col)) {
+    stop("`qx_col` must be a single character string.", call. = FALSE)
+  }
+
+  if (!x_col %in% names(lt)) {
+    stop("`x_col` must identify a column in `lt`.", call. = FALSE)
+  }
+
+  if (!qx_col %in% names(lt)) {
+    stop("`qx_col` must identify a column in `lt`.", call. = FALSE)
+  }
+
+  if (!is.numeric(lt[[x_col]])) {
+    stop("The column identified by `x_col` must be numeric.", call. = FALSE)
+  }
+
+  if (!is.numeric(lt[[qx_col]])) {
+    stop("The column identified by `qx_col` must be numeric.", call. = FALSE)
+  }
+
+  if (!is.logical(include_distribution) ||
+      length(include_distribution) != 1L ||
+      is.na(include_distribution)) {
     stop("`include_distribution` must be a logical scalar.", call. = FALSE)
   }
 
   if (!is.null(seed)) {
-    .mc_assert_positive_integer(seed, "seed")
-    set.seed(seed)
+    if (!is.numeric(seed) ||
+        length(seed) != 1L ||
+        is.na(seed) ||
+        !is.finite(seed) ||
+        seed <= 0 ||
+        abs(seed - round(seed)) > 1e-10) {
+      stop("`seed` must be a single positive integer or NULL.", call. = FALSE)
+    }
+
+    set.seed(as.integer(round(seed)))
   }
 
-  age_vec <- data[[age_col]]
-  qx_vec <- data[[qx_col]]
+  age_vec <- lt[[x_col]]
+  qx_vec <- lt[[qx_col]]
 
-  keep <- age_vec >= age
+  keep <- age_vec >= x
 
   if (!any(keep)) {
     stop(
-      "No ages greater than or equal to `age` were found in `data`.",
+      "No ages greater than or equal to `x` were found in `lt`.",
       call. = FALSE
     )
   }
@@ -195,16 +231,27 @@ simulate_lifetime <- function(data,
 
   dist <- dist[order(dist$attained_age), , drop = FALSE]
 
+  if (any(is.na(dist$attained_age)) || any(!is.finite(dist$attained_age))) {
+    stop("The selected `x_col` contains non-finite or missing ages.", call. = FALSE)
+  }
+
   if (any(is.na(dist$qx))) {
     stop("The selected `qx_col` contains missing values.", call. = FALSE)
   }
 
-  if (any(dist$qx < 0 | dist$qx > 1)) {
-    stop("All death probabilities in `qx_col` must be between 0 and 1.",
+  if (any(!is.finite(dist$qx)) || any(dist$qx < 0 | dist$qx > 1)) {
+    stop("All death probabilities in `qx_col` must be finite and between 0 and 1.",
          call. = FALSE)
   }
 
-  dist$k <- dist$attained_age - age
+  dist$k <- dist$attained_age - x
+
+  if (any(dist$k < 0) || any(abs(dist$k - round(dist$k)) > 1e-10)) {
+    stop("The selected ages must define nonnegative integer curtate lifetimes.",
+         call. = FALSE)
+  }
+
+  dist$k <- as.integer(round(dist$k))
   dist$px <- 1 - dist$qx
 
   survival_to_k <- c(1, cumprod(dist$px[-length(dist$px)]))
@@ -250,7 +297,7 @@ simulate_lifetime <- function(data,
       rightmost.closed = TRUE
     )
 
-    index[index < 1] <- 1
+    index[index < 1L] <- 1L
     index[index > nrow(dist)] <- nrow(dist)
 
     Kx <- dist$k[index]
@@ -268,7 +315,7 @@ simulate_lifetime <- function(data,
       rightmost.closed = TRUE
     )
 
-    index[index < 1] <- 1
+    index[index < 1L] <- 1L
     index[index > nrow(dist)] <- nrow(dist)
 
     Kx <- dist$k[index]
@@ -276,11 +323,11 @@ simulate_lifetime <- function(data,
 
   Tx <- rep(NA_real_, n_sim)
 
-  if (fractional == "udd") {
+  if (frac == "udd") {
     Tx <- Kx + stats::runif(n_sim)
   }
 
-  if (fractional == "constant_force") {
+  if (frac == "constant_force") {
     qx_by_k <- stats::setNames(dist$qx, dist$k)
     q_death <- unname(qx_by_k[as.character(Kx)])
 
@@ -295,9 +342,11 @@ simulate_lifetime <- function(data,
 
   out <- tibble::tibble(
     sim_id = seq_len(n_sim),
-    age = age,
+    x = x,
+    age = x,
     method = method,
-    fractional = fractional,
+    frac = frac,
+    fractional = frac,
     Kx = Kx,
     Tx = Tx
   )

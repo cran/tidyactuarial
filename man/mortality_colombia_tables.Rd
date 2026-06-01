@@ -7,20 +7,23 @@
 \format{
 A tibble with 12 variables:
 \describe{
-\item{table}{Mortality table identifier.}
+\item{table_id}{Mortality table identifier.}
 \item{sex}{Sex category, typically \code{"male"} or \code{"female"}.}
-\item{x}{Integer age.}
+\item{x}{Integer actuarial age.}
 \item{lx}{Number of survivors at exact age \code{x}.}
-\item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
-\item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
-\item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
-\item{mu}{Force of mortality, if available.}
-\item{ex}{Complete life expectancy at age \code{x}, if available.}
+\item{dx}{Expected number of deaths between ages \code{x} and
+\code{x + 1}.}
+\item{qx}{One-year death probability between ages \code{x} and
+\code{x + 1}.}
+\item{px}{One-year survival probability between ages \code{x} and
+\code{x + 1}.}
+\item{mu_x}{Force of mortality at age \code{x}, when available.}
+\item{ex}{Complete life expectancy at age \code{x}, when available.}
 \item{source}{Source identifier or reference.}
-\item{qx_calculated}{Death probability recalculated from \code{lx} and
+\item{qx_calc}{Death probability recalculated from \code{lx} and
 \code{dx}, when available.}
-\item{qx_difference}{Difference between reported \code{qx} and
-recalculated \code{qx}, when available.}
+\item{qx_diff}{Difference between reported \code{qx} and recalculated
+\code{qx}, when available.}
 }
 }
 \source{
@@ -40,9 +43,15 @@ The dataset is intended for actuarial examples involving Colombian mortality
 tables, survival probabilities, life annuities, life insurance present values,
 and validation of life-table calculations.
 
-The variables \code{qx_calculated} and \code{qx_difference} are included as
-validation aids. They allow users to compare reported death probabilities
-against probabilities reconstructed from \code{lx} and \code{dx}.
+The variable names follow the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{x} denotes age, \code{lx} the number of lives,
+\code{dx} the number of deaths, \code{qx} the one-year death probability,
+\code{px} the one-year survival probability, \code{mu_x} the force of
+mortality, and \code{ex} the life expectancy at age \code{x}.
+
+The variables \code{qx_calc} and \code{qx_diff} are included as validation
+aids. They allow users to compare reported death probabilities against
+probabilities reconstructed from \code{lx} and \code{dx}.
 
 Some tables may start at different initial ages, use different terminal ages,
 or use different radix values. Users should filter the desired table and sex
@@ -54,11 +63,11 @@ data(mortality_colombia_tables)
 head(mortality_colombia_tables)
 
 mortality_colombia_tables |>
-  dplyr::count(table, sex)
+  dplyr::count(table_id, sex)
 
 rv08_male <- mortality_colombia_tables |>
-  dplyr::filter(table == "RV08_Rentistas_2005_2008", sex == "male") |>
-  dplyr::select(x, lx, dx, qx, px, ex)
+  dplyr::filter(table_id == "RV08_Rentistas_2005_2008", sex == "male") |>
+  dplyr::select(x, lx, dx, qx, px, mu_x, ex)
 
 head(rv08_male)
 

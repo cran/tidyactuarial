@@ -1,84 +1,186 @@
 #' Monte Carlo simulation of a life annuity
 #'
-#' Simulates the present value of a discrete life annuity using a mortality
-#' table and annual curtate future lifetimes.
+#' Simulates the present value of a discrete single-life annuity using a life
+#' table and annual curtate future lifetimes, with compact actuarial notation.
 #'
-#' The function supports direct use with `mortality_table`, `age`, and `rate`,
-#' and pipe workflows with [life_contract()].
+#' The function supports direct use with \code{lt}, \code{x}, and \code{i}, and
+#' pipe workflows with \code{\link{life_contract}}.
 #'
-#' @param mortality_table A life table or a `tidyact_life_contract` object.
-#'   A life table must contain columns `x` and `lx`.
-#' @param age Integer actuarial age. Optional when `mortality_table` is a
-#'   `tidyact_life_contract`.
-#' @param rate Numeric scalar. Annual interest-rate input. Optional when
-#'   `mortality_table` is a `tidyact_life_contract`.
-#' @param rate_type Character string indicating the rate type.
-#' @param m Positive integer. Compounding frequency for nominal rates.
-#' @param term_years Term in years. Use `Inf` for whole life.
-#' @param payments_per_year Positive integer. Number of annuity payments per year.
-#' @param timing `"due"` or `"immediate"`.
+#' @param lt A life table or a \code{tidyact_life_contract} object. A life table
+#'   must contain columns \code{x} and \code{lx}.
+#' @param x Integer actuarial age. Optional when \code{lt} is a
+#'   \code{tidyact_life_contract}.
+#' @param i Numeric scalar. Annual interest-rate input. Optional when
+#'   \code{lt} is a \code{tidyact_life_contract}.
+#' @param i_type Character string indicating the interest-rate type. Allowed
+#'   values are \code{"effective"}, \code{"nominal_interest"},
+#'   \code{"nominal_discount"}, and \code{"force"}.
+#' @param m Positive integer. Conversion frequency for nominal rates. Ignored
+#'   for \code{i_type = "effective"} and \code{i_type = "force"}.
+#' @param n Term in years. Use \code{Inf} for whole life.
+#' @param k Positive integer. Number of annuity payments per year.
+#' @param timing Character string. Either \code{"due"} or \code{"immediate"}.
 #' @param payment Numeric scalar. Level payment per payment period.
-#' @param method Simulation method. Currently `"inverse"` is supported.
+#' @param method Simulation method. Currently \code{"inverse"} is supported.
 #' @param n_sim Positive integer. Number of simulations.
 #' @param seed Optional seed for reproducibility.
-#' @param output `"simulations"` for the simulated data or `"summary"` for
-#'   summary statistics using [summary_mc()].
+#' @param output Character string. Use \code{"simulations"} for the simulated
+#'   data or \code{"summary"} for summary statistics using
+#'   \code{\link{summary_mc}}.
+#' @param ... Transitional compatibility for older calls using
+#'   \code{mortality_table}, \code{age}, \code{rate}, \code{rate_type},
+#'   \code{term_years}, and \code{payments_per_year}.
 #'
-#' @return A tibble.
+#' @return A tibble. If \code{output = "simulations"}, the tibble contains one
+#'   row per simulation. If \code{output = "summary"}, the tibble is the output
+#'   of \code{\link{summary_mc}} applied to the simulated present values.
+#'
+#' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age,
+#' \code{i} is the interest-rate input, \code{i_type} is the interest-rate type,
+#' \code{m} is the conversion frequency for nominal rates, \code{n} is the term,
+#' and \code{k} is the payment frequency.
+#'
+#' The simulation is based on the curtate future lifetime \eqn{K_x}. For annual
+#' payments, an annuity-due pays while the life is alive at the beginning of the
+#' year, and an annuity-immediate pays at the end of completed years.
 #'
 #' @family simulation
 #' @family life-contingencies
 #'
+#' @examples
+#' lt <- data.frame(
+#'   x = 60:66,
+#'   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 0)
+#' )
+#'
+#' simulate_annuity_x(
+#'   lt = lt,
+#'   x = 60,
+#'   i = 0.05,
+#'   n_sim = 25,
+#'   seed = 123
+#' )
+#'
+#' simulate_annuity_x(
+#'   lt = lt,
+#'   x = 60,
+#'   i = 0.06,
+#'   i_type = "nominal_interest",
+#'   m = 12,
+#'   n = 5,
+#'   k = 12,
+#'   n_sim = 25,
+#'   seed = 123,
+#'   output = "summary"
+#' )
+#'
 #' @export
 simulate_annuity_x <- function(
-    mortality_table,
-    age = NULL,
-    rate = NULL,
-    rate_type = NULL,
+    lt,
+    x = NULL,
+    i = NULL,
+    i_type = NULL,
     m = NULL,
-    term_years = Inf,
-    payments_per_year = 1L,
+    n = Inf,
+    k = 1L,
     timing = c("due", "immediate"),
     payment = 1,
     method = c("inverse"),
     n_sim = 10000L,
     seed = NULL,
-    output = c("simulations", "summary")
+    output = c("simulations", "summary"),
+    ...
 ) {
   timing <- match.arg(timing)
   method <- match.arg(method)
   output <- match.arg(output)
 
+  old <- .life_mc_collect_old_args(
+    dots = list(...),
+    allowed = c(
+      "mortality_table",
+      "age",
+      "rate",
+      "rate_type",
+      "term_years",
+      "payments_per_year"
+    )
+  )
+
+  if (!is.null(old$mortality_table)) {
+    if (!missing(lt)) {
+      stop("Provide only one of `lt` or deprecated `mortality_table`.", call. = FALSE)
+    }
+    lt <- old$mortality_table
+  }
+
+  if (!is.null(old$age)) {
+    if (!is.null(x)) {
+      stop("Provide only one of `x` or deprecated `age`.", call. = FALSE)
+    }
+    x <- old$age
+  }
+
+  if (!is.null(old$rate)) {
+    if (!is.null(i)) {
+      stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
+    }
+    i <- old$rate
+  }
+
+  if (!is.null(old$rate_type)) {
+    if (!is.null(i_type)) {
+      stop("Provide only one of `i_type` or deprecated `rate_type`.", call. = FALSE)
+    }
+    i_type <- old$rate_type
+  }
+
+  if (!is.null(old$term_years)) {
+    if (!is.infinite(n)) {
+      stop("Provide only one of `n` or deprecated `term_years`.", call. = FALSE)
+    }
+    n <- old$term_years
+  }
+
+  if (!is.null(old$payments_per_year)) {
+    if (!identical(k, 1L) && !identical(k, 1)) {
+      stop("Provide only one of `k` or deprecated `payments_per_year`.", call. = FALSE)
+    }
+    k <- old$payments_per_year
+  }
+
   inputs <- .resolve_life_mc_inputs(
-    mortality_table = mortality_table,
-    age = age,
-    rate = rate,
-    rate_type = rate_type,
+    lt = lt,
+    x = x,
+    i = i,
+    i_type = i_type,
     m = m
   )
 
-  mortality_table <- inputs$mortality_table
-  age <- inputs$age
-  rate <- inputs$rate
-  rate_type <- inputs$rate_type
+  lt <- inputs$lt
+  x <- inputs$x
+  i <- inputs$i
+  i_type <- inputs$i_type
   m <- inputs$m
 
   .validate_mc_common(
-    age = age,
-    rate = rate,
+    x = x,
+    i = i,
     m = m,
     n_sim = n_sim,
     seed = seed,
-    term_years = term_years
+    n = n
   )
 
-  if (!is.numeric(payments_per_year) ||
-      length(payments_per_year) != 1L ||
-      is.na(payments_per_year) ||
-      !is.finite(payments_per_year) ||
-      payments_per_year < 1 ||
-      abs(payments_per_year - round(payments_per_year)) > 1e-10) {
-    stop("`payments_per_year` must be a single positive integer.", call. = FALSE)
+  if (!is.numeric(k) ||
+      length(k) != 1L ||
+      is.na(k) ||
+      !is.finite(k) ||
+      k < 1 ||
+      abs(k - round(k)) > 1e-10) {
+    stop("`k` must be a single positive integer.", call. = FALSE)
   }
 
   if (!is.numeric(payment) ||
@@ -88,54 +190,75 @@ simulate_annuity_x <- function(
     stop("`payment` must be a single finite numeric value.", call. = FALSE)
   }
 
-  payments_per_year <- as.integer(round(payments_per_year))
+  x <- as.integer(round(x))
+  m <- as.integer(round(m))
+  k <- as.integer(round(k))
+  n_sim <- as.integer(round(n_sim))
+
+  if (!is.infinite(n)) {
+    n <- as.integer(round(n))
+  }
 
   i_effective <- standardize_interest(
-    type = rate_type,
-    rate = rate,
+    i_type = i_type,
+    i = i,
     m = m
   )
 
+  if (!is.finite(i_effective) || i_effective <= -1) {
+    stop(
+      "The standardized annual effective interest rate must be greater than -1.",
+      call. = FALSE
+    )
+  }
+
   lifetime <- .simulate_lifetime_inverse_lx(
-    mortality_table = mortality_table,
-    age = age,
-    term_years = term_years,
+    lt = lt,
+    x = x,
+    n = n,
     n_sim = n_sim,
     seed = seed
   )
 
-  k <- lifetime$curtate_lifetime
+  Kx <- lifetime$Kx
 
   n_payments <- .annuity_payment_count(
-    curtate_lifetime = k,
+    Kx = Kx,
     died_within_horizon = lifetime$died_within_horizon,
-    term_years = term_years,
-    payments_per_year = payments_per_year,
+    n = n,
+    k = k,
     timing = timing
   )
 
   annuity_factor <- .annuity_factor_count(
     n_payments = n_payments,
     i_effective = i_effective,
-    payments_per_year = payments_per_year,
+    k = k,
     timing = timing
   )
 
   present_value <- payment * annuity_factor
 
   out <- tibble::tibble(
+    sim_id = seq_len(n_sim),
     simulation_id = seq_len(n_sim),
     contract_type = "annuity",
-    age = age,
-    term_years = term_years,
-    payments_per_year = payments_per_year,
+    x = x,
+    age = x,
+    n = n,
+    term_years = n,
+    k = k,
+    payments_per_year = k,
     timing = timing,
     payment = payment,
-    rate = rate,
-    rate_type = rate_type,
+    i = i,
+    rate = i,
+    i_type = i_type,
+    rate_type = i_type,
     m = m,
     i_effective = i_effective,
-    curtate_lifetime = lifetime$curtate_lifetime,
+    Kx = lifetime$Kx,
+    curtate_lifetime = lifetime$Kx,
     death_age = lifetime$death_age,
     died_within_horizon = lifetime$died_within_horizon,
     n_payments = n_payments,
@@ -152,74 +275,177 @@ simulate_annuity_x <- function(
 
 #' Monte Carlo simulation of a life insurance
 #'
-#' Simulates the present value of a discrete life insurance using a mortality
-#' table and annual curtate future lifetimes.
+#' Simulates the present value of a discrete single-life insurance using a life
+#' table and annual curtate future lifetimes, with compact actuarial notation.
 #'
-#' The function supports direct use with `mortality_table`, `age`, and `rate`,
-#' and pipe workflows with [life_contract()].
+#' The function supports direct use with \code{lt}, \code{x}, and \code{i}, and
+#' pipe workflows with \code{\link{life_contract}}.
 #'
-#' @param mortality_table A life table or a `tidyact_life_contract` object.
-#' @param age Integer actuarial age. Optional when `mortality_table` is a
-#'   `tidyact_life_contract`.
-#' @param rate Numeric scalar. Annual interest-rate input. Optional when
-#'   `mortality_table` is a `tidyact_life_contract`.
-#' @param rate_type Character string indicating the rate type.
-#' @param m Positive integer. Compounding frequency for nominal rates.
-#' @param insurance_type `"whole"`, `"term"`, or `"endowment"`.
-#' @param term_years Term in years. Required for term and endowment insurance.
-#'   Use `Inf` for whole life.
+#' @param lt A life table or a \code{tidyact_life_contract} object. A life table
+#'   must contain columns \code{x} and \code{lx}.
+#' @param x Integer actuarial age. Optional when \code{lt} is a
+#'   \code{tidyact_life_contract}.
+#' @param i Numeric scalar. Annual interest-rate input. Optional when
+#'   \code{lt} is a \code{tidyact_life_contract}.
+#' @param i_type Character string indicating the interest-rate type. Allowed
+#'   values are \code{"effective"}, \code{"nominal_interest"},
+#'   \code{"nominal_discount"}, and \code{"force"}.
+#' @param m Positive integer. Conversion frequency for nominal rates. Ignored
+#'   for \code{i_type = "effective"} and \code{i_type = "force"}.
+#' @param type Character string. One of \code{"whole"}, \code{"term"}, or
+#'   \code{"endowment"}.
+#' @param n Term in years. Required as finite for term and endowment insurance.
+#'   Use \code{Inf} for whole life.
 #' @param benefit Numeric scalar. Insurance benefit.
-#' @param method Simulation method. Currently `"inverse"` is supported.
+#' @param method Simulation method. Currently \code{"inverse"} is supported.
 #' @param n_sim Positive integer. Number of simulations.
 #' @param seed Optional seed for reproducibility.
-#' @param output `"simulations"` for the simulated data or `"summary"` for
-#'   summary statistics using [summary_mc()].
+#' @param output Character string. Use \code{"simulations"} for the simulated
+#'   data or \code{"summary"} for summary statistics using
+#'   \code{\link{summary_mc}}.
+#' @param ... Transitional compatibility for older calls using
+#'   \code{mortality_table}, \code{age}, \code{rate}, \code{rate_type},
+#'   \code{insurance_type}, and \code{term_years}.
 #'
-#' @return A tibble.
+#' @return A tibble. If \code{output = "simulations"}, the tibble contains one
+#'   row per simulation. If \code{output = "summary"}, the tibble is the output
+#'   of \code{\link{summary_mc}} applied to the simulated present values.
+#'
+#' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age,
+#' \code{i} is the interest-rate input, \code{i_type} is the interest-rate type,
+#' \code{m} is the conversion frequency for nominal rates, and \code{n} is the
+#' insurance term.
+#'
+#' The benefit is paid at the end of the year of death for whole-life and term
+#' insurance. For endowment insurance, the benefit is paid at death within the
+#' term or at maturity if the life survives.
 #'
 #' @family simulation
 #' @family life-contingencies
 #'
+#' @examples
+#' lt <- data.frame(
+#'   x = 60:66,
+#'   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 0)
+#' )
+#'
+#' simulate_insurance_x(
+#'   lt = lt,
+#'   x = 60,
+#'   i = 0.05,
+#'   type = "whole",
+#'   n_sim = 25,
+#'   seed = 123
+#' )
+#'
+#' simulate_insurance_x(
+#'   lt = lt,
+#'   x = 60,
+#'   i = 0.06,
+#'   i_type = "nominal_interest",
+#'   m = 12,
+#'   type = "term",
+#'   n = 5,
+#'   benefit = 100000,
+#'   n_sim = 25,
+#'   seed = 123,
+#'   output = "summary"
+#' )
+#'
 #' @export
 simulate_insurance_x <- function(
-    mortality_table,
-    age = NULL,
-    rate = NULL,
-    rate_type = NULL,
+    lt,
+    x = NULL,
+    i = NULL,
+    i_type = NULL,
     m = NULL,
-    insurance_type = c("whole", "term", "endowment"),
-    term_years = Inf,
+    type = c("whole", "term", "endowment"),
+    n = Inf,
     benefit = 1,
     method = c("inverse"),
     n_sim = 10000L,
     seed = NULL,
-    output = c("simulations", "summary")
+    output = c("simulations", "summary"),
+    ...
 ) {
-  insurance_type <- match.arg(insurance_type)
+  type <- match.arg(type)
   method <- match.arg(method)
   output <- match.arg(output)
 
+  old <- .life_mc_collect_old_args(
+    dots = list(...),
+    allowed = c(
+      "mortality_table",
+      "age",
+      "rate",
+      "rate_type",
+      "insurance_type",
+      "term_years"
+    )
+  )
+
+  if (!is.null(old$mortality_table)) {
+    if (!missing(lt)) {
+      stop("Provide only one of `lt` or deprecated `mortality_table`.", call. = FALSE)
+    }
+    lt <- old$mortality_table
+  }
+
+  if (!is.null(old$age)) {
+    if (!is.null(x)) {
+      stop("Provide only one of `x` or deprecated `age`.", call. = FALSE)
+    }
+    x <- old$age
+  }
+
+  if (!is.null(old$rate)) {
+    if (!is.null(i)) {
+      stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
+    }
+    i <- old$rate
+  }
+
+  if (!is.null(old$rate_type)) {
+    if (!is.null(i_type)) {
+      stop("Provide only one of `i_type` or deprecated `rate_type`.", call. = FALSE)
+    }
+    i_type <- old$rate_type
+  }
+
+  if (!is.null(old$insurance_type)) {
+    type <- match.arg(old$insurance_type, c("whole", "term", "endowment"))
+  }
+
+  if (!is.null(old$term_years)) {
+    if (!is.infinite(n)) {
+      stop("Provide only one of `n` or deprecated `term_years`.", call. = FALSE)
+    }
+    n <- old$term_years
+  }
+
   inputs <- .resolve_life_mc_inputs(
-    mortality_table = mortality_table,
-    age = age,
-    rate = rate,
-    rate_type = rate_type,
+    lt = lt,
+    x = x,
+    i = i,
+    i_type = i_type,
     m = m
   )
 
-  mortality_table <- inputs$mortality_table
-  age <- inputs$age
-  rate <- inputs$rate
-  rate_type <- inputs$rate_type
+  lt <- inputs$lt
+  x <- inputs$x
+  i <- inputs$i
+  i_type <- inputs$i_type
   m <- inputs$m
 
   .validate_mc_common(
-    age = age,
-    rate = rate,
+    x = x,
+    i = i,
     m = m,
     n_sim = n_sim,
     seed = seed,
-    term_years = term_years
+    n = n
   )
 
   if (!is.numeric(benefit) ||
@@ -230,42 +456,57 @@ simulate_insurance_x <- function(
     stop("`benefit` must be a single finite nonnegative number.", call. = FALSE)
   }
 
-  if (insurance_type %in% c("term", "endowment") && is.infinite(term_years)) {
+  if (type %in% c("term", "endowment") && is.infinite(n)) {
     stop(
-      "`term_years` must be finite for term and endowment insurance.",
+      "`n` must be finite for term and endowment insurance.",
       call. = FALSE
     )
   }
 
+  x <- as.integer(round(x))
+  m <- as.integer(round(m))
+  n_sim <- as.integer(round(n_sim))
+
+  if (!is.infinite(n)) {
+    n <- as.integer(round(n))
+  }
+
   i_effective <- standardize_interest(
-    type = rate_type,
-    rate = rate,
+    i_type = i_type,
+    i = i,
     m = m
   )
 
+  if (!is.finite(i_effective) || i_effective <= -1) {
+    stop(
+      "The standardized annual effective interest rate must be greater than -1.",
+      call. = FALSE
+    )
+  }
+
   lifetime <- .simulate_lifetime_inverse_lx(
-    mortality_table = mortality_table,
-    age = age,
-    term_years = term_years,
+    lt = lt,
+    x = x,
+    n = n,
     n_sim = n_sim,
     seed = seed
   )
 
-  k <- lifetime$curtate_lifetime
+  Kx <- lifetime$Kx
   v <- 1 / (1 + i_effective)
 
-  if (insurance_type == "whole") {
+  if (type == "whole") {
     covered <- lifetime$died_within_horizon
-    payment_time <- k + 1L
+    payment_time <- Kx + 1L
     present_value <- ifelse(covered, benefit * v^payment_time, 0)
-  } else if (insurance_type == "term") {
-    covered <- lifetime$died_within_horizon & k < term_years
-    payment_time <- k + 1L
+  } else if (type == "term") {
+    covered <- lifetime$died_within_horizon & Kx < n
+    payment_time <- Kx + 1L
     present_value <- ifelse(covered, benefit * v^payment_time, 0)
   } else {
-    death_covered <- lifetime$died_within_horizon & k < term_years
-    death_payment_time <- k + 1L
-    maturity_payment_time <- term_years
+    death_covered <- lifetime$died_within_horizon & Kx < n
+    death_payment_time <- Kx + 1L
+    maturity_payment_time <- n
 
     present_value <- ifelse(
       death_covered,
@@ -278,16 +519,24 @@ simulate_insurance_x <- function(
   }
 
   out <- tibble::tibble(
+    sim_id = seq_len(n_sim),
     simulation_id = seq_len(n_sim),
-    contract_type = paste0(insurance_type, "_insurance"),
-    age = age,
-    term_years = term_years,
+    contract_type = paste0(type, "_insurance"),
+    x = x,
+    age = x,
+    n = n,
+    term_years = n,
+    type = type,
+    insurance_type = type,
     benefit = benefit,
-    rate = rate,
-    rate_type = rate_type,
+    i = i,
+    rate = i,
+    i_type = i_type,
+    rate_type = i_type,
     m = m,
     i_effective = i_effective,
-    curtate_lifetime = lifetime$curtate_lifetime,
+    Kx = lifetime$Kx,
+    curtate_lifetime = lifetime$Kx,
     death_age = lifetime$death_age,
     died_within_horizon = lifetime$died_within_horizon,
     covered = covered,
@@ -303,15 +552,54 @@ simulate_insurance_x <- function(
 }
 
 
+#' Internal helper: collect old Monte Carlo argument names
+#'
+#' @param dots List of arguments from `...`.
+#' @param allowed Character vector with allowed deprecated names.
+#'
+#' @return A list.
+#'
+#' @keywords internal
+.life_mc_collect_old_args <- function(dots, allowed) {
+  bad <- setdiff(names(dots), allowed)
+
+  if (length(bad) > 0L) {
+    stop(
+      "Unused argument(s): ",
+      paste(sprintf("`%s`", bad), collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  dots
+}
+
+
+#' Internal helper: resolve inputs for single-life Monte Carlo functions
+#'
+#' @param lt A life table or tidyactuarial life contract.
+#' @param x Integer age.
+#' @param i Interest-rate input.
+#' @param i_type Interest-rate type.
+#' @param m Nominal conversion frequency.
+#'
+#' @return A list with resolved arguments.
+#'
+#' @keywords internal
 .resolve_life_mc_inputs <- function(
-    mortality_table,
-    age = NULL,
-    rate = NULL,
-    rate_type = NULL,
+    lt,
+    x = NULL,
+    i = NULL,
+    i_type = NULL,
     m = NULL
 ) {
-  if (inherits(mortality_table, "tidyact_life_contract")) {
-    contract <- mortality_table
+  `%||%` <- function(a, b) {
+    if (!is.null(a)) a else b
+  }
+
+  if (inherits(lt, "tidyact_life_contract")) {
+    contract <- lt
 
     if (!identical(contract$lives, "single")) {
       stop(
@@ -320,18 +608,18 @@ simulate_insurance_x <- function(
       )
     }
 
-    mortality_table <- contract$mortality_table
+    lt <- contract$mortality_table
 
-    if (is.null(age)) {
-      age <- contract$age
+    if (is.null(x)) {
+      x <- contract$x %||% contract$age
     }
 
-    if (is.null(rate)) {
-      rate <- contract$rate
+    if (is.null(i)) {
+      i <- contract$i %||% contract$rate
     }
 
-    if (is.null(rate_type)) {
-      rate_type <- contract$rate_type
+    if (is.null(i_type)) {
+      i_type <- contract$i_type %||% contract$rate_type
     }
 
     if (is.null(m)) {
@@ -339,8 +627,8 @@ simulate_insurance_x <- function(
     }
   }
 
-  if (is.null(rate_type)) {
-    rate_type <- "effective"
+  if (is.null(i_type)) {
+    i_type <- "effective"
   }
 
   if (is.null(m)) {
@@ -348,38 +636,50 @@ simulate_insurance_x <- function(
   }
 
   list(
-    mortality_table = mortality_table,
-    age = age,
-    rate = rate,
-    rate_type = rate_type,
+    lt = lt,
+    x = x,
+    i = i,
+    i_type = i_type,
     m = m
   )
 }
 
 
+#' Internal helper: validate common Monte Carlo arguments
+#'
+#' @param x Integer age.
+#' @param i Interest-rate input.
+#' @param m Nominal conversion frequency.
+#' @param n_sim Number of simulations.
+#' @param seed Optional seed.
+#' @param n Term in years.
+#'
+#' @return Invisibly returns `TRUE`.
+#'
+#' @keywords internal
 .validate_mc_common <- function(
-    age,
-    rate,
+    x,
+    i,
     m,
     n_sim,
     seed,
-    term_years
+    n
 ) {
-  if (is.null(age) ||
-      !is.numeric(age) ||
-      length(age) != 1L ||
-      is.na(age) ||
-      !is.finite(age) ||
-      abs(age - round(age)) > 1e-10) {
-    stop("`age` must be a single integer age.", call. = FALSE)
+  if (is.null(x) ||
+      !is.numeric(x) ||
+      length(x) != 1L ||
+      is.na(x) ||
+      !is.finite(x) ||
+      abs(x - round(x)) > 1e-10) {
+    stop("`x` must be a single integer age.", call. = FALSE)
   }
 
-  if (is.null(rate) ||
-      !is.numeric(rate) ||
-      length(rate) != 1L ||
-      is.na(rate) ||
-      !is.finite(rate)) {
-    stop("`rate` must be a single finite numeric value.", call. = FALSE)
+  if (is.null(i) ||
+      !is.numeric(i) ||
+      length(i) != 1L ||
+      is.na(i) ||
+      !is.finite(i)) {
+    stop("`i` must be a single finite numeric value.", call. = FALSE)
   }
 
   if (!is.numeric(m) ||
@@ -408,36 +708,47 @@ simulate_insurance_x <- function(
     stop("`seed` must be NULL or a single numeric value.", call. = FALSE)
   }
 
-  if (!is.numeric(term_years) ||
-      length(term_years) != 1L ||
-      is.na(term_years) ||
-      term_years <= 0 ||
-      (!is.infinite(term_years) &&
-       (!is.finite(term_years) ||
-        abs(term_years - round(term_years)) > 1e-10))) {
-    stop("`term_years` must be `Inf` or a single positive integer.", call. = FALSE)
+  if (!is.numeric(n) ||
+      length(n) != 1L ||
+      is.na(n) ||
+      n <= 0 ||
+      (!is.infinite(n) &&
+       (!is.finite(n) ||
+        abs(n - round(n)) > 1e-10))) {
+    stop("`n` must be `Inf` or a single positive integer.", call. = FALSE)
   }
 
   invisible(TRUE)
 }
 
 
+#' Internal helper: simulate curtate future lifetimes from lx
+#'
+#' @param lt Life table with columns `x` and `lx`.
+#' @param x Integer age.
+#' @param n Term in years. Use `Inf` for whole life.
+#' @param n_sim Number of simulations.
+#' @param seed Optional seed.
+#'
+#' @return A tibble with simulated curtate lifetimes.
+#'
+#' @keywords internal
 .simulate_lifetime_inverse_lx <- function(
-    mortality_table,
-    age,
-    term_years,
+    lt,
+    x,
+    n,
     n_sim,
     seed = NULL
 ) {
-  if (!is.data.frame(mortality_table)) {
-    stop("`mortality_table` must be a data.frame or tibble.", call. = FALSE)
+  if (!is.data.frame(lt)) {
+    stop("`lt` must be a data.frame or tibble.", call. = FALSE)
   }
 
-  if (!all(c("x", "lx") %in% names(mortality_table))) {
-    stop("`mortality_table` must contain columns `x` and `lx`.", call. = FALSE)
+  if (!all(c("x", "lx") %in% names(lt))) {
+    stop("`lt` must contain columns `x` and `lx`.", call. = FALSE)
   }
 
-  lt <- mortality_table[order(mortality_table$x), , drop = FALSE]
+  lt <- lt[order(lt$x), , drop = FALSE]
 
   if (!is.numeric(lt$x) || !is.numeric(lt$lx)) {
     stop("Columns `x` and `lx` must be numeric.", call. = FALSE)
@@ -459,42 +770,42 @@ simulate_insurance_x <- function(
   ages <- as.integer(round(lt$x))
   lx <- as.numeric(lt$lx)
 
-  idx_age <- match(age, ages)
+  idx_x <- match(x, ages)
 
-  if (is.na(idx_age)) {
-    stop("`age` must be present in `mortality_table$x`.", call. = FALSE)
+  if (is.na(idx_x)) {
+    stop("`x` must be present in `lt$x`.", call. = FALSE)
   }
 
-  if (lx[[idx_age]] <= 0) {
-    stop("`lx` at `age` must be strictly positive.", call. = FALSE)
+  if (lx[[idx_x]] <= 0) {
+    stop("`lx` at age `x` must be strictly positive.", call. = FALSE)
   }
 
-  max_age <- max(ages)
+  omega <- max(ages)
 
-  if (is.infinite(term_years)) {
-    horizon <- max_age - age
+  if (is.infinite(n)) {
+    horizon <- omega - x
 
     if (horizon <= 0) {
-      stop("The mortality table does not provide a future lifetime horizon.", call. = FALSE)
+      stop("The life table does not provide a future lifetime horizon.", call. = FALSE)
     }
   } else {
-    horizon <- as.integer(round(term_years))
+    horizon <- as.integer(round(n))
   }
 
-  needed_ages <- age:(age + horizon)
+  needed_ages <- x:(x + horizon)
 
   if (!all(needed_ages %in% ages)) {
     stop(
-      "`mortality_table` does not contain enough integer ages for the requested simulation horizon.",
+      "`lt` does not contain enough integer ages for the requested simulation horizon.",
       call. = FALSE
     )
   }
 
   lx_path <- lx[match(needed_ages, ages)]
 
-  if (is.infinite(term_years) && tail(lx_path, 1) > 0) {
+  if (is.infinite(n) && tail(lx_path, 1) > 0) {
     stop(
-      "Whole-life simulation requires the mortality table to end with `lx = 0` at or after `age`.",
+      "Whole-life simulation requires the life table to end with `lx = 0` at or after `x`.",
       call. = FALSE
     )
   }
@@ -504,12 +815,16 @@ simulate_insurance_x <- function(
   death_counts <- pmax(lx_path[-length(lx_path)] - lx_path[-1], 0)
   survival_to_horizon <- tail(lx_path, 1)
 
-  if (is.infinite(term_years)) {
+  if (is.infinite(n)) {
     probs <- death_counts / l0
     categories <- seq_along(death_counts)
   } else {
     probs <- c(death_counts / l0, survival_to_horizon / l0)
     categories <- seq_along(probs)
+  }
+
+  if (sum(probs) <= 0 || any(is.na(probs))) {
+    stop("The simulated lifetime distribution has invalid probabilities.", call. = FALSE)
   }
 
   if (abs(sum(probs) - 1) > 1e-8) {
@@ -538,20 +853,21 @@ simulate_insurance_x <- function(
     prob = probs
   )
 
-  if (is.infinite(term_years)) {
-    curtate_lifetime <- sampled - 1L
+  if (is.infinite(n)) {
+    Kx <- sampled - 1L
     died_within_horizon <- rep(TRUE, n_sim)
   } else {
     survival_category <- length(probs)
     died_within_horizon <- sampled != survival_category
-    curtate_lifetime <- ifelse(died_within_horizon, sampled - 1L, horizon)
+    Kx <- ifelse(died_within_horizon, sampled - 1L, horizon)
   }
 
   tibble::tibble(
-    curtate_lifetime = as.integer(curtate_lifetime),
+    Kx = as.integer(Kx),
+    curtate_lifetime = as.integer(Kx),
     death_age = ifelse(
       died_within_horizon,
-      age + as.integer(curtate_lifetime) + 1L,
+      x + as.integer(Kx) + 1L,
       NA_real_
     ),
     died_within_horizon = died_within_horizon
@@ -559,40 +875,69 @@ simulate_insurance_x <- function(
 }
 
 
+#' Internal helper: count annuity payments from simulated curtate lifetimes
+#'
+#' @param Kx Simulated curtate future lifetimes.
+#' @param died_within_horizon Logical vector.
+#' @param n Term in years.
+#' @param k Payment frequency.
+#' @param timing Payment timing.
+#'
+#' @return Integer vector with number of payments.
+#'
+#' @keywords internal
 .annuity_payment_count <- function(
-    curtate_lifetime,
+    Kx,
     died_within_horizon,
-    term_years,
-    payments_per_year,
+    n,
+    k,
     timing
 ) {
-  k_month <- as.integer(payments_per_year)
+  kk <- as.integer(k)
 
-  if (is.infinite(term_years)) {
-    years_lived <- curtate_lifetime
+  if (is.infinite(n)) {
+    years_lived <- Kx
+    cap_payments <- Inf
   } else {
-    years_lived <- pmin(curtate_lifetime, term_years)
+    years_lived <- pmin(Kx, n)
+    cap_payments <- as.integer(round(n * kk))
   }
 
   if (timing == "due") {
-    pmax(years_lived * k_month + 1L, 0L)
+    out <- pmax(years_lived * kk + 1L, 0L)
   } else {
-    pmax(years_lived * k_month, 0L)
+    out <- pmax(years_lived * kk, 0L)
   }
+
+  # For finite temporary annuities, the maximum number of payments is n * k.
+  if (is.finite(cap_payments)) {
+    out <- pmin(out, cap_payments)
+  }
+
+  as.integer(out)
 }
 
 
+#' Internal helper: convert number of payments into annuity factors
+#'
+#' @param n_payments Integer vector with number of payments.
+#' @param i_effective Annual effective interest rate.
+#' @param k Payment frequency.
+#' @param timing Payment timing.
+#'
+#' @return Numeric vector of annuity factors.
+#'
+#' @keywords internal
 .annuity_factor_count <- function(
     n_payments,
     i_effective,
-    payments_per_year,
+    k,
     timing
 ) {
-  i_period <- (1 + i_effective)^(1 / payments_per_year) - 1
+  i_period <- (1 + i_effective)^(1 / k) - 1
   v_period <- 1 / (1 + i_period)
 
   out <- numeric(length(n_payments))
-
   positive <- n_payments > 0L
 
   if (!any(positive)) {
@@ -600,11 +945,11 @@ simulate_insurance_x <- function(
   }
 
   if (abs(i_period) < 1e-12) {
-    out[positive] <- n_payments[positive] / payments_per_year
+    out[positive] <- n_payments[positive] / k
     return(out)
   }
 
-  due_factor <- (1 / payments_per_year) *
+  due_factor <- (1 / k) *
     (1 - v_period^n_payments[positive]) /
     (1 - v_period)
 

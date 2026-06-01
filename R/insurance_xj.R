@@ -1,44 +1,73 @@
-#' Cause-specific term/whole-life insurance APV under multiple decrements: insurance_xj
+#' Cause-specific term/whole-life insurance APV under multiple decrements
 #'
-#' @description
-#' Computes the actuarial present value (APV) of an annual (discrete) insurance
+#' Computes the actuarial present value (APV) of an annual discrete insurance
 #' that pays \code{benefit} at the end of the year of decrement by a specified
 #' cause \code{j}, using a multiple decrement table produced by
 #' \code{\link{md_table}}.
 #'
-#' @details
-#' Let \eqn{q_{x+k}^{(j)}} be the one-year decrement probability for cause \eqn{j}
-#' at age \eqn{x+k}, and \eqn{p_{x+r}^{(\tau)}} be the one-year total survival
-#' probability (any cause) at age \eqn{x+r}. For a product with deferment \eqn{m}
-#' and term \eqn{n}, with benefit payable at the end of the year of decrement by
-#' cause \eqn{j}, the APV is:
-#' \deqn{
-#' \sum_{k=m}^{m+n-1} v^{k+1}\left(\prod_{r=0}^{k-1} p_{x+r}^{(\tau)}\right) q_{x+k}^{(j)},
-#' }
-#' where \eqn{v = (1+i)^{-1}} and \eqn{i} is the annual effective interest rate.
+#' @description
+#' This function evaluates cause-specific insurance benefits under a multiple
+#' decrement model. It supports whole-life and term insurance, integer
+#' deferment, vectorized issue ages and interest-rate assumptions, and compact
+#' actuarial notation.
 #'
-#' If \code{product = "whole"}, the function sets \code{n} to the remaining length
-#' of the table after deferment (i.e., whole life over the available ages).
+#' @details
+#' Let \eqn{q_{x+k}^{(j)}} be the one-year decrement probability for cause
+#' \eqn{j} at age \eqn{x+k}, and let \eqn{p_{x+r}^{(\tau)}} be the one-year
+#' total survival probability against all decrements at age \eqn{x+r}.
+#'
+#' For a product with deferment \eqn{h} and term \eqn{n}, with benefit payable
+#' at the end of the year of decrement by cause \eqn{j}, the APV is:
+#' \deqn{
+#' \sum_{k=h}^{h+n-1}
+#' v^{k+1}
+#' \left(\prod_{r=0}^{k-1} p_{x+r}^{(\tau)}\right)
+#' q_{x+k}^{(j)}.
+#' }
+#'
+#' Here \eqn{v = (1+i_e)^{-1}}, where \eqn{i_e} is the annual effective
+#' interest rate obtained from \code{i}, \code{i_type}, and \code{m}.
+#'
+#' If \code{type = "whole"}, the function sets \code{n} to the remaining length
+#' of the table after deferment, that is, whole life over the available ages.
+#'
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{md} is a multiple decrement table, \code{x} is
+#' age at issue, \code{i} is the interest rate, \code{i_type} is the
+#' interest-rate type, \code{m} is the conversion frequency for nominal rates,
+#' \code{n} is the term, and \code{h} is the deferment period.
 #'
 #' @param md A multiple decrement table produced by \code{\link{md_table}}.
-#'   Must contain columns \code{x}, \code{p_total}, and the requested \code{cause}.
+#'   Must contain columns \code{x}, \code{p_total}, and the requested
+#'   \code{cause}.
 #' @param x Integer age(s) at issue.
-#' @param i Annual effective interest rate(s). Must satisfy \code{i > -1}.
-#' @param cause Character. Name of the cause column in \code{md}
-#'   (e.g., \code{"q_death"}).
-#' @param product Character. Insurance type: \code{"whole"} or \code{"term"}.
+#' @param i Annual interest-rate input. Must produce an annual effective rate
+#'   greater than \code{-1}.
+#' @param cause Character scalar. Name of the cause column in \code{md}, for
+#'   example \code{"q_death"}.
+#' @param type Character scalar. Insurance type: \code{"whole"} or
+#'   \code{"term"}.
 #' @param benefit Numeric benefit amount payable at the end of the year of
-#'   decrement by the specified cause (default \code{1}).
-#' @param n Integer term length in years (required when \code{product = "term"}).
-#' @param m Integer deferment in years (default \code{0}).
-#' @param tidy Logical. If \code{TRUE}, returns a tibble with inputs and \code{insurance_xj}.
+#'   decrement by the specified cause. Default is \code{1}.
+#' @param n Integer term length in years. Required when \code{type = "term"}.
+#' @param h Integer deferment period in years. Default is \code{0}.
+#' @param i_type Character vector indicating the interest-rate type. Allowed
+#'   values are \code{"effective"}, \code{"nominal_interest"},
+#'   \code{"nominal_discount"}, and \code{"force"}.
+#' @param m Positive integer vector giving the conversion frequency for nominal
+#'   rates. Ignored for \code{"effective"} and \code{"force"}.
+#' @param tidy Logical. If \code{TRUE}, returns a tibble with inputs and
+#'   \code{insurance_xj}.
 #' @param check Logical. If \code{TRUE}, performs input validation.
 #' @param tol Numeric tolerance for integer checks.
 #'
-#' @return Numeric vector of APVs (or a tibble if \code{tidy = TRUE}).
+#' @return Numeric vector of APVs, or a tibble if \code{tidy = TRUE}.
 #'
 #' @seealso \code{\link{t_qxj}} for cause-specific decrement probabilities,
-#'   \code{\link{lt_tau}} to build a single-decrement lifetable for the total decrement.
+#'   \code{\link{lt_tau}} to build a single-decrement life table for the total
+#'   decrement.
+#'
+#' @family multiple-decrements
 #'
 #' @examples
 #' qx_df <- tibble::tibble(
@@ -49,10 +78,25 @@
 #' md <- md_table(qx_df, radix = 1e5, close = TRUE)
 #'
 #' # 5-year term cause-specific insurance for death, i = 5%
-#' insurance_xj(md, x = 30, i = 0.05, cause = "q_death", product = "term", n = 5)
+#' insurance_xj(
+#'   md = md,
+#'   x = 30,
+#'   i = 0.05,
+#'   cause = "q_death",
+#'   type = "term",
+#'   n = 5
+#' )
 #'
-#' # Whole-life (over available ages), 2-year deferred
-#' insurance_xj(md, x = 30, i = 0.05, cause = "q_death", product = "whole", m = 2, tidy = TRUE)
+#' # Whole-life over available ages, 2-year deferred
+#' insurance_xj(
+#'   md = md,
+#'   x = 30,
+#'   i = 0.05,
+#'   cause = "q_death",
+#'   type = "whole",
+#'   h = 2,
+#'   tidy = TRUE
+#' )
 #'
 #' @export
 insurance_xj <- function(
@@ -60,19 +104,21 @@ insurance_xj <- function(
     x,
     i,
     cause,
-    product = c("whole", "term"),
+    type = c("whole", "term"),
     benefit = 1,
     n = NULL,
-    m = 0L,
+    h = 0L,
+    i_type = "effective",
+    m = 1L,
     tidy = FALSE,
     check = TRUE,
     tol = 1e-10
 ) {
-  product <- match.arg(product)
+  type <- match.arg(type)
 
   # --- checks (light, CRAN-friendly) ---
   if (missing(md)) stop("`md` is required.")
-  if (!is.data.frame(md)) stop("`md` must be a data.frame/tibble.", call. = FALSE)
+  if (!is.data.frame(md)) stop("`md` must be a data frame or tibble.", call. = FALSE)
   if (!all(c("x", "p_total") %in% names(md))) {
     stop("`md` must contain columns `x` and `p_total`.", call. = FALSE)
   }
@@ -86,34 +132,72 @@ insurance_xj <- function(
   }
   if (!cause %in% names(md)) stop("`cause` not found in `md`.", call. = FALSE)
 
+  if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
+    stop("`tidy` must be a logical scalar.", call. = FALSE)
+  }
+
+  if (!is.logical(check) || length(check) != 1L || is.na(check)) {
+    stop("`check` must be a logical scalar.", call. = FALSE)
+  }
+
   x <- as.numeric(x)
   i <- as.numeric(i)
+  h <- as.numeric(h)
   m <- as.numeric(m)
   benefit <- as.numeric(benefit)
 
   if (check) {
     if (any(!is.finite(x))) stop("`x` must be finite.", call. = FALSE)
     if (any(abs(x - round(x)) > tol)) stop("`x` must be integer ages.", call. = FALSE)
+
     if (any(!is.finite(i))) stop("`i` must be finite.", call. = FALSE)
-    if (any(i <= -1)) stop("`i` must be greater than -1.", call. = FALSE)
+
+    if (!is.character(i_type)) {
+      stop("`i_type` must be a character vector.", call. = FALSE)
+    }
+
+    valid_i_type <- c(
+      "effective",
+      "nominal_interest",
+      "nominal_discount",
+      "force"
+    )
+
+    bad_i_type <- !is.na(i_type) & !(i_type %in% valid_i_type)
+    if (any(bad_i_type)) {
+      stop(
+        "`i_type` must contain only: ",
+        paste(sprintf("'%s'", valid_i_type), collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+
     if (any(!is.finite(m))) stop("`m` must be finite.", call. = FALSE)
-    if (any(abs(m - round(m)) > tol)) stop("`m` must be an integer.", call. = FALSE)
-    if (any(m < 0)) stop("`m` must be nonnegative.", call. = FALSE)
+    if (any(abs(m - round(m)) > tol)) stop("`m` must contain integer values.", call. = FALSE)
+    if (any(m < 1)) stop("`m` must contain positive integers.", call. = FALSE)
+
+    if (any(!is.finite(h))) stop("`h` must be finite.", call. = FALSE)
+    if (any(abs(h - round(h)) > tol)) stop("`h` must be an integer.", call. = FALSE)
+    if (any(h < 0)) stop("`h` must be nonnegative.", call. = FALSE)
+
     if (!is.null(n)) {
       n <- as.numeric(n)
       if (any(!is.finite(n))) stop("`n` must be finite.", call. = FALSE)
       if (any(abs(n - round(n)) > tol)) stop("`n` must be an integer.", call. = FALSE)
       if (any(n < 0)) stop("`n` must be nonnegative.", call. = FALSE)
     }
+
     if (any(!is.finite(benefit))) stop("`benefit` must be finite.", call. = FALSE)
     if (any(benefit < 0)) stop("`benefit` must be nonnegative.", call. = FALSE)
 
-    if (product == "term" && is.null(n)) {
-      stop("For product = 'term', `n` must be provided.", call. = FALSE)
+    if (type == "term" && is.null(n)) {
+      stop("For type = 'term', `n` must be provided.", call. = FALSE)
     }
   }
 
   x <- as.integer(round(x))
+  h <- as.integer(round(h))
   m <- as.integer(round(m))
   if (!is.null(n)) n <- as.integer(round(n))
 
@@ -125,13 +209,16 @@ insurance_xj <- function(
   q_j   <- md[[cause]]
 
   # --- recycle inputs to common length (scalar recycling only) ---
-  lengths <- c(length(x), length(i), length(m), length(benefit))
+  lengths <- c(length(x), length(i), length(i_type), length(m), length(h), length(benefit))
   if (!is.null(n)) lengths <- c(lengths, length(n))
   L <- max(lengths)
 
   recycle_ok <- function(z) length(z) %in% c(1L, L)
-  if (!all(vapply(list(x, i, m, benefit), recycle_ok, logical(1)))) {
-    stop("`x`, `i`, `m`, and `benefit` must have the same length or length 1.", call. = FALSE)
+  if (!all(vapply(list(x, i, i_type, m, h, benefit), recycle_ok, logical(1)))) {
+    stop(
+      "`x`, `i`, `i_type`, `m`, `h`, and `benefit` must have the same length or length 1.",
+      call. = FALSE
+    )
   }
   if (!is.null(n) && !recycle_ok(n)) {
     stop("`n` must have the same length as other inputs or length 1.", call. = FALSE)
@@ -139,52 +226,80 @@ insurance_xj <- function(
 
   if (length(x) == 1L && L > 1L) x <- rep.int(x, L)
   if (length(i) == 1L && L > 1L) i <- rep.int(i, L)
+  if (length(i_type) == 1L && L > 1L) i_type <- rep.int(i_type, L)
   if (length(m) == 1L && L > 1L) m <- rep.int(m, L)
+  if (length(h) == 1L && L > 1L) h <- rep.int(h, L)
   if (length(benefit) == 1L && L > 1L) benefit <- rep.int(benefit, L)
   if (!is.null(n) && length(n) == 1L && L > 1L) n <- rep.int(n, L)
 
-  apv <- vapply(seq_len(L), function(k) {
-    xk <- x[k]
-    ik <- i[k]
-    mk <- m[k]
-    bk <- benefit[k]
+  i_effective <- standardize_interest(
+    type = i_type,
+    rate = i,
+    m = m
+  )
 
-    idx0 <- match(xk, ages)
+  if (any(is.na(i_effective)) ||
+      any(!is.finite(i_effective)) ||
+      any(i_effective <= -1)) {
+    stop(
+      "The standardized annual effective interest rates must be greater than -1.",
+      call. = FALSE
+    )
+  }
+
+  apv <- vapply(seq_len(L), function(idx) {
+    x_idx <- x[idx]
+    i_idx <- i_effective[idx]
+    h_idx <- h[idx]
+    benefit_idx <- benefit[idx]
+
+    idx0 <- match(x_idx, ages)
     if (is.na(idx0)) stop("Starting age not found in `md$x`.", call. = FALSE)
 
     available_years <- length(ages) - idx0 + 1L  # includes last age row
-    if (mk > available_years) stop("Deferment `m` exceeds the available ages in `md`.", call. = FALSE)
+    if (h_idx > available_years) {
+      stop("Deferment `h` exceeds the available ages in `md`.", call. = FALSE)
+    }
 
-    nk <- if (product == "whole") (available_years - mk) else n[k]
-    if (is.na(nk)) nk <- 0L
-    if (nk < 0L) stop("`n` must be nonnegative.", call. = FALSE)
-    if (nk == 0L) return(0)
+    n_idx <- if (type == "whole") {
+      available_years - h_idx
+    } else {
+      n[idx]
+    }
 
-    K <- mk + nk  # total years from issue to end of term
-    if (K > available_years) stop("Term plus deferment exceeds the available ages in `md`.", call. = FALSE)
+    if (is.na(n_idx)) n_idx <- 0L
+    if (n_idx < 0L) stop("`n` must be nonnegative.", call. = FALSE)
+    if (n_idx == 0L) return(0)
+
+    K <- h_idx + n_idx  # total years from issue to end of term
+    if (K > available_years) {
+      stop("Term plus deferment exceeds the available ages in `md`.", call. = FALSE)
+    }
 
     idx_end <- idx0 + K - 1L
     pvec <- p_tot[idx0:idx_end]
     qvec <- q_j[idx0:idx_end]
 
-    v <- (1 + ik)^(-1)
+    v <- (1 + i_idx)^(-1)
 
     surv_to_start <- cumprod(c(1, pvec))[1:K]  # survival to start of each year
     disc_endyear  <- v^(1:K)                   # discount to end of each year
 
-    idx_sum <- (mk + 1L):(mk + nk)             # years m..m+n-1 (1-based)
-    bk * sum(disc_endyear[idx_sum] * surv_to_start[idx_sum] * qvec[idx_sum])
+    idx_sum <- (h_idx + 1L):(h_idx + n_idx)    # years h..h+n-1 (1-based)
+    benefit_idx * sum(disc_endyear[idx_sum] * surv_to_start[idx_sum] * qvec[idx_sum])
   }, numeric(1))
 
   if (!tidy) return(apv)
 
   tibble::tibble(
-    x       = x,
-    i       = i,
-    m       = m,
-    n       = if (product == "whole") NA_integer_ else n,
-    product = product,
-    cause   = cause,
+    x = x,
+    i = i,
+    i_type = i_type,
+    m = m,
+    h = h,
+    n = if (type == "whole") NA_integer_ else n,
+    type = type,
+    cause = cause,
     benefit = benefit,
     insurance_xj = apv
   )

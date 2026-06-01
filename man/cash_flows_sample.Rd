@@ -8,8 +8,8 @@
 A tibble with 19 rows and 5 variables:
 \describe{
 \item{scenario_id}{Scenario identifier.}
-\item{time}{Payment time.}
-\item{amount}{Cash-flow amount. Negative values represent outflows and
+\item{t}{Payment time.}
+\item{C}{Cash-flow amount. Negative values represent outflows and
 positive values represent inflows.}
 \item{cashflow_type}{Type of cash flow.}
 \item{description}{Short description of the cash flow.}
@@ -18,8 +18,8 @@ positive values represent inflows.}
 A tibble with 19 rows and 5 variables:
 \describe{
 \item{scenario_id}{Scenario identifier.}
-\item{time}{Payment time.}
-\item{amount}{Cash-flow amount. Negative values represent outflows and
+\item{t}{Payment time.}
+\item{C}{Cash-flow amount. Negative values represent outflows and
 positive values represent inflows.}
 \item{cashflow_type}{Type of cash flow.}
 \item{description}{Short description of the cash flow.}
@@ -44,16 +44,27 @@ A small pedagogical dataset containing cash-flow scenarios for present value,
 future value, net present value, internal rate of return, equations of value,
 and cash-flow diagrams.
 }
+\details{
+This dataset uses the compact financial-actuarial notation used throughout
+\code{tidyactuarial}: \code{t} denotes time and \code{C} denotes the cash-flow
+amount at that time.
+
+This dataset uses the compact financial-actuarial notation used throughout
+\code{tidyactuarial}: \code{t} denotes time and \code{C} denotes the cash-flow
+amount at that time.
+}
 \examples{
 data(cash_flows_sample)
 
 cash_flows_sample |>
-  dplyr::filter(scenario_id == "investment_project")
+  dplyr::filter(scenario_id == "investment_project") |>
+  dplyr::select(scenario_id, t, C, cashflow_type)
 
 data(cash_flows_sample)
 
 cash_flows_sample |>
-  dplyr::filter(scenario_id == "investment_project")
+  dplyr::filter(scenario_id == "investment_project") |>
+  dplyr::select(scenario_id, t, C, cashflow_type)
 
 }
 \keyword{datasets}

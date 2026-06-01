@@ -1,17 +1,17 @@
 #' Equivalent interest rates in FM actuarial notation
 #'
-#' Converts a single interest-rate specification into equivalent
-#' actuarial rates for the same compounding frequency \code{m}.
+#' Converts a single interest-rate specification into equivalent actuarial
+#' rates for the same conversion frequency \code{m}.
 #'
-#' Internally, the supplied rate is first converted to the annual
-#' effective interest rate \eqn{i} using \code{\link{standardize_interest}}.
+#' Internally, the supplied rate is first converted to the annual effective
+#' interest rate \eqn{i} using \code{\link{standardize_interest}}.
 #'
-#' @param type Character string indicating the input rate type.
+#' @param i_type Character string indicating the input interest-rate type.
 #'   Must be one of \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, or \code{"force"}.
-#' @param rate Numeric scalar giving the rate value.
-#' @param m Positive integer scalar giving the compounding frequency
-#'   for nominal rates.
+#' @param i Numeric scalar giving the interest-rate value.
+#' @param m Positive integer scalar giving the conversion frequency for nominal
+#'   rates.
 #'
 #' @return A tibble with columns:
 #' \describe{
@@ -19,12 +19,17 @@
 #'     \code{"force"}, \code{"nominal_interest"}, or
 #'     \code{"nominal_discount"}.}
 #'   \item{notation}{Actuarial notation for the equivalent rate.}
-#'   \item{m}{Compounding frequency used for nominal rates.}
+#'   \item{m}{Conversion frequency used for nominal rates.}
 #'   \item{description}{Human-readable description.}
 #'   \item{value}{Equivalent rate value.}
 #' }
 #'
 #' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{i} denotes the interest-rate value,
+#' \code{i_type} denotes the type of interest rate, and \code{m} denotes the
+#' conversion frequency for nominal rates.
+#'
 #' Given the annual effective interest rate \eqn{i}, the equivalents are:
 #' \describe{
 #'   \item{Effective discount rate:}{\eqn{d = i/(1+i)}{d = i/(1+i)}}
@@ -40,17 +45,17 @@
 #' @family interest
 #'
 #' @examples
-#' interest_equivalents("nominal_interest", rate = 0.18, m = 4)
-#' interest_equivalents("nominal_discount", rate = 0.10, m = 12)
-#' interest_equivalents("force", rate = 0.12)
-#' interest_equivalents("effective", rate = 0.08)
+#' interest_equivalents(i_type = "nominal_interest", i = 0.18, m = 4)
+#' interest_equivalents(i_type = "nominal_discount", i = 0.10, m = 12)
+#' interest_equivalents(i_type = "force", i = 0.12)
+#' interest_equivalents(i_type = "effective", i = 0.08)
 #'
 #' # Batch use with purrr
 #' if (requireNamespace("purrr", quietly = TRUE) &&
 #'     requireNamespace("tibble", quietly = TRUE)) {
 #'   cases <- tibble::tibble(
-#'     type = c("effective", "force"),
-#'     rate = c(0.08, 0.12),
+#'     i_type = c("effective", "force"),
+#'     i = c(0.08, 0.12),
 #'     m = c(1, 1)
 #'   )
 #'
@@ -59,18 +64,18 @@
 #'
 #' @export
 interest_equivalents <- function(
-    type = c("effective", "nominal_interest", "nominal_discount", "force"),
-    rate,
+    i_type = c("effective", "nominal_interest", "nominal_discount", "force"),
+    i,
     m = 1L
 ) {
-  type <- match.arg(type)
+  i_type <- match.arg(i_type)
 
-  if (missing(rate)) {
-    stop("`rate` must be provided.", call. = FALSE)
+  if (missing(i)) {
+    stop("`i` must be provided.", call. = FALSE)
   }
 
-  if (!is.numeric(rate) || length(rate) != 1L || is.na(rate) || !is.finite(rate)) {
-    stop("`rate` must be a single finite numeric value.", call. = FALSE)
+  if (!is.numeric(i) || length(i) != 1L || is.na(i) || !is.finite(i)) {
+    stop("`i` must be a single finite numeric value.", call. = FALSE)
   }
 
   if (!is.numeric(m) || length(m) != 1L || is.na(m) || !is.finite(m) ||
@@ -80,13 +85,13 @@ interest_equivalents <- function(
 
   m <- as.integer(m)
 
-  i <- standardize_interest(type = type, rate = rate, m = m)
+  i_eff <- standardize_interest(type = i_type, rate = i, m = m)
 
-  d     <- i / (1 + i)
-  v     <- 1 / (1 + i)
-  delta <- log1p(i)
-  j_m   <- m * expm1(log1p(i) / m)
-  d_m   <- m * (1 - exp(-log1p(i) / m))
+  d     <- i_eff / (1 + i_eff)
+  v     <- 1 / (1 + i_eff)
+  delta <- log1p(i_eff)
+  j_m   <- m * expm1(log1p(i_eff) / m)
+  d_m   <- m * (1 - exp(-log1p(i_eff) / m))
 
   freq_label <- switch(
     as.character(m),
@@ -123,6 +128,6 @@ interest_equivalents <- function(
       paste0("nominal annual interest rate convertible ", freq_label),
       paste0("nominal annual discount rate convertible ", freq_label)
     ),
-    value = c(i, d, v, delta, j_m, d_m)
+    value = c(i_eff, d, v, delta, j_m, d_m)
   )
 }

@@ -5,33 +5,33 @@
 \title{Multiple internal rates of return for a cash flow}
 \usage{
 irr_flow_multi(
-  payment,
-  time = NULL,
+  cf,
+  t = NULL,
   date = NULL,
+  m = 1L,
   search_interval = c(-0.99, 10),
   grid_points = 2000L,
-  nominal_m = 1L,
   tol = 1e-10,
   maxiter = 1000L,
   day_count = c("act/365", "act/360")
 )
 }
 \arguments{
-\item{payment}{Numeric vector of cash flows.}
+\item{cf}{Numeric vector of cash flows.}
 
-\item{time}{Optional numeric vector of cash-flow times in years.}
+\item{t}{Optional numeric vector of cash-flow times in years.}
 
 \item{date}{Optional vector of cash-flow dates. If supplied, the earliest
 date is treated as time 0.}
+
+\item{m}{Positive integer used only to report an equivalent nominal annual
+interest rate convertible \code{m} times per year.}
 
 \item{search_interval}{Numeric vector of length 2 giving the search interval
 for annual effective IRRs. Default is \code{c(-0.99, 10)}.}
 
 \item{grid_points}{Positive integer giving the number of grid points used
 to scan the interval. Larger values improve detection at the cost of speed.}
-
-\item{nominal_m}{Positive integer used only to report an equivalent nominal
-annual interest rate convertible \code{nominal_m} times per year.}
 
 \item{tol}{Numeric tolerance passed to \code{\link[stats]{uniroot}}.}
 
@@ -47,12 +47,12 @@ A tibble with one row per detected IRR and columns:
 \item{irr}{Detected IRR as an annual effective rate.}
 \item{i_effective_annual}{Same as \code{irr}, reported explicitly.}
 \item{j_nominal_interest}{Equivalent nominal annual interest rate
-convertible \code{nominal_m} times.}
+convertible \code{m} times.}
 \item{delta}{Equivalent force of interest.}
-\item{npv}{NPV evaluated at the detected root (approximately zero).}
+\item{npv}{NPV evaluated at the detected root, approximately zero.}
 \item{interval_left}{Left endpoint of the local search bracket.}
 \item{interval_right}{Right endpoint of the local search bracket.}
-\item{n_cashflows}{Length of \code{payment}.}
+\item{n_cashflows}{Length of \code{cf}.}
 \item{has_both_signs}{Whether the cash flow has at least one positive
 and one negative value.}
 \item{n_sign_changes_cashflow}{Number of sign changes in the nonzero
@@ -63,8 +63,8 @@ If no roots are detected, the function returns a tibble with zero rows.
 }
 \description{
 Searches for multiple internal rates of return (IRRs) of a cash flow by
-scanning a search interval and solving for all detectable roots of the
-net present value (NPV) function.
+scanning a search interval and solving for all detectable roots of the net
+present value (NPV) function, using compact actuarial notation.
 }
 \details{
 This function is intended for cash flows with multiple sign changes, where
@@ -75,9 +75,14 @@ where the NPV is approximately zero), and applies
 
 The IRRs returned are interpreted as annual effective rates.
 
-Timing can be supplied either through \code{time} (in years) or \code{date}
+Timing can be supplied either through \code{t} (in years) or \code{date}
 (calendar dates). If \code{date} is supplied, the earliest date is treated
 as time 0.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
+and \code{m} denotes the conversion frequency used to report the equivalent
+nominal annual interest rate.
 
 This function detects roots numerically over a finite search interval.
 It may miss roots if:
@@ -93,21 +98,21 @@ For a single-IRR workflow, use \code{\link{irr_flow}}.
 \examples{
 # A standard single-IRR cash flow
 irr_flow_multi(
-  payment = c(-1000, 300, 400, 500),
-  time = c(0, 1, 2, 3)
+  cf = c(-1000, 300, 400, 500),
+  t = c(0, 1, 2, 3)
 )
 
 # A cash flow with multiple sign changes
 irr_flow_multi(
-  payment = c(-1000, 5000, -4500, 200),
-  time = c(0, 1, 2, 3),
+  cf = c(-1000, 5000, -4500, 200),
+  t = c(0, 1, 2, 3),
   search_interval = c(-0.99, 5),
   grid_points = 5000
 )
 
 # Date-based version
 irr_flow_multi(
-  payment = c(-1000, 300, 400, 500),
+  cf = c(-1000, 300, 400, 500),
   date = as.Date(c("2026-01-01", "2027-01-01", "2028-01-01", "2029-01-01"))
 )
 

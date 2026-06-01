@@ -5,56 +5,56 @@
 \title{Level annuity accumulation factor s-angle-n}
 \usage{
 s_angle(
-  n_years,
-  payments_per_year = 1L,
-  rate,
-  rate_type = "effective",
+  n,
+  k = 1L,
+  i,
+  i_type = "effective",
   m = 1L,
-  deferral_years = 0,
+  h = 0,
   timing = "immediate",
   payment = 1,
-  output = c("value", "table")
+  tidy = FALSE
 )
 }
 \arguments{
-\item{n_years}{Numeric vector of payment durations in years.
-Each value must be positive and finite.}
+\item{n}{Numeric vector of payment durations in years. Each value must be
+positive and finite.}
 
-\item{payments_per_year}{Positive integer vector giving the number of
-discrete payments per year. Ignored for continuous annuities.}
+\item{k}{Positive integer vector giving the number of discrete payments per
+year. Ignored for continuous annuities.}
 
-\item{rate}{Numeric vector of rate values.}
+\item{i}{Numeric vector of interest-rate values.}
 
-\item{rate_type}{Character vector indicating the rate type.
-Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\item{i_type}{Character vector indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Positive integer vector giving the compounding frequency
-for nominal rates. Ignored for \code{"effective"} and \code{"force"}.}
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. Ignored for \code{"effective"} and \code{"force"}.}
 
-\item{deferral_years}{Numeric vector of deferral times in years.
-Must be greater than or equal to 0. Under the adopted horizon convention,
-this is metadata only for accumulation factors.}
+\item{h}{Numeric vector of deferment times in years. Must be greater than or
+equal to 0. Under the adopted horizon convention, this is metadata only for
+accumulation factors.}
 
-\item{timing}{Character vector. One of \code{"immediate"},
-\code{"due"}, or \code{"continuous"}.}
+\item{timing}{Character vector. One of \code{"immediate"}, \code{"due"}, or
+\code{"continuous"}.}
 
 \item{payment}{Numeric vector of level payment amounts. Used only when
-\code{output = "table"} to report the corresponding future value.
-The accumulation factor itself is always computed for unit payments.}
+\code{tidy = TRUE} to report the corresponding future value. The
+accumulation factor itself is always computed for unit payments.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric
-accumulation factor, or \code{"table"} to return a tibble with intermediate
-calculations.}
+\item{tidy}{Logical scalar. If \code{FALSE}, returns a numeric accumulation
+factor. If \code{TRUE}, returns a tibble with intermediate calculations.}
 }
 \value{
-If \code{output = "value"}, a numeric vector of accumulation factors.
+If \code{tidy = FALSE}, a numeric vector of accumulation factors.
 
-If \code{output = "table"}, a tibble with input values, equivalent rates,
+If \code{tidy = TRUE}, a tibble with input values, equivalent rates,
 accumulation factors, payment amounts, and future values.
 }
 \description{
-Computes the actuarial accumulation factor for a level annuity.
+Computes the actuarial accumulation factor for a level annuity using compact
+actuarial notation.
 }
 \details{
 Supported timing conventions:
@@ -64,19 +64,31 @@ Supported timing conventions:
 \item \code{"continuous"}: continuous annuity.
 }
 
-For discrete annuities, \code{payments_per_year = k} means payments are made
-every \eqn{1/k} year. The function returns the accumulation factor, assuming
-a unit payment at each payment time.
+For discrete annuities, \code{k} is the number of payments per year, so
+payments are made every \eqn{1/k} year. The function returns the accumulation
+factor, assuming a unit payment at each payment time.
 
 Horizon convention:
 the future value is measured at the time of the last payment. Under this
-convention, a pure deferral that shifts the entire payment block forward in
+convention, a pure deferment that shifts the entire payment block forward in
 time does not change the accumulation factor when the payment pattern is
-otherwise unchanged. Therefore, \code{deferral_years} is recorded and
-validated, but it does not modify the factor.
+otherwise unchanged. Therefore, \code{h} is recorded and validated, but it
+does not modify the factor.
 
 The future value of a perpetuity diverges, so perpetuities are not supported
 in \code{s_angle()}.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}:
+
+\itemize{
+\item \code{n}: annuity term;
+\item \code{k}: payment frequency;
+\item \code{i}: interest rate;
+\item \code{i_type}: interest-rate type;
+\item \code{m}: conversion frequency for nominal rates;
+\item \code{h}: deferment period.
+}
 
 The function first converts the supplied rate to the equivalent annual
 effective interest rate using \code{\link{standardize_interest}}.
@@ -95,41 +107,41 @@ propagated.
 }
 \examples{
 # Numeric accumulation factor
-s_angle(n_years = 10, rate = 0.05)
+s_angle(n = 10, i = 0.05)
 
 # Nominal interest converted monthly, with monthly payments
 s_angle(
-  n_years = 10,
-  rate = 0.06,
-  rate_type = "nominal_interest",
+  n = 10,
+  i = 0.06,
+  i_type = "nominal_interest",
   m = 12,
-  payments_per_year = 12
+  k = 12
 )
 
 # Continuous annuity
 s_angle(
-  n_years = 15,
-  rate = 0.04,
-  rate_type = "force",
+  n = 15,
+  i = 0.04,
+  i_type = "force",
   timing = "continuous"
 )
 
 # Tibble output for teaching or auditing
 s_angle(
-  n_years = 10,
-  rate = 0.05,
+  n = 10,
+  i = 0.05,
   payment = 1000,
-  output = "table"
+  tidy = TRUE
 )
 
 # Vectorized example
 s_angle(
-  n_years = c(5, 10, 20),
-  payments_per_year = c(1, 12, 1),
-  rate = c(0.05, 0.06, 0.04),
-  rate_type = c("effective", "nominal_interest", "force"),
+  n = c(5, 10, 20),
+  k = c(1, 12, 1),
+  i = c(0.05, 0.06, 0.04),
+  i_type = c("effective", "nominal_interest", "force"),
   m = c(1, 12, 1),
-  deferral_years = c(0, 2, 3),
+  h = c(0, 2, 3),
   timing = c("immediate", "due", "continuous")
 )
 

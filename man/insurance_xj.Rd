@@ -3,17 +3,19 @@
 \name{insurance_xj}
 \alias{insurance_xj}
 \alias{A_xj}
-\title{Cause-specific term/whole-life insurance APV under multiple decrements: insurance_xj}
+\title{Cause-specific term/whole-life insurance APV under multiple decrements}
 \usage{
 insurance_xj(
   md,
   x,
   i,
   cause,
-  product = c("whole", "term"),
+  type = c("whole", "term"),
   benefit = 1,
   n = NULL,
-  m = 0L,
+  h = 0L,
+  i_type = "effective",
+  m = 1L,
   tidy = FALSE,
   check = TRUE,
   tol = 1e-10
@@ -24,10 +26,12 @@ A_xj(
   x,
   i,
   cause,
-  product = c("whole", "term"),
+  type = c("whole", "term"),
   benefit = 1,
   n = NULL,
-  m = 0L,
+  h = 0L,
+  i_type = "effective",
+  m = 1L,
   tidy = FALSE,
   check = TRUE,
   tol = 1e-10
@@ -35,52 +39,80 @@ A_xj(
 }
 \arguments{
 \item{md}{A multiple decrement table produced by \code{\link{md_table}}.
-Must contain columns \code{x}, \code{p_total}, and the requested \code{cause}.}
+Must contain columns \code{x}, \code{p_total}, and the requested
+\code{cause}.}
 
 \item{x}{Integer age(s) at issue.}
 
-\item{i}{Annual effective interest rate(s). Must satisfy \code{i > -1}.}
+\item{i}{Annual interest-rate input. Must produce an annual effective rate
+greater than \code{-1}.}
 
-\item{cause}{Character. Name of the cause column in \code{md}
-(e.g., \code{"q_death"}).}
+\item{cause}{Character scalar. Name of the cause column in \code{md}, for
+example \code{"q_death"}.}
 
-\item{product}{Character. Insurance type: \code{"whole"} or \code{"term"}.}
+\item{type}{Character scalar. Insurance type: \code{"whole"} or
+\code{"term"}.}
 
 \item{benefit}{Numeric benefit amount payable at the end of the year of
-decrement by the specified cause (default \code{1}).}
+decrement by the specified cause. Default is \code{1}.}
 
-\item{n}{Integer term length in years (required when \code{product = "term"}).}
+\item{n}{Integer term length in years. Required when \code{type = "term"}.}
 
-\item{m}{Integer deferment in years (default \code{0}).}
+\item{h}{Integer deferment period in years. Default is \code{0}.}
 
-\item{tidy}{Logical. If \code{TRUE}, returns a tibble with inputs and \code{insurance_xj}.}
+\item{i_type}{Character vector indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. Ignored for \code{"effective"} and \code{"force"}.}
+
+\item{tidy}{Logical. If \code{TRUE}, returns a tibble with inputs and
+\code{insurance_xj}.}
 
 \item{check}{Logical. If \code{TRUE}, performs input validation.}
 
 \item{tol}{Numeric tolerance for integer checks.}
 }
 \value{
-Numeric vector of APVs (or a tibble if \code{tidy = TRUE}).
+Numeric vector of APVs, or a tibble if \code{tidy = TRUE}.
 }
 \description{
-Computes the actuarial present value (APV) of an annual (discrete) insurance
+This function evaluates cause-specific insurance benefits under a multiple
+decrement model. It supports whole-life and term insurance, integer
+deferment, vectorized issue ages and interest-rate assumptions, and compact
+actuarial notation.
+}
+\details{
+Computes the actuarial present value (APV) of an annual discrete insurance
 that pays \code{benefit} at the end of the year of decrement by a specified
 cause \code{j}, using a multiple decrement table produced by
 \code{\link{md_table}}.
-}
-\details{
-Let \eqn{q_{x+k}^{(j)}} be the one-year decrement probability for cause \eqn{j}
-at age \eqn{x+k}, and \eqn{p_{x+r}^{(\tau)}} be the one-year total survival
-probability (any cause) at age \eqn{x+r}. For a product with deferment \eqn{m}
-and term \eqn{n}, with benefit payable at the end of the year of decrement by
-cause \eqn{j}, the APV is:
-\deqn{
-\sum_{k=m}^{m+n-1} v^{k+1}\left(\prod_{r=0}^{k-1} p_{x+r}^{(\tau)}\right) q_{x+k}^{(j)},
-}
-where \eqn{v = (1+i)^{-1}} and \eqn{i} is the annual effective interest rate.
 
-If \code{product = "whole"}, the function sets \code{n} to the remaining length
-of the table after deferment (i.e., whole life over the available ages).
+Let \eqn{q_{x+k}^{(j)}} be the one-year decrement probability for cause
+\eqn{j} at age \eqn{x+k}, and let \eqn{p_{x+r}^{(\tau)}} be the one-year
+total survival probability against all decrements at age \eqn{x+r}.
+
+For a product with deferment \eqn{h} and term \eqn{n}, with benefit payable
+at the end of the year of decrement by cause \eqn{j}, the APV is:
+\deqn{
+\sum_{k=h}^{h+n-1}
+v^{k+1}
+\left(\prod_{r=0}^{k-1} p_{x+r}^{(\tau)}\right)
+q_{x+k}^{(j)}.
+}
+
+Here \eqn{v = (1+i_e)^{-1}}, where \eqn{i_e} is the annual effective
+interest rate obtained from \code{i}, \code{i_type}, and \code{m}.
+
+If \code{type = "whole"}, the function sets \code{n} to the remaining length
+of the table after deferment, that is, whole life over the available ages.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{md} is a multiple decrement table, \code{x} is
+age at issue, \code{i} is the interest rate, \code{i_type} is the
+interest-rate type, \code{m} is the conversion frequency for nominal rates,
+\code{n} is the term, and \code{h} is the deferment period.
 }
 \examples{
 qx_df <- tibble::tibble(
@@ -91,13 +123,30 @@ qx_df <- tibble::tibble(
 md <- md_table(qx_df, radix = 1e5, close = TRUE)
 
 # 5-year term cause-specific insurance for death, i = 5\%
-insurance_xj(md, x = 30, i = 0.05, cause = "q_death", product = "term", n = 5)
+insurance_xj(
+  md = md,
+  x = 30,
+  i = 0.05,
+  cause = "q_death",
+  type = "term",
+  n = 5
+)
 
-# Whole-life (over available ages), 2-year deferred
-insurance_xj(md, x = 30, i = 0.05, cause = "q_death", product = "whole", m = 2, tidy = TRUE)
+# Whole-life over available ages, 2-year deferred
+insurance_xj(
+  md = md,
+  x = 30,
+  i = 0.05,
+  cause = "q_death",
+  type = "whole",
+  h = 2,
+  tidy = TRUE
+)
 
 }
 \seealso{
 \code{\link{t_qxj}} for cause-specific decrement probabilities,
-\code{\link{lt_tau}} to build a single-decrement lifetable for the total decrement.
+\code{\link{lt_tau}} to build a single-decrement life table for the total
+decrement.
 }
+\concept{multiple-decrements}

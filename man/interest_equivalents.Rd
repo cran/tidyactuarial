@@ -5,20 +5,20 @@
 \title{Equivalent interest rates in FM actuarial notation}
 \usage{
 interest_equivalents(
-  type = c("effective", "nominal_interest", "nominal_discount", "force"),
-  rate,
+  i_type = c("effective", "nominal_interest", "nominal_discount", "force"),
+  i,
   m = 1L
 )
 }
 \arguments{
-\item{type}{Character string indicating the input rate type.
+\item{i_type}{Character string indicating the input interest-rate type.
 Must be one of \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, or \code{"force"}.}
 
-\item{rate}{Numeric scalar giving the rate value.}
+\item{i}{Numeric scalar giving the interest-rate value.}
 
-\item{m}{Positive integer scalar giving the compounding frequency
-for nominal rates.}
+\item{m}{Positive integer scalar giving the conversion frequency for nominal
+rates.}
 }
 \value{
 A tibble with columns:
@@ -27,18 +27,23 @@ A tibble with columns:
 \code{"force"}, \code{"nominal_interest"}, or
 \code{"nominal_discount"}.}
 \item{notation}{Actuarial notation for the equivalent rate.}
-\item{m}{Compounding frequency used for nominal rates.}
+\item{m}{Conversion frequency used for nominal rates.}
 \item{description}{Human-readable description.}
 \item{value}{Equivalent rate value.}
 }
 }
 \description{
-Converts a single interest-rate specification into equivalent
-actuarial rates for the same compounding frequency \code{m}.
+Converts a single interest-rate specification into equivalent actuarial
+rates for the same conversion frequency \code{m}.
 }
 \details{
-Internally, the supplied rate is first converted to the annual
-effective interest rate \eqn{i} using \code{\link{standardize_interest}}.
+Internally, the supplied rate is first converted to the annual effective
+interest rate \eqn{i} using \code{\link{standardize_interest}}.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} denotes the interest-rate value,
+\code{i_type} denotes the type of interest rate, and \code{m} denotes the
+conversion frequency for nominal rates.
 
 Given the annual effective interest rate \eqn{i}, the equivalents are:
 \describe{
@@ -50,17 +55,17 @@ Given the annual effective interest rate \eqn{i}, the equivalents are:
 }
 }
 \examples{
-interest_equivalents("nominal_interest", rate = 0.18, m = 4)
-interest_equivalents("nominal_discount", rate = 0.10, m = 12)
-interest_equivalents("force", rate = 0.12)
-interest_equivalents("effective", rate = 0.08)
+interest_equivalents(i_type = "nominal_interest", i = 0.18, m = 4)
+interest_equivalents(i_type = "nominal_discount", i = 0.10, m = 12)
+interest_equivalents(i_type = "force", i = 0.12)
+interest_equivalents(i_type = "effective", i = 0.08)
 
 # Batch use with purrr
 if (requireNamespace("purrr", quietly = TRUE) &&
     requireNamespace("tibble", quietly = TRUE)) {
   cases <- tibble::tibble(
-    type = c("effective", "force"),
-    rate = c(0.08, 0.12),
+    i_type = c("effective", "force"),
+    i = c(0.08, 0.12),
     m = c(1, 1)
   )
 

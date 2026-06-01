@@ -7,10 +7,10 @@
 amort_schedule(
   principal,
   n,
-  rate,
-  rate_type = "effective",
+  i,
+  i_type = "effective",
   m = 1L,
-  periods_per_year = 1L,
+  k = 1L,
   timing = c("immediate", "due"),
   payment = NULL,
   extra_principal = NULL,
@@ -23,14 +23,15 @@ amort_schedule(
 
 \item{n}{Positive integer. Number of contractual periods.}
 
-\item{rate}{Numeric scalar. Annual rate value.}
+\item{i}{Numeric scalar. Annual interest-rate input.}
 
-\item{rate_type}{Character string indicating the annual rate type:
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.}
+\item{i_type}{Character string indicating the annual interest-rate type:
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"},
+or \code{"force"}.}
 
-\item{m}{Positive integer. Compounding frequency for nominal annual rates.}
+\item{m}{Positive integer. Conversion frequency for nominal annual rates.}
 
-\item{periods_per_year}{Positive integer. Number of schedule periods per year.}
+\item{k}{Positive integer. Number of amortization periods per year.}
 
 \item{timing}{Character string. One of \code{"immediate"} or \code{"due"}.}
 
@@ -45,7 +46,8 @@ If \code{NULL}, it is computed from the loan data.}
 \item a named numeric vector with names interpreted as period numbers.
 }}
 
-\item{adjust}{Character string. One of \code{"none"}, \code{"term"}, or \code{"payment"}.}
+\item{adjust}{Character string. One of \code{"none"}, \code{"term"}, or
+\code{"payment"}.}
 
 \item{tol}{Numeric tolerance for zero-balance detection.}
 }
@@ -63,19 +65,19 @@ A tibble with one row per realized period and columns:
 \item{ob_end}{Outstanding balance at the end of the period.}
 \item{i_effective_annual}{Equivalent annual effective rate.}
 \item{i_effective_period}{Equivalent effective rate per schedule period.}
-\item{periods_per_year}{Schedule frequency.}
+\item{k}{Schedule frequency.}
 \item{timing}{Payment timing convention.}
 \item{adjust}{Adjustment rule used.}
 }
 }
 \description{
 Builds an amortization schedule under a fixed annual interest-rate
-specification, allowing extra principal payments and optional adjustment
-of either the remaining term or the remaining payment amount.
+specification, allowing extra principal payments and optional adjustment of
+either the remaining term or the remaining payment amount.
 }
 \details{
 The annual rate is converted internally to an effective rate per schedule
-period using \code{periods_per_year}.
+period using \code{k}.
 
 Adjustment policies after extra principal payments:
 \itemize{
@@ -87,6 +89,11 @@ outstanding balance reaches zero.
 \item \code{"payment"}: keep the remaining contractual term and
 recalculate the regular payment after each period.
 }
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} is the interest rate, \code{i_type} is the
+interest-rate type, \code{m} is the conversion frequency for nominal annual
+rates, and \code{k} is the number of amortization periods per year.
 
 For \code{timing = "immediate"} (annuity-immediate), interest accrues on the
 outstanding balance during the period, and the payment is made at the end.
@@ -101,19 +108,19 @@ amortization). This is permitted but the user should be aware.
 amort_schedule(
   principal = 100000,
   n = 12,
-  rate = 0.12,
-  rate_type = "nominal_interest",
+  i = 0.12,
+  i_type = "nominal_interest",
   m = 12,
-  periods_per_year = 12
+  k = 12
 )
 
 amort_schedule(
   principal = 100000,
   n = 24,
-  rate = 0.12,
-  rate_type = "nominal_interest",
+  i = 0.12,
+  i_type = "nominal_interest",
   m = 12,
-  periods_per_year = 12,
+  k = 12,
   extra_principal = c("6" = 5000, "12" = 3000),
   adjust = "term"
 )
@@ -121,17 +128,18 @@ amort_schedule(
 amort_schedule(
   principal = 100000,
   n = 24,
-  rate = 0.12,
-  rate_type = "nominal_interest",
+  i = 0.12,
+  i_type = "nominal_interest",
   m = 12,
-  periods_per_year = 12,
+  k = 12,
   extra_principal = c("6" = 5000, "12" = 3000),
   adjust = "payment"
 )
 
 }
 \seealso{
-\code{\link{a_angle}}, \code{\link{present_value}}, \code{\link{pv_flow}}, \code{\link{standardize_interest}}
+\code{\link{a_angle}}, \code{\link{present_value}},
+\code{\link{pv_flow}}, \code{\link{standardize_interest}}
 
 Other amortization: 
 \code{\link{sinking_fund_schedule}()}

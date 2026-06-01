@@ -13,11 +13,11 @@ A tibble with 3,939 rows and 13 variables:
 \item{region}{Geographic region.}
 \item{year}{Calendar year.}
 \item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
-\item{age}{Integer age, from 0 to 100.}
+\item{x}{Integer actuarial age, from 0 to 100.}
 \item{mx}{Central death rate at age \code{x}.}
 \item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
 \item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
-\item{lx}{Number of survivors at exact age \code{x}, based on radix 100,000.}
+\item{lx}{Number of survivors at exact age \code{x}, based on \code{l0 = 100000}.}
 \item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
 \item{source}{Data source.}
 }
@@ -42,7 +42,7 @@ q_x = \frac{m_x}{1 + (1 - a_x)m_x},
 }
 with \eqn{a_x = 0.5}. The last available age is closed by setting
 \code{qx = 1}. Survivors \code{lx} and expected deaths \code{dx} are then
-reconstructed recursively from a radix of 100,000.
+reconstructed recursively from \code{l0 = 100000}.
 
 This dataset is a selected-country sample, not a complete world mortality
 database.
@@ -52,7 +52,7 @@ data(mortality_world_sample_2023)
 
 mortality_world_sample_2023 |>
   dplyr::filter(country == "Colombia", sex == "both") |>
-  dplyr::select(age, mx, qx, px, lx, dx)
+  dplyr::select(x, mx, qx, px, lx, dx)
 
 }
 \keyword{datasets}

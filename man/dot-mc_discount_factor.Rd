@@ -5,24 +5,32 @@
 \title{Internal helper: compute annual discount factor}
 \usage{
 .mc_discount_factor(
-  rate,
-  interest_type = c("effective", "nominal", "force"),
-  m = 1
+  i,
+  i_type = c("effective", "nominal_interest", "nominal_discount", "force"),
+  m = 1,
+  rate = NULL,
+  interest_type = NULL
 )
 }
 \arguments{
-\item{rate}{Numeric scalar. Interest rate.}
+\item{i}{Numeric scalar. Interest-rate input.}
 
-\item{interest_type}{Character string. Interest rate convention. One of
-\code{"effective"}, \code{"nominal"}, or \code{"force"}.}
+\item{i_type}{Character string. Interest-rate convention. One of
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.
+The legacy value \code{"nominal"} is accepted internally and treated as
+\code{"nominal_interest"}.}
 
-\item{m}{Numeric scalar. Number of interest conversion periods per year when
-\code{interest_type = "nominal"}. Default is \code{1}.}
+\item{m}{Numeric scalar. Number of interest conversion periods per year for
+nominal annual rates. Default is \code{1}.}
+
+\item{rate}{Deprecated internal alias for \code{i}.}
+
+\item{interest_type}{Deprecated internal alias for \code{i_type}.}
 }
 \value{
 Numeric scalar with the annual discount factor.
 }
 \description{
-Computes the annual discount factor from an interest rate convention.
+Computes the annual discount factor from an interest-rate convention.
 }
 \keyword{internal}

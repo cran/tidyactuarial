@@ -5,64 +5,87 @@
 \title{Summarise Monte Carlo simulation output}
 \usage{
 summary_mc(
-  .data,
-  value_col = "present_value",
-  group_cols = NULL,
+  .data = NULL,
+  col_value = "present_value",
   by = NULL,
   probs = c(0.025, 0.5, 0.975),
   var_probs = c(0.95, 0.99),
-  na_rm = TRUE
+  na_rm = TRUE,
+  ...
 )
 }
 \arguments{
 \item{.data}{A data.frame or tibble containing simulation output.}
 
-\item{value_col}{Character string. Name of the numeric column to summarise.
+\item{col_value}{Character string. Name of the numeric column to summarise.
 Defaults to \code{"present_value"}.}
 
-\item{group_cols}{Optional character vector of grouping columns.}
-
-\item{by}{Optional character vector of grouping columns. This is a convenient
-alias for \code{group_cols}, useful in examples and pipelines.}
+\item{by}{Optional character vector of grouping columns. If supplied, the
+summary is computed separately within each group. If \code{by = NULL} and
+\code{.data} is already grouped with \code{dplyr::group_by()}, the current
+grouping structure is used.}
 
 \item{probs}{Numeric vector of probabilities for quantiles.}
 
 \item{var_probs}{Numeric vector of probabilities for VaR and TVaR.}
 
-\item{na_rm}{Logical. If \code{TRUE}, missing values are removed.}
+\item{na_rm}{Logical scalar. If \code{TRUE}, missing values are removed
+before computing statistics.}
+
+\item{...}{Transitional compatibility for older calls using
+\code{data}, \code{value_col}, and \code{group_cols}.}
 }
 \value{
 A tibble with summary statistics.
 }
 \description{
-Computes tidy summary statistics from simulated actuarial values.
+Computes tidy summary statistics from simulated actuarial values, using a
+column-oriented interface consistent with the Monte Carlo functions in
+\code{tidyactuarial}.
 }
 \details{
 This function is intentionally generic. It can summarise simulated present
 values from annuities, insurances, premiums, reserves, losses, or any other
 numeric actuarial indicator stored in a tidy simulation table.
 
-The function computes the number of simulations, mean, variance, standard
-deviation, standard error, minimum, maximum, selected quantiles, VaR, and
-TVaR.
+This function follows the compact column-naming convention used throughout
+the Monte Carlo layer of \code{tidyactuarial}: column arguments are prefixed
+with \code{col_}. Thus, \code{col_value} identifies the simulated actuarial
+value to summarise.
 
-TVaR is computed empirically as the mean of simulated values greater than
-or equal to the corresponding empirical VaR.
+The function computes the number of simulations used, number of missing
+values, mean, variance, standard deviation, standard error, minimum, maximum,
+selected quantiles, empirical VaR, and empirical TVaR.
+
+TVaR is computed empirically as the mean of simulated values greater than or
+equal to the corresponding empirical VaR.
+
+If \code{na_rm = TRUE}, missing values in \code{col_value} are removed before
+computing statistics. If \code{na_rm = FALSE} and missing values are present,
+most numerical statistics are returned as \code{NA_real_}, avoiding accidental
+silent deletion of missing reserve or loss scenarios.
 }
 \examples{
 sim <- tibble::tibble(
-  simulation_id = 1:5,
-  duration = c(0, 0, 1, 1, 1),
-  present_value = c(10, 12, 8, 15, 11)
+  sim_id = 1:5,
+  t = c(0, 0, 1, 1, 1),
+  L_t = c(10, 12, 8, 15, 11)
 )
 
-summary_mc(sim)
-summary_mc(sim, by = "duration")
+summary_mc(sim, col_value = "L_t")
+summary_mc(sim, col_value = "L_t", by = "t")
+
+# Transitional compatibility with older argument names
+summary_mc(sim, value_col = "L_t", group_cols = "t")
 
 }
 \seealso{
-Other simulation: 
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other monte-carlo: 
+\code{\link{mc_annuity}()},
+\code{\link{mc_insurance}()},
+\code{\link{mc_loss}()},
+\code{\link{mc_premium}()},
+\code{\link{mc_reserve}()},
+\code{\link{simulate_lifetime}()}
 }
-\concept{simulation}
+\concept{monte-carlo}

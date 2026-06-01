@@ -1,238 +1,229 @@
-#' Simulate multiple independent future lifetimes
+#' Simulate future lifetimes from a life table
 #'
-#' Simulates curtate and complete future lifetimes for several lives under an
-#' independence assumption.
+#' @description
+#' Simulates curtate and complete future lifetimes from a life table.
 #'
-#' This function extends [simulate_lifetime()] to multiple lives. It is designed
-#' as the simulation engine for Monte Carlo multiple-life actuarial calculations.
-#' Each life is simulated independently, and the output is returned in tidy long
-#' format with one row per simulation and per life.
+#' This version is intentionally simple and defensive. It avoids using
+#' `findInterval()` on a cumulative distribution that may contain missing values,
+#' while preserving the column names expected by the Monte Carlo workflow:
+#' `sim_id`, `life_id`, `Kx`, and `Tx`.
 #'
-#' @param data A life table data frame or a list of life table data frames.
-#'   If a single data frame is supplied, the same life table is used for all
-#'   lives. If a list is supplied, it must have length 1 or the same length as
-#'   `ages`.
-#' @param ages Numeric vector. Initial ages of the lives to simulate.
-#' @param n_sim Positive integer. Number of Monte Carlo simulations per life.
-#'   Default is `10000`.
-#' @param life_id Optional character vector identifying each life. If `NULL`,
-#'   IDs are created automatically as `"life_1"`, `"life_2"`, and so on. If
-#'   `data` is a named list and `life_id = NULL`, the list names are used when
-#'   possible.
-#' @param age_col Character string. Name of the age column in the life table or
-#'   life tables. Default is `"age"`.
-#' @param qx_col Character string. Name of the one-year death probability
-#'   column in the life table or life tables. Default is `"qx"`.
-#' @param method Character string specifying the simulation method for each
-#'   curtate future lifetime. Available options are `"inverse"`,
-#'   `"multinomial"`, and `"antithetic"`. Default is `"inverse"`.
-#' @param fractional Character string specifying how the fractional part of the
-#'   complete future lifetime is generated within the year of death. Available
-#'   options are `"udd"`, `"constant_force"`, and `"none"`. Default is `"udd"`.
-#' @param seed Optional integer seed for reproducibility. Default is `NULL`.
+#' @param data A data frame or tibble containing a life table.
+#' @param x Numeric vector of initial ages.
+#' @param n_sim Number of simulations per life.
+#' @param frac Fractional age assumption. One of `"udd"`, `"constant"`,
+#'   `"cfm"`, or `"balducci"`.
+#' @param seed Optional random seed.
+#'
+#' @return A tibble with simulated curtate and complete future lifetimes.
 #'
 #' @details
-#' For lives aged \eqn{x_1, x_2, \ldots, x_r}, the function simulates
+#' The input life table must contain an age column named `x`, `age`, or `Age`,
+#' and at least one mortality column among `qx`, `px`, or `lx`.
 #'
-#' \deqn{
-#'   K_{x_1}, K_{x_2}, \ldots, K_{x_r}
-#' }
+#' If `qx` is not available, it is obtained from `px` as `1 - px`, or from
+#' consecutive `lx` values as `1 - lx[x + 1] / lx[x]`.
 #'
-#' independently. The same applies to the complete future lifetimes
-#' \eqn{T_{x_1}, T_{x_2}, \ldots, T_{x_r}} when `fractional` is not `"none"`.
-#'
-#' The independence assumption means that no common shock, copula, frailty, or
-#' other dependence structure is imposed. This is a natural first model for
-#' multiple-life Monte Carlo calculations and allows direct construction of
-#' joint-life, last-survivor, first-death, last-death, and k-th death quantities
-#' through downstream functions.
-#'
-#' The output is intentionally long:
-#'
-#' ```
-#' sim_id | life_id | life_index | age | Kx | Tx
-#' ```
-#'
-#' This format works naturally with [dplyr::group_by()],
-#' [dplyr::summarise()], [tidyr::pivot_wider()], and downstream functions such
-#' as `mc_multilife_status()`.
-#'
-#' If different mortality tables are needed for different lives, pass `data` as
-#' a list of life tables. For example, one table may be used for a male life and
-#' another for a female life.
-#'
-#' @return A tibble with one row per simulation and per life. It contains:
-#'
-#' * `sim_id`: simulation identifier.
-#' * `life_id`: life identifier.
-#' * `life_index`: position of the life in `ages`.
-#' * `age`: initial age of the life.
-#' * `method`: simulation method used.
-#' * `fractional`: fractional age assumption.
-#' * `Kx`: simulated curtate future lifetime.
-#' * `Tx`: simulated complete future lifetime. If `fractional = "none"`,
-#'   this column contains `NA`.
-#'
-#' @seealso
-#' [simulate_lifetime()], [summary_mc()]
-#'
-#' @references
-#' Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
-#' and Nesbitt, C. J. (1997). *Actuarial Mathematics*. Second Edition.
-#' Society of Actuaries.
+#' Invalid mortality values are handled defensively. Non-finite values, negative
+#' values, and values greater than one are removed from the mortality basis.
+#' Missing values are then treated as zero, and the final available age is forced
+#' to have `qx = 1` so that the lifetime distribution is closed.
 #'
 #' @examples
-#' life_table <- tibble::tibble(
-#'   age = 40:110,
-#'   qx = seq(0.002, 1, length.out = 71)
+#' lt <- tibble::tibble(
+#'   x = 40:100,
+#'   qx = seq(0.002, 1, length.out = 61)
 #' )
 #'
-#' # Two independent lives using the same life table
-#' life_table |>
-#'   simulate_lifetimes(
-#'     ages = c(60, 58),
-#'     n_sim = 1000,
-#'     seed = 123
-#'   )
-#'
-#' # Three independent lives
-#' life_table |>
-#'   simulate_lifetimes(
-#'     ages = c(60, 58, 55),
-#'     life_id = c("x", "y", "z"),
-#'     n_sim = 1000,
-#'     seed = 123
-#'   )
-#'
-#' # Different life tables for different lives
-#' male_table <- tibble::tibble(
-#'   age = 40:110,
-#'   qx = seq(0.003, 1, length.out = 71)
+#' simulate_lifetimes(
+#'   data = lt,
+#'   x = c(60, 58),
+#'   n_sim = 25,
+#'   frac = "udd",
+#'   seed = 123
 #' )
-#'
-#' female_table <- tibble::tibble(
-#'   age = 40:110,
-#'   qx = seq(0.002, 1, length.out = 71)
-#' )
-#'
-#' list(male = male_table, female = female_table) |>
-#'   simulate_lifetimes(
-#'     ages = c(60, 58),
-#'     n_sim = 1000,
-#'     seed = 123
-#'   )
 #'
 #' @export
 simulate_lifetimes <- function(data,
-                               ages,
-                               n_sim = 10000,
-                               life_id = NULL,
-                               age_col = "age",
-                               qx_col = "qx",
-                               method = c("inverse", "multinomial", "antithetic"),
-                               fractional = c("udd", "constant_force", "none"),
+                               x,
+                               n_sim = 1000,
+                               frac = "udd",
                                seed = NULL) {
-  method <- match.arg(method)
-  fractional <- match.arg(fractional)
-
-  if (!is.numeric(ages) || length(ages) == 0 ||
-      anyNA(ages) || any(!is.finite(ages))) {
-    stop("`ages` must be a numeric vector without missing values.", call. = FALSE)
-  }
-
-  if (any(ages < 0)) {
-    stop("All values in `ages` must be non-negative.", call. = FALSE)
-  }
-
-  .mc_assert_positive_integer(n_sim, "n_sim")
-  .mc_assert_character_scalar(age_col, "age_col")
-  .mc_assert_character_scalar(qx_col, "qx_col")
-
-  n_lives <- length(ages)
-
-  if (is.data.frame(data)) {
-    life_tables <- rep(list(data), n_lives)
-  } else if (is.list(data)) {
-    if (!length(data) %in% c(1, n_lives)) {
-      stop(
-        "`data` must be a data frame or a list of length 1 or length equal ",
-        "to `length(ages)`.",
-        call. = FALSE
-      )
-    }
-
-    if (!all(vapply(data, is.data.frame, logical(1)))) {
-      stop("Every element of `data` must be a data frame or tibble.",
-           call. = FALSE)
-    }
-
-    life_tables <- if (length(data) == 1) {
-      rep(data, n_lives)
-    } else {
-      data
-    }
-  } else {
-    stop(
-      "`data` must be a life table data frame or a list of life table data frames.",
-      call. = FALSE
-    )
-  }
-
-  if (is.null(life_id)) {
-    data_names <- names(data)
-
-    if (is.list(data) && length(data) == n_lives &&
-        !is.null(data_names) && all(nzchar(data_names))) {
-      life_id <- data_names
-    } else {
-      life_id <- paste0("life_", seq_len(n_lives))
-    }
-  }
-
-  if (!is.character(life_id) || length(life_id) != n_lives || anyNA(life_id)) {
-    stop(
-      "`life_id` must be NULL or a character vector with length equal to ",
-      "`length(ages)`.",
-      call. = FALSE
-    )
-  }
-
-  if (anyDuplicated(life_id)) {
-    stop("`life_id` values must be unique.", call. = FALSE)
-  }
-
   if (!is.null(seed)) {
-    .mc_assert_positive_integer(seed, "seed")
     set.seed(seed)
   }
 
-  simulated_list <- lapply(
-    seq_len(n_lives),
-    function(i) {
-      simulate_lifetime(
-        data = life_tables[[i]],
-        age = ages[[i]],
-        n_sim = n_sim,
-        age_col = age_col,
-        qx_col = qx_col,
-        method = method,
-        fractional = fractional,
-        seed = NULL,
-        include_distribution = FALSE
-      ) |>
-        dplyr::mutate(
-          life_id = life_id[[i]],
-          life_index = i,
-          .before = "age"
-        ) |>
-        dplyr::select(
-          .data$sim_id,
-          .data$life_id,
-          .data$life_index,
-          dplyr::everything()
-        )
-    }
+  if (!is.data.frame(data)) {
+    stop("`data` must be a data frame or tibble.", call. = FALSE)
+  }
+
+  if (!is.numeric(x) || length(x) == 0L) {
+    stop("`x` must be a non-empty numeric vector of ages.", call. = FALSE)
+  }
+
+  if (!is.numeric(n_sim) || length(n_sim) != 1L || !is.finite(n_sim) ||
+      n_sim <= 0) {
+    stop("`n_sim` must be a positive integer.", call. = FALSE)
+  }
+
+  n_sim <- as.integer(n_sim)
+
+  frac <- match.arg(
+    frac,
+    choices = c("udd", "constant", "cfm", "balducci")
   )
 
-  dplyr::bind_rows(simulated_list)
+  age_col <- intersect(c("x", "age", "Age"), names(data))[1]
+
+  if (is.na(age_col)) {
+    stop("`data` must contain an age column named `x`, `age`, or `Age`.",
+         call. = FALSE)
+  }
+
+  ages <- as.numeric(data[[age_col]])
+
+  if (any(!is.finite(ages))) {
+    stop("The age column must contain only finite numeric values.",
+         call. = FALSE)
+  }
+
+  ord <- order(ages)
+  data <- data[ord, , drop = FALSE]
+  ages <- ages[ord]
+
+  if (any(duplicated(ages))) {
+    stop("The age column must not contain duplicated ages.", call. = FALSE)
+  }
+
+  if ("qx" %in% names(data)) {
+    qx <- as.numeric(data[["qx"]])
+  } else if ("px" %in% names(data)) {
+    qx <- 1 - as.numeric(data[["px"]])
+  } else if ("lx" %in% names(data)) {
+    lx <- as.numeric(data[["lx"]])
+    qx <- rep(NA_real_, length(lx))
+
+    if (length(lx) >= 2L) {
+      denom <- lx[-length(lx)]
+      numer <- lx[-1]
+
+      valid <- is.finite(denom) & denom > 0 & is.finite(numer)
+      qx[-length(lx)][valid] <- 1 - numer[valid] / denom[valid]
+    }
+
+    qx[length(qx)] <- 1
+  } else {
+    stop("`data` must contain one of the columns `qx`, `px`, or `lx`.",
+         call. = FALSE)
+  }
+
+  qx <- as.numeric(qx)
+
+  if (length(qx) != length(ages)) {
+    stop("The mortality column must have the same length as the age column.",
+         call. = FALSE)
+  }
+
+  qx[!is.finite(qx)] <- NA_real_
+  qx[qx < 0] <- NA_real_
+  qx[qx > 1] <- NA_real_
+
+  if (all(is.na(qx))) {
+    stop("A valid mortality column could not be constructed.", call. = FALSE)
+  }
+
+  qx[is.na(qx)] <- 0
+  qx[length(qx)] <- 1
+
+  simulate_one_life <- function(age_start, life_id) {
+    if (!is.finite(age_start)) {
+      stop("All initial ages in `x` must be finite.", call. = FALSE)
+    }
+
+    start_pos <- which(ages >= age_start)[1]
+
+    if (is.na(start_pos)) {
+      stop("An initial age in `x` is outside the life table range.",
+           call. = FALSE)
+    }
+
+    q <- qx[start_pos:length(qx)]
+
+    q[!is.finite(q)] <- 0
+    q <- pmin(pmax(q, 0), 1)
+    q[length(q)] <- 1
+
+    surv_before <- c(1, cumprod(1 - q[-length(q)]))
+    prob_death <- surv_before * q
+
+    prob_death[!is.finite(prob_death)] <- 0
+    prob_death <- pmax(prob_death, 0)
+
+    total_prob <- sum(prob_death)
+
+    if (!is.finite(total_prob) || total_prob <= 0) {
+      stop("A valid lifetime distribution could not be constructed.",
+           call. = FALSE)
+    }
+
+    prob_death <- prob_death / total_prob
+
+    Kx <- sample.int(
+      n = length(prob_death),
+      size = n_sim,
+      replace = TRUE,
+      prob = prob_death
+    ) - 1L
+
+    q_death <- q[Kx + 1L]
+    u <- stats::runif(n_sim)
+
+    frac_time <- u
+
+    if (frac %in% c("constant", "cfm")) {
+      valid <- q_death > 0 & q_death < 1
+      p_death <- 1 - q_death
+
+      frac_time[valid] <- log(1 - u[valid] * q_death[valid]) /
+        log(p_death[valid])
+
+      frac_time[!is.finite(frac_time)] <- u[!is.finite(frac_time)]
+    }
+
+    if (frac == "balducci") {
+      valid <- q_death > 0 & q_death < 1
+
+      frac_time[valid] <- u[valid] * (1 - q_death[valid]) /
+        (1 - u[valid] * q_death[valid])
+
+      frac_time[!is.finite(frac_time)] <- u[!is.finite(frac_time)]
+    }
+
+    frac_time <- pmin(pmax(frac_time, 0), 1)
+
+    Tx <- Kx + frac_time
+
+    tibble::tibble(
+      sim_id = seq_len(n_sim),
+      life_id = life_id,
+      x = age_start,
+      age = age_start,
+      method = "inverse",
+      frac = frac,
+      fractional = frac,
+      Kx = as.integer(Kx),
+      Tx = as.numeric(Tx),
+      K = as.integer(Kx),
+      T = as.numeric(Tx),
+      sim = seq_len(n_sim),
+      life = life_id
+    )
+  }
+
+  out <- lapply(seq_along(x), function(j) {
+    simulate_one_life(age_start = x[j], life_id = j)
+  })
+
+  dplyr::bind_rows(out)
 }
+

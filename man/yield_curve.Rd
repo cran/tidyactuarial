@@ -2,36 +2,45 @@
 % Please edit documentation in R/yield_curve.R
 \name{yield_curve}
 \alias{yield_curve}
-\title{Validate a yield curve, compute discount factors, and optionally create a plot}
+\title{Validate a yield curve and compute discount factors}
 \usage{
 yield_curve(
   .data = NULL,
-  term = NULL,
-  spot = NULL,
-  col_term = "term",
-  col_spot = "spot",
+  t = NULL,
+  i = NULL,
+  col_t = "t",
+  col_i = "i",
+  i_type = "effective",
+  m = 1L,
   plot = FALSE,
-  .out = "discount",
+  .out = "v",
   .out_plot = "yield_curve_plot",
   .keep = c("all", "used", "none"),
   .na = c("propagate", "error", "drop")
 )
 }
 \arguments{
-\item{.data}{A data.frame or tibble. If \code{NULL}, \code{term} and
-\code{spot} must be supplied as numeric vectors.}
+\item{.data}{A data frame or tibble. If \code{NULL}, \code{t} and \code{i}
+must be supplied as numeric vectors.}
 
-\item{term}{Numeric vector of maturities when \code{.data = NULL}.}
+\item{t}{Numeric vector of maturities in years when \code{.data = NULL}.}
 
-\item{spot}{Numeric vector of annual effective spot rates when
-\code{.data = NULL}.}
+\item{i}{Numeric vector of spot-rate values when \code{.data = NULL}.}
 
-\item{col_term}{Name of the list-column containing maturities.}
+\item{col_t}{Name of the list-column containing maturities.}
 
-\item{col_spot}{Name of the list-column containing spot rates.}
+\item{col_i}{Name of the list-column containing spot rates.}
 
-\item{plot}{Logical; if \code{TRUE}, adds a list-column of
-\code{ggplot2} objects.}
+\item{i_type}{Character vector indicating the spot-rate type. Allowed values
+are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}. May have length 1 or the
+same length as each curve.}
+
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+spot rates. May have length 1 or the same length as each curve.}
+
+\item{plot}{Logical. If \code{TRUE}, adds a list-column of \code{ggplot2}
+objects.}
 
 \item{.out}{Name of the output list-column containing discount factors.}
 
@@ -40,53 +49,61 @@ objects. Used only if \code{plot = TRUE}.}
 
 \item{.keep}{One of \code{"all"}, \code{"used"}, or \code{"none"}.}
 
-\item{.na}{NA handling policy: \code{"propagate"}, \code{"error"}, or
-\code{"drop"}.}
+\item{.na}{Missing-value handling policy: \code{"propagate"},
+\code{"error"}, or \code{"drop"}.}
 }
 \value{
-A tibble. By default it returns the original columns plus a new
-list-column named by \code{.out} containing discount-factor vectors.
-If \code{plot = TRUE}, it also adds a list-column named by \code{.out_plot}
+A tibble. By default, it returns the original columns plus a new
+list-column named by \code{.out} containing discount-factor vectors. If
+\code{plot = TRUE}, it also adds a list-column named by \code{.out_plot}
 containing \code{ggplot2} objects.
 }
 \description{
-Builds a tibble-first representation of a discrete yield curve using
-annual effective spot rates and computes the corresponding discount factors.
+Builds a tibble-first representation of a discrete yield curve and computes
+the corresponding spot discount factors, using compact actuarial notation.
 }
 \details{
-Each row is treated as one curve (one case). For tibble input,
-\code{col_term} and \code{col_spot} must be list-columns of equal-length
-numeric vectors. When \code{.data = NULL}, \code{term} and \code{spot}
-must be numeric vectors and a one-row tibble is returned.
+Each row is treated as one curve. For tibble input, \code{col_t} and
+\code{col_i} must identify list-columns of equal-length numeric vectors.
+When \code{.data = NULL}, \code{t} and \code{i} must be numeric vectors and
+a one-row tibble is returned.
 
 The discount factors are computed as:
-\deqn{v_t = (1 + i_t)^{-t}}{v_t = (1 + i_t)^(-t)}
-where \eqn{i_t}{i_t} is the annual effective spot rate for maturity \eqn{t}.
+\deqn{v_t = (1+i_t)^{-t}}
+where \eqn{i_t} is the annual effective spot rate for maturity \eqn{t}.
 
 If \code{plot = TRUE}, the function also returns a list-column of
 \code{ggplot2} objects showing the spot yield curve for each row.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{t} denotes maturity, \code{i} denotes the spot
+rate, \code{i_type} denotes the interest-rate type, and \code{m} denotes the
+conversion frequency for nominal spot rates.
+
+The spot-rate input is converted to annual effective form through
+\code{\link{standardize_interest}} before discount factors are computed.
 }
 \examples{
 # Simple example
 res <- yield_curve(
-  term = c(1, 2, 3, 4, 5),
-  spot = c(0.040, 0.045, 0.048, 0.050, 0.051),
+  t = c(1, 2, 3, 4, 5),
+  i = c(0.040, 0.045, 0.048, 0.050, 0.051),
   plot = TRUE
 )
 
 res$yield_curve_plot[[1]]
 
-# Medium example
+# Multiple curves in a tibble
 curves <- tibble::tibble(
   curve_id = c("A", "B"),
-  term = list(c(1, 2, 3), c(1, 3, 5)),
-  spot = list(c(0.04, 0.05, 0.06), c(0.03, 0.035, 0.04))
+  t = list(c(1, 2, 3), c(1, 3, 5)),
+  i = list(c(0.04, 0.05, 0.06), c(0.03, 0.035, 0.04))
 )
 
 res2 <- yield_curve(
   curves,
-  col_term = "term",
-  col_spot = "spot",
+  col_t = "t",
+  col_i = "i",
   plot = TRUE,
   .out = "v",
   .out_plot = "curve_plot"
@@ -94,10 +111,18 @@ res2 <- yield_curve(
 
 res2$curve_plot[[2]]
 
+# Nominal annual spot rates convertible semiannually
+yield_curve(
+  t = c(1, 2, 3),
+  i = c(0.05, 0.055, 0.06),
+  i_type = "nominal_interest",
+  m = 2
+)
+
 }
 \references{
-Marcel B. Finan, \emph{A Basic Course in the Theory of Interest and Derivatives
-Markets: A Preparation for the Actuarial Exam FM/2}, Section 53:
+Marcel B. Finan, \emph{A Basic Course in the Theory of Interest and
+Derivatives Markets: A Preparation for the Actuarial Exam FM/2}, Section 53:
 The Term Structure of Interest Rates and Yield Curves.
 
 Kellison, S. G. \emph{The Theory of Interest}.

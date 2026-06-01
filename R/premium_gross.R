@@ -1,18 +1,19 @@
-#' Gross (expense-loaded) premium from net premium
+#' Gross (expense-loaded) premium from a net premium
 #'
 #' Adjusts a net premium using a simple expense structure
 #' \eqn{(\alpha, \beta, \gamma)} to obtain the gross or commercial premium
-#' through the extended equivalence principle.
+#' through the extended equivalence principle, using compact actuarial notation.
 #'
 #' The function is designed to work with the detailed output of
-#' \code{\link{premium_x}} using \code{output = "table"}. It can also be used
-#' with any one-row tibble containing the columns \code{premium} and
-#' \code{apv_premiums}.
+#' \code{\link{premium_x}} or \code{\link{premium_xy}} when those functions
+#' return a one-row tibble containing the APV of the premium annuity. It can
+#' also be used with any compatible one-row tibble.
 #'
 #' @param prem A one-row data frame or tibble containing at least:
 #'   \itemize{
-#'     \item \code{premium}: net premium per payment.
-#'     \item \code{apv_premiums}: APV of the premium annuity.
+#'     \item \code{premium} or \code{P}: net premium per payment.
+#'     \item \code{apv_premiums} or \code{a_premiums}: APV of the premium
+#'     annuity.
 #'   }
 #' @param alpha Numeric scalar greater than or equal to 0. Initial acquisition
 #'   expense as a multiple of one gross premium payment. The initial expense is
@@ -21,11 +22,19 @@
 #'   as a fraction of each gross premium payment.
 #' @param gamma Numeric scalar greater than or equal to 0. Fixed maintenance
 #'   expense per premium payment period, in monetary units.
-#' @param output Character string. Use \code{"value"} to return a numeric gross
-#'   premium, or \code{"table"} to return a one-row tibble with the expense
+#' @param tidy Logical scalar. If \code{FALSE}, returns the gross premium as a
+#'   numeric value. If \code{TRUE}, returns a one-row tibble with the expense
 #'   breakdown.
+#' @param ... Transitional compatibility for older calls using
+#'   \code{output = "value"} or \code{output = "table"}. This argument will be
+#'   removed in a future version.
 #'
 #' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}. The gross premium is denoted by \code{G}, the net
+#' premium by \code{P_net}, and the APV of the premium annuity by
+#' \code{a_premiums}.
+#'
 #' The extended equivalence principle equates the APV of gross premiums with
 #' the APV of benefits plus expenses:
 #' \deqn{
@@ -44,14 +53,14 @@
 #' }
 #'
 #' In this function, \eqn{\ddot{a}} is supplied through the
-#' \code{apv_premiums} column of \code{prem}.
+#' \code{apv_premiums} or \code{a_premiums} column of \code{prem}.
 #'
 #' @return
-#' If \code{output = "value"}, a numeric gross premium per payment.
+#' If \code{tidy = FALSE}, a numeric gross premium per payment.
 #'
-#' If \code{output = "table"}, a one-row tibble with columns
-#' \code{gross_premium}, \code{net_premium}, \code{alpha}, \code{beta},
-#' \code{gamma}, \code{loading_pct}, and \code{apv_premiums}.
+#' If \code{tidy = TRUE}, a one-row tibble with columns \code{G},
+#' \code{P_net}, \code{alpha}, \code{beta}, \code{gamma}, \code{loading_pct},
+#' and \code{a_premiums}.
 #'
 #' @seealso \code{\link{premium_x}} for single-life net premiums,
 #'   \code{\link{premium_xy}} for two-life net premiums,
@@ -60,19 +69,10 @@
 #' @family life-contingencies
 #'
 #' @examples
-#' lt <- data.frame(
-#'   x  = 60:66,
-#'   lx = c(100000, 99000, 97500, 95500, 93000, 90000, 86000)
-#' )
-#'
-#' # Full workflow: net premium -> gross premium
-#' net <- premium_x(
-#'   mortality_table = lt,
-#'   age = 60,
-#'   rate = 0.05,
-#'   insurance_type = "whole",
-#'   benefit = 100000,
-#'   output = "table"
+#' # Compatible one-row premium table
+#' net <- tibble::tibble(
+#'   premium = 1200,
+#'   apv_premiums = 12.5
 #' )
 #'
 #' premium_gross(net, alpha = 0.5, beta = 0.05, gamma = 50)
@@ -87,11 +87,16 @@
 #'   alpha = 0.5,
 #'   beta = 0.05,
 #'   gamma = 50,
-#'   output = "table"
+#'   tidy = TRUE
 #' )
 #'
-#' # No expenses: gross = net
-#' premium_gross(net)
+#' # Also accepts compact actuarial column names
+#' net2 <- tibble::tibble(
+#'   P = 1200,
+#'   a_premiums = 12.5
+#' )
+#'
+#' premium_gross(net2, alpha = 0.5, beta = 0.05, gamma = 50)
 #'
 #' @export
 premium_gross <- function(
@@ -99,29 +104,75 @@ premium_gross <- function(
     alpha = 0,
     beta = 0,
     gamma = 0,
-    output = c("value", "table")
+    tidy = FALSE,
+    ...
 ) {
-  output <- match.arg(output)
+  dots <- list(...)
+
+  if (length(dots) > 0L) {
+    allowed_old <- "output"
+    bad_dots <- setdiff(names(dots), allowed_old)
+
+    if (length(bad_dots) > 0L) {
+      stop(
+        "Unused argument(s): ",
+        paste(sprintf("`%s`", bad_dots), collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+
+    if (!is.null(dots$output)) {
+      if (!identical(tidy, FALSE)) {
+        stop("Provide only one of `tidy` or deprecated `output`.", call. = FALSE)
+      }
+
+      output <- match.arg(dots$output, c("value", "table"))
+      tidy <- identical(output, "table")
+    }
+  }
+
+  if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
+    stop("`tidy` must be a logical scalar.", call. = FALSE)
+  }
 
   # --- Input checks ---
   if (!inherits(prem, "data.frame") || nrow(prem) != 1L) {
     stop(
-      "'prem' must be a one-row tibble from ",
-      "premium_x(..., output = \"table\") or another compatible premium table.",
+      "`prem` must be a one-row tibble from ",
+      "premium_x(..., tidy = TRUE), premium_xy(..., tidy = TRUE), ",
+      "or another compatible premium table.",
       call. = FALSE
     )
   }
 
-  if (!("premium" %in% names(prem))) {
-    stop("Column `premium` was not found in `prem`.", call. = FALSE)
+  # Accept both old and compact column names while the package is being migrated.
+  premium_col <- if ("P" %in% names(prem)) {
+    "P"
+  } else if ("premium" %in% names(prem)) {
+    "premium"
+  } else {
+    NA_character_
   }
 
-  if (!("apv_premiums" %in% names(prem))) {
-    stop("Column `apv_premiums` was not found in `prem`.", call. = FALSE)
+  apv_col <- if ("a_premiums" %in% names(prem)) {
+    "a_premiums"
+  } else if ("apv_premiums" %in% names(prem)) {
+    "apv_premiums"
+  } else {
+    NA_character_
   }
 
-  P_net <- prem$premium[[1]]
-  apv_premiums <- prem$apv_premiums[[1]]
+  if (is.na(premium_col)) {
+    stop("Column `P` or `premium` was not found in `prem`.", call. = FALSE)
+  }
+
+  if (is.na(apv_col)) {
+    stop("Column `a_premiums` or `apv_premiums` was not found in `prem`.", call. = FALSE)
+  }
+
+  P_net <- prem[[premium_col]][[1]]
+  a_premiums <- prem[[apv_col]][[1]]
 
   if (!is.numeric(P_net) ||
       length(P_net) != 1L ||
@@ -131,11 +182,11 @@ premium_gross <- function(
     stop("The net premium must be a single positive finite number.", call. = FALSE)
   }
 
-  if (!is.numeric(apv_premiums) ||
-      length(apv_premiums) != 1L ||
-      is.na(apv_premiums) ||
-      !is.finite(apv_premiums) ||
-      apv_premiums <= 0) {
+  if (!is.numeric(a_premiums) ||
+      length(a_premiums) != 1L ||
+      is.na(a_premiums) ||
+      !is.finite(a_premiums) ||
+      a_premiums <= 0) {
     stop(
       "The APV of premiums must be a single positive finite number.",
       call. = FALSE
@@ -167,8 +218,8 @@ premium_gross <- function(
     stop("`gamma` must be a single finite nonnegative number.", call. = FALSE)
   }
 
-  # G = (P_net + gamma) / ((1 - beta) - alpha / apv_premiums)
-  denominator <- (1 - beta) - alpha / apv_premiums
+  # G = (P_net + gamma) / ((1 - beta) - alpha / a_premiums)
+  denominator <- (1 - beta) - alpha / a_premiums
 
   if (!is.finite(denominator) || denominator <= 0) {
     stop(
@@ -178,19 +229,19 @@ premium_gross <- function(
     )
   }
 
-  gross_premium <- (P_net + gamma) / denominator
+  G <- (P_net + gamma) / denominator
 
-  if (output == "value") {
-    return(gross_premium)
+  if (!tidy) {
+    return(G)
   }
 
   tibble::tibble(
-    gross_premium = gross_premium,
-    net_premium = P_net,
+    G = G,
+    P_net = P_net,
     alpha = alpha,
     beta = beta,
     gamma = gamma,
-    loading_pct = (gross_premium - P_net) / P_net * 100,
-    apv_premiums = apv_premiums
+    loading_pct = (G - P_net) / P_net * 100,
+    a_premiums = a_premiums
   )
 }

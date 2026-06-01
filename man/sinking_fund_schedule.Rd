@@ -7,8 +7,13 @@
 sinking_fund_schedule(
   principal,
   n,
-  i_loan,
-  i_fund,
+  i,
+  j,
+  k = 1L,
+  i_type = "effective",
+  j_type = "effective",
+  m = 1L,
+  j_m = 1L,
   deposit = NULL,
   tol = 1e-08
 )
@@ -16,12 +21,28 @@ sinking_fund_schedule(
 \arguments{
 \item{principal}{Numeric scalar. Initial loan amount.}
 
-\item{n}{Positive integer. Number of periods.}
+\item{n}{Positive integer. Number of schedule periods.}
 
-\item{i_loan}{Numeric scalar. Effective interest rate per period on the loan.}
+\item{i}{Numeric scalar. Annual interest-rate input for the loan.}
 
-\item{i_fund}{Numeric scalar. Effective interest rate per period on the
-sinking fund.}
+\item{j}{Numeric scalar. Annual accumulation-rate input for the sinking fund.}
+
+\item{k}{Positive integer. Number of schedule periods per year.}
+
+\item{i_type}{Character string indicating the loan interest-rate type.
+Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{j_type}{Character string indicating the sinking-fund accumulation-rate
+type. Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Conversion frequency for nominal loan rates.
+Ignored for \code{i_type = "effective"} and \code{i_type = "force"}.}
+
+\item{j_m}{Positive integer. Conversion frequency for nominal sinking-fund
+rates. Ignored for \code{j_type = "effective"} and
+\code{j_type = "force"}.}
 
 \item{deposit}{Optional numeric scalar. Level sinking-fund deposit per
 period. If \code{NULL}, it is computed so that the fund accumulates to
@@ -43,11 +64,16 @@ A tibble with one row per period and columns:
 \item{fund_balance_end}{Fund balance after redemption.}
 \item{loan_balance_end}{Outstanding loan balance after redemption.}
 \item{total_cashflow_borrower}{Borrower's external cash outflow during the period.}
+\item{i_effective_loan_annual}{Equivalent annual effective loan rate.}
+\item{i_effective_fund_annual}{Equivalent annual effective fund rate.}
+\item{i_loan_period}{Effective loan rate per schedule period.}
+\item{i_fund_period}{Effective fund rate per schedule period.}
+\item{k}{Schedule frequency.}
 }
 }
 \description{
 Builds a sinking fund schedule under a fixed loan rate and a fixed
-accumulation rate for the sinking fund.
+accumulation rate for the sinking fund, using compact actuarial notation.
 }
 \details{
 The borrower pays:
@@ -58,27 +84,45 @@ The borrower pays:
 
 At maturity, the sinking fund is used to redeem the principal.
 
-If \code{deposit} is \code{NULL} and \code{i_fund} is approximately zero,
-the deposit is computed as \code{principal / n}.
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} is the loan interest rate, \code{j} is the
+sinking-fund accumulation rate, \code{k} is the number of schedule periods
+per year, \code{m} is the conversion frequency for the loan rate, and
+\code{j_m} is the conversion frequency for the sinking-fund rate.
+
+The supplied annual rate specifications are converted to effective annual
+rates and then to effective rates per schedule period:
+\deqn{i_p = (1+i_e)^{1/k} - 1,\qquad
+      j_p = (1+j_e)^{1/k} - 1.}
+
+If \code{deposit} is \code{NULL} and the sinking-fund periodic rate
+\code{j_p} is approximately zero, the deposit is computed as
+\code{principal / n}.
 
 Otherwise, the standard sinking-fund formula is used:
-\deqn{\text{deposit} = \frac{\text{principal}}{s_n}}{deposit = principal / s_n}
+\deqn{deposit = \frac{principal}{s_{\overline{n}|j_p}}}
 where
-\deqn{s_n = \frac{(1+i_{\text{fund}})^n - 1}{i_{\text{fund}}}}{s_n = ((1+i_fund)^n - 1) / i_fund}
+\deqn{s_{\overline{n}|j_p} =
+\frac{(1+j_p)^n - 1}{j_p}.}
 }
 \examples{
 sinking_fund_schedule(
   principal = 100000,
   n = 12,
-  i_loan = 0.01,
-  i_fund = 0.008
+  i = 0.12,
+  j = 0.096,
+  i_type = "nominal_interest",
+  j_type = "nominal_interest",
+  m = 12,
+  j_m = 12,
+  k = 12
 )
 
 sinking_fund_schedule(
   principal = 50000,
   n = 10,
-  i_loan = 0.02,
-  i_fund = 0,
+  i = 0.02,
+  j = 0,
   deposit = NULL
 )
 

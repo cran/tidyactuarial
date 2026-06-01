@@ -2,185 +2,53 @@
 % Please edit documentation in R/mc_multilife_status.R
 \name{mc_multilife_status}
 \alias{mc_multilife_status}
-\title{Construct multiple-life status lifetimes from simulated lives}
+\title{Compute multiple-life simulated status variables}
 \usage{
 mc_multilife_status(
   data,
-  status = c("joint_life", "last_survivor", "first_death", "last_death", "kth_death",
-    "at_least_k_alive"),
-  k = NULL,
-  sim_col = "sim_id",
-  life_col = "life_id",
-  k_col = "Kx",
-  tx_col = "Tx",
-  k_status_col = "K_status",
-  t_status_col = "T_status",
-  keep_lifetimes = FALSE
+  status = c("joint", "last_survivor"),
+  col_sim = "sim_id",
+  col_life = "life_id",
+  col_K = "Kx",
+  col_T = "Tx"
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing simulated multiple-life
-lifetimes, typically returned by \code{\link[=simulate_lifetimes]{simulate_lifetimes()}}.}
+\item{data}{A data frame or tibble produced by \code{simulate_lifetimes()}.}
 
-\item{status}{Character string specifying the multiple-life status.
-Available options are \code{"joint_life"}, \code{"last_survivor"},
-\code{"first_death"}, \code{"last_death"}, \code{"kth_death"}, and
-\code{"at_least_k_alive"}.}
+\item{status}{Multiple-life status. One of \code{"joint"}, \code{"joint_life"},
+\code{"last"}, \code{"last_survivor"}, or \code{"last_survivor_life"}.}
 
-\item{k}{Optional positive integer. Required when \code{status = "kth_death"} or
-\code{status = "at_least_k_alive"}.}
+\item{col_sim}{Name of the simulation identifier column.}
 
-\item{sim_col}{Character string. Name of the simulation identifier column.
-Default is \code{"sim_id"}.}
+\item{col_life}{Name of the life identifier column.}
 
-\item{life_col}{Character string. Name of the life identifier column.
-Default is \code{"life_id"}.}
+\item{col_K}{Name of the curtate future lifetime column.}
 
-\item{k_col}{Character string. Name of the column containing simulated
-curtate future lifetimes. Default is \code{"Kx"}.}
-
-\item{tx_col}{Character string. Name of the column containing simulated
-complete future lifetimes. Default is \code{"Tx"}.}
-
-\item{k_status_col}{Character string. Name of the output column containing
-the curtate lifetime of the multiple-life status. Default is \code{"K_status"}.}
-
-\item{t_status_col}{Character string. Name of the output column containing
-the complete lifetime of the multiple-life status. Default is \code{"T_status"}.}
-
-\item{keep_lifetimes}{Logical. If \code{TRUE}, the output includes a list-column
-named \code{lifetimes} containing the simulated individual lifetimes used in
-each simulation. Default is \code{FALSE}.}
+\item{col_T}{Name of the complete future lifetime column.}
 }
 \value{
-A tibble with one row per simulation and the following columns:
-\itemize{
-\item \code{sim_id}: simulation identifier, or the column named by \code{sim_col}.
-\item \code{status}: multiple-life status.
-\item \code{n_lives}: number of lives in the simulation.
-\item \code{k}: value of \code{k}, when applicable.
-\item \code{status_rank}: order statistic rank used to define the status.
-\item \code{K_status}: simulated curtate lifetime of the status, or another name
-supplied through \code{k_status_col}.
-\item \code{T_status}: simulated complete lifetime of the status, or another name
-supplied through \code{t_status_col}. If complete lifetimes are unavailable,
-this column contains \code{NA}.
-\item \code{event_life_id}: identifier of the life or lives associated with the
-status event time.
-\item \code{n_event_lives}: number of lives tied at the status event time.
-}
-
-If \code{keep_lifetimes = TRUE}, a list-column named \code{lifetimes} is also returned.
+A tibble with one row per simulation and the columns \code{K_status}
+and \code{T_status}.
 }
 \description{
-Constructs simulated multiple-life status lifetimes from simulated individual
-lifetimes in long format.
-}
-\details{
-This function is designed to be used after \code{\link[=simulate_lifetimes]{simulate_lifetimes()}}. It takes
-one row per simulation and per life, and returns one row per simulation with
-simulated curtate and complete lifetimes for the selected multiple-life
-status.
-
-The key output columns are \code{K_status} and \code{T_status}. They are intentionally
-named so they can be used directly in downstream functions such as
-\code{\link[=mc_insurance]{mc_insurance()}} and \code{\link[=mc_annuity]{mc_annuity()}} through their \code{k_col} and \code{tx_col}
-arguments.
-
-Suppose that, for a given simulation, the complete future lifetimes of
-\eqn{r} lives are
-
-\deqn{
-  T_1, T_2, \ldots, T_r.
-}
-
-Let
-
-\deqn{
-  T_{(1)} \le T_{(2)} \le \cdots \le T_{(r)}
-}
-
-denote the ordered lifetimes. The selected multiple-life status is converted
-into an order statistic:
-\itemize{
-\item \code{"joint_life"}: fails at the first death, \eqn{T_{(1)}}.
-\item \code{"first_death"}: time until the first death, \eqn{T_{(1)}}.
-\item \code{"last_survivor"}: fails at the last death, \eqn{T_{(r)}}.
-\item \code{"last_death"}: time until the last death, \eqn{T_{(r)}}.
-\item \code{"kth_death"}: time until the \code{k}-th death, \eqn{T_{(k)}}.
-\item \code{"at_least_k_alive"}: status remains active while at least \code{k} lives are
-alive, and fails at the \eqn{(r-k+1)}-th death.
-}
-
-The same order-statistic logic is applied to the curtate future lifetimes
-\eqn{K_1, K_2, \ldots, K_r}, producing \code{K_status}.
-
-This construction allows multiple-life quantities to be evaluated using the
-single-life Monte Carlo functions. For example, a joint-life annuity can be
-computed by passing \code{k_col = "K_status"} to \code{\link[=mc_annuity]{mc_annuity()}}, and a first-death
-insurance can be computed by passing \code{k_col = "K_status"} and
-\code{tx_col = "T_status"} to \code{\link[=mc_insurance]{mc_insurance()}}.
-
-The function assumes the individual lifetimes have already been simulated.
-If the input comes from \code{\link[=simulate_lifetimes]{simulate_lifetimes()}}, the default model is
-independence across lives.
+Combines simulated future lifetimes from multiple lives into a single
+multiple-life status. For a joint-life status, the status fails at the first
+death. For a last-survivor status, the status fails at the last death.
 }
 \examples{
-life_table <- tibble::tibble(
-  age = 60:90,
-  qx = seq(0.01, 1, length.out = 31)
+lt <- tibble::tibble(
+  x = 40:100,
+  qx = seq(0.002, 1, length.out = 61)
 )
 
-# Simulated lifetimes for two independent lives
-sim_two <- life_table |>
+lt |>
   simulate_lifetimes(
-    ages = c(60, 58),
+    x = c(60, 58),
     n_sim = 25,
+    frac = "udd",
     seed = 123
-  )
+  ) |>
+  mc_multilife_status(status = "joint")
 
-# Joint-life status: time until the first death
-mc_multilife_status(
-  sim_two,
-  status = "joint_life"
-)
-
-# Last-survivor status: time until the last death
-mc_multilife_status(
-  sim_two,
-  status = "last_survivor"
-)
-
-# Simulated lifetimes for three independent lives
-sim_three <- life_table |>
-  simulate_lifetimes(
-    ages = c(60, 58, 55),
-    life_id = c("x", "y", "z"),
-    n_sim = 25,
-    seed = 123
-  )
-
-# Time until the second death among three lives
-mc_multilife_status(
-  sim_three,
-  status = "kth_death",
-  k = 2
-)
-
-# Status active while at least two lives are alive
-mc_multilife_status(
-  sim_three,
-  status = "at_least_k_alive",
-  k = 2
-)
-
-}
-\references{
-Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
-and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
-Society of Actuaries.
-}
-\seealso{
-\code{\link[=simulate_lifetimes]{simulate_lifetimes()}}, \code{\link[=simulate_lifetime]{simulate_lifetime()}}, \code{\link[=mc_insurance]{mc_insurance()}},
-\code{\link[=mc_annuity]{mc_annuity()}}, \code{\link[=summary_mc]{summary_mc()}}
 }

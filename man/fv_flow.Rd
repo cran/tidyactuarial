@@ -5,42 +5,42 @@
 \title{Future value of a general cash flow}
 \usage{
 fv_flow(
-  payment,
-  rate,
-  type = "effective",
+  cf,
+  i,
+  i_type = "effective",
   m = 1L,
-  time = NULL,
+  t = NULL,
   date = NULL,
   day_count = c("act/365", "act/360"),
   tol = 1e-10
 )
 }
 \arguments{
-\item{payment}{Numeric vector of cash flows.}
+\item{cf}{Numeric vector of cash flows.}
 
-\item{rate}{Numeric scalar or numeric vector of rate values.}
+\item{i}{Numeric scalar or numeric vector of interest-rate values.}
 
-\item{type}{Character vector indicating the rate type:
+\item{i_type}{Character vector indicating the interest-rate type:
 \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, or \code{"force"}.
-May have length 1 or the same length as \code{payment}.}
+May have length 1 or the same length as \code{cf}.}
 
-\item{m}{Positive integer vector giving the compounding frequency for
-nominal rates. May have length 1 or the same length as \code{payment}.}
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. May have length 1 or the same length as \code{cf}.}
 
-\item{time}{Optional numeric vector of payment times in years.}
+\item{t}{Optional numeric vector of cash-flow times in years.}
 
-\item{date}{Optional vector of payment dates. If supplied, the earliest
+\item{date}{Optional vector of cash-flow dates. If supplied, the earliest
 date is treated as time 0.}
 
-\item{day_count}{Day-count convention used to convert dates to year fractions.
-One of \code{"act/365"} or \code{"act/360"}.}
+\item{day_count}{Day-count convention used to convert dates to year
+fractions. One of \code{"act/365"} or \code{"act/360"}.}
 
 \item{tol}{Numeric tolerance used in internal checks.}
 }
 \value{
 Numeric scalar: the future value of the cash flow accumulated to the
-latest payment time.
+latest cash-flow time.
 }
 \description{
 Computes the future value of a cash-flow vector under either:
@@ -50,18 +50,18 @@ Computes the future value of a cash-flow vector under either:
 }
 }
 \details{
-The cash flow is supplied explicitly through \code{payment}. Its timing is
-supplied either through \code{time} (in years) or \code{date} (calendar
-dates). If \code{date} is supplied, the earliest date is taken as time 0.
+The cash flow is supplied explicitly through \code{cf}. Its timing is
+supplied either through \code{t} (in years) or \code{date} (calendar dates).
+If \code{date} is supplied, the earliest date is taken as time 0.
 
-The future value is accumulated to the latest payment time (or latest date).
+The future value is accumulated to the latest payment time or latest date.
 
 Interest-rate input:
 \itemize{
-\item If \code{rate} has length 1, the same rate is used for all payments.
-\item If \code{rate} has the same length as \code{payment}, each rate is
+\item If \code{i} has length 1, the same rate is used for all cash flows.
+\item If \code{i} has the same length as \code{cf}, each rate is
 interpreted as the annual effective spot rate associated with the
-corresponding payment time.
+corresponding cash-flow time.
 }
 
 Rate types may be supplied in FM-style notation:
@@ -73,52 +73,57 @@ Rate types may be supplied in FM-style notation:
 }
 
 Internally, all supplied rates are converted to annual effective rates using
-\code{\link{standardize_interest}}. When \code{rate} is a vector, the
+\code{\link{standardize_interest}}. When \code{i} is a vector, the
 accumulation uses the implied discount-factor ratio under the spot-rate
 interpretation.
 
-Let \eqn{T} be the latest payment time (the accumulation horizon). For
-each payment \eqn{C_k} at time \eqn{t_k} with annual effective spot rate
-\eqn{i_k}, the future value contribution is
-\deqn{FV_k = C_k \cdot \frac{(1+i_T)^T}{(1+i_k)^{t_k}}}{FV_k = C_k * (1+i_T)^T / (1+i_k)^t_k}
-and the total future value is \eqn{FV = \sum_k FV_k}{FV = sum(FV_k)}.
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
+\code{i} denotes the interest rate, \code{i_type} denotes the interest-rate
+type, and \code{m} denotes the conversion frequency for nominal rates.
 
-When a single constant rate is supplied, \eqn{i_k = i_T = i} for all
-\eqn{k} and the formula simplifies to
-\eqn{FV = \sum_k C_k (1+i)^{T - t_k}}{FV = sum(C_k * (1+i)^(T - t_k))}.
+Let \eqn{T} be the latest cash-flow time, the accumulation horizon. For each
+cash flow \eqn{C_k} at time \eqn{t_k} with annual effective spot rate
+\eqn{i_k}, the future value contribution is
+\deqn{FV_k = C_k \cdot \frac{(1+i_T)^T}{(1+i_k)^{t_k}}.}
+
+The total future value is \eqn{FV = \sum_k FV_k}. When a single constant rate
+is supplied, \eqn{i_k = i_T = i} for all \eqn{k}, and the formula simplifies
+to
+\deqn{FV = \sum_k C_k (1+i)^{T-t_k}.}
 }
 \examples{
 # Constant annual effective rate
 fv_flow(
-  payment = c(100, 150, 200),
-  rate = 0.08,
-  type = "effective",
-  time = c(0, 1, 2)
+  cf = c(100, 150, 200),
+  i = 0.08,
+  i_type = "effective",
+  t = c(0, 1, 2)
 )
 
-# Spot rates, one per payment
+# Spot rates, one per cash flow
 fv_flow(
-  payment = c(100, 150, 200),
-  rate = c(0.05, 0.055, 0.06),
-  type = "effective",
-  time = c(1, 2, 3)
+  cf = c(100, 150, 200),
+  i = c(0.05, 0.055, 0.06),
+  i_type = "effective",
+  t = c(1, 2, 3)
 )
 
 # Using dates; earliest date is taken as t = 0
 fv_flow(
-  payment = c(100, 150, 200),
-  rate = c(0.05, 0.055, 0.06),
-  type = "effective",
+  cf = c(100, 150, 200),
+  i = c(0.05, 0.055, 0.06),
+  i_type = "effective",
   date = as.Date(c("2026-01-10", "2027-01-10", "2028-01-10"))
 )
 
-# Nominal rates by payment
+# Nominal rates by cash flow
 fv_flow(
-  payment = c(100, 100, 100),
-  rate = c(0.12, 0.12, 0.12),
-  type = "nominal_interest",
+  cf = c(100, 100, 100),
+  i = c(0.12, 0.12, 0.12),
+  i_type = "nominal_interest",
   m = c(12, 12, 12),
-  time = c(1, 2, 3)
+  t = c(1, 2, 3)
 )
 
 }

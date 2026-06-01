@@ -4,80 +4,125 @@
 \alias{immunize_duration}
 \title{Duration-based immunization with multiple assets}
 \usage{
-immunize_duration(liabilities, t_liabilities, pv_assets, duration_assets, i)
+immunize_duration(L, t, P, D, i, i_type = "effective", m = 1L)
 }
 \arguments{
-\item{liabilities}{Numeric vector with liability payments.}
+\item{L}{Numeric vector with liability payments.}
 
-\item{t_liabilities}{Numeric vector of the same length as \code{liabilities}
-with the times (in years or periods) at which each liability payment occurs.}
+\item{t}{Numeric vector of the same length as \code{L}, giving the times at
+which each liability payment occurs.}
 
-\item{pv_assets}{Numeric vector with present values (prices) of each asset
-evaluated at the same yield rate \code{i}.}
+\item{P}{Numeric vector with present values or prices of the immunizing
+assets, evaluated on the same yield basis.}
 
-\item{duration_assets}{Numeric vector with the Macaulay duration of each
-asset, expressed in the same time units as \code{t_liabilities}.}
+\item{D}{Numeric vector with the Macaulay duration of each asset, expressed
+in the same time units as \code{t}.}
 
-\item{i}{Yield rate used to discount the liabilities (effective per period).}
+\item{i}{Numeric scalar. Interest-rate input used to discount the
+liabilities.}
+
+\item{i_type}{Character string indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
+for \code{i_type = "effective"} and \code{i_type = "force"}.}
 }
 \value{
 A tibble with:
 \describe{
-\item{weight_asset}{Numeric vector of asset weights (amounts of each asset).}
-\item{PV_liabilities}{Present value of the liabilities.}
-\item{Duration_liabilities}{Macaulay duration of the liabilities.}
-\item{PV_assets}{Present value of the immunized asset portfolio.}
-\item{Duration_assets}{Macaulay duration of the asset portfolio.}
+\item{w}{Numeric vector of asset weights or units.}
+\item{PV_L}{Present value of the liabilities.}
+\item{D_L}{Macaulay duration of the liabilities.}
+\item{PV_A}{Present value of the immunized asset portfolio.}
+\item{D_A}{Macaulay duration of the asset portfolio.}
 \item{n_assets}{Number of assets used.}
 }
 }
 \description{
-Computes asset weights that duration-immunize a stream of liabilities
-using two or more assets. The method enforces:
-\enumerate{
-\item Present value of assets = PV of liabilities;
-\item Macaulay duration of assets = Macaulay duration of liabilities.
-}
+Computes asset weights that duration-immunize a stream of liabilities using
+two or more assets, using compact actuarial notation.
 }
 \details{
+The method enforces:
+\enumerate{
+\item present value of assets = present value of liabilities;
+\item Macaulay duration of assets = Macaulay duration of liabilities.
+}
+
 For exactly two assets, a closed-form solution is used. For three or more
-assets, a minimum-norm solution is computed via linear algebra.
+assets, a minimum-norm solution is computed by linear algebra.
 
-Let \eqn{PV_L}{PV_L} and \eqn{D_L}{D_L} be the present value and Macaulay
-duration of the liability stream at yield \eqn{i}. Let \eqn{PV_j}{PV_j} and
-\eqn{D_j}{D_j} be the present value and duration of asset \eqn{j}. The
-weights \eqn{w_j}{w_j} are chosen so that:
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{L} denotes liabilities, \code{t} denotes payment
+times, \code{P} denotes asset prices or present values, \code{D} denotes
+asset durations, \code{i} denotes the interest rate, \code{i_type} denotes
+the interest-rate type, and \code{m} denotes the conversion frequency for
+nominal rates.
 
-\deqn{\sum_j w_j PV_j = PV_L}{sum(w_j * PV_j) = PV_L}
+Let \eqn{PV_L} and \eqn{D_L} be the present value and Macaulay duration of
+the liability stream at yield \eqn{i}. Let \eqn{P_j} and \eqn{D_j} be the
+price and duration of asset \eqn{j}. The weights \eqn{w_j} are chosen so
+that:
+
+\deqn{\sum_j w_j P_j = PV_L}
+
 and
-\deqn{\frac{\sum_j w_j PV_j D_j}{\sum_j w_j PV_j} = D_L}{sum(w_j * PV_j * D_j) / PV_L = D_L}
+
+\deqn{
+  \frac{\sum_j w_j P_j D_j}{\sum_j w_j P_j} = D_L.
+}
 
 For two assets, the closed-form solution is:
-\deqn{w_1 = \frac{PV_L (D_L - D_2)}{PV_1 (D_1 - D_2)}, \quad w_2 = \frac{PV_L - w_1 PV_1}{PV_2}}{w1 = PV_L*(D_L - D2) / (PV1*(D1 - D2)), w2 = (PV_L - w1*PV1) / PV2}
 
-For \eqn{k \geq 3}{k >= 3} assets, the minimum-norm solution of the linear
-system \eqn{A w = b} is computed, where \eqn{A} is a \eqn{2 \times k}{2 x k}
-matrix with rows \eqn{(PV_1, \ldots, PV_k)}{(PV1, ..., PVk)} and
-\eqn{(PV_1 D_1, \ldots, PV_k D_k)}{(PV1*D1, ..., PVk*Dk)}, and
-\eqn{b = (PV_L,\; PV_L D_L)^T}{b = (PV_L, PV_L*D_L)}.
+\deqn{
+w_1 =
+\frac{PV_L(D_L - D_2)}{P_1(D_1 - D_2)}, \qquad
+w_2 = \frac{PV_L - w_1 P_1}{P_2}.
+}
+
+For three or more assets, the minimum-norm solution of the linear system
+\eqn{Aw = b} is computed, where \eqn{A} is a \eqn{2 \times r} matrix with
+rows
+
+\deqn{(P_1,\ldots,P_r)}
+
+and
+
+\deqn{(P_1D_1,\ldots,P_rD_r),}
+
+and
+
+\deqn{b = (PV_L, PV_LD_L)^T.}
 }
 \examples{
 # Two-asset immunization
 immunize_duration(
-  liabilities = c(5000, 8000),
-  t_liabilities = c(3, 7),
-  pv_assets = c(100, 200),
-  duration_assets = c(3, 7),
+  L = c(5000, 8000),
+  t = c(3, 7),
+  P = c(100, 200),
+  D = c(3, 7),
   i = 0.05
 )
 
-# Three-asset immunization (minimum-norm)
+# Three-asset immunization: minimum-norm solution
 immunize_duration(
-  liabilities = c(5000, 8000),
-  t_liabilities = c(3, 7),
-  pv_assets = c(100, 150, 200),
-  duration_assets = c(2, 5, 8),
+  L = c(5000, 8000),
+  t = c(3, 7),
+  P = c(100, 150, 200),
+  D = c(2, 5, 8),
   i = 0.05
+)
+
+# Nominal annual interest rate convertible monthly
+immunize_duration(
+  L = c(5000, 8000),
+  t = c(3, 7),
+  P = c(100, 200),
+  D = c(3, 7),
+  i = 0.06,
+  i_type = "nominal_interest",
+  m = 12
 )
 
 }

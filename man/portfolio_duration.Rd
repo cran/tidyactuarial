@@ -7,56 +7,62 @@
 portfolio_duration(
   .data = NULL,
   portfolio_id = NULL,
-  market_value = NULL,
-  duration = NULL,
+  P = NULL,
+  D = NULL,
   col_portfolio = "portfolio_id",
-  col_market_value = "market_value",
-  col_duration = "duration",
-  .out = "portfolio_duration",
-  .out_value = "portfolio_market_value",
+  col_P = "P",
+  col_D = "D",
+  .out = "D_P",
+  .out_value = "P_total",
   .out_n = "n_positions",
-  .na = c("propagate", "error", "drop")
+  .na = c("propagate", "error", "drop"),
+  ...
 )
 }
 \arguments{
-\item{.data}{A data.frame or tibble. If \code{NULL}, \code{market_value} and
-\code{duration} must be supplied as vectors.}
+\item{.data}{A data.frame or tibble. If \code{NULL}, \code{P} and
+\code{D} must be supplied as vectors.}
 
 \item{portfolio_id}{Optional vector of portfolio identifiers when
 \code{.data = NULL}. If omitted, all positions are treated as belonging to
 a single portfolio.}
 
-\item{market_value}{Numeric vector of market values when \code{.data = NULL}.}
-
-\item{duration}{Numeric vector of individual durations when
+\item{P}{Numeric vector of present values, prices, or market values when
 \code{.data = NULL}.}
+
+\item{D}{Numeric vector of individual durations when \code{.data = NULL}.}
 
 \item{col_portfolio}{Name of the portfolio identifier column. If \code{NULL},
 all rows are treated as one portfolio.}
 
-\item{col_market_value}{Name of the numeric column containing market values.}
+\item{col_P}{Name of the numeric column containing present values, prices, or
+market values.}
 
-\item{col_duration}{Name of the numeric column containing individual
-durations.}
+\item{col_D}{Name of the numeric column containing individual durations.}
 
 \item{.out}{Name of the output column containing portfolio duration.}
 
-\item{.out_value}{Name of the output column containing total portfolio
-market value.}
+\item{.out_value}{Name of the output column containing total portfolio value.}
 
 \item{.out_n}{Name of the output column containing the number of positions
 used in the calculation.}
 
 \item{.na}{NA handling policy: \code{"propagate"}, \code{"error"}, or
 \code{"drop"}.}
+
+\item{...}{Transitional compatibility for older calls using
+\code{market_value}, \code{duration}, \code{col_market_value}, and
+\code{col_duration}. These names are mapped to \code{P}, \code{D},
+\code{col_P}, and \code{col_D}.}
 }
 \value{
 A tibble with one row per portfolio and columns for portfolio
-duration, total market value, and number of positions used.
+duration, total portfolio value, and number of positions used.
 }
 \description{
-Computes portfolio duration from individual position durations using
-market values as weights.
+Computes portfolio duration from individual position durations using present
+values, prices, or market values as weights, using compact actuarial
+notation.
 }
 \details{
 This is a summarise-style tibble-first function. Each input row represents
@@ -67,29 +73,38 @@ Instead, it assumes that the input duration column already contains valid
 duration measures on a common basis within each portfolio.
 
 The portfolio duration is computed as:
-\deqn{D_P = \frac{\sum_{k=1}^n P_k D_k}{\sum_{k=1}^n P_k}}{D_P = sum(P_k * D_k) / sum(P_k)}
-where \eqn{P_k}{P_k} is the market value of position \eqn{k} and
-\eqn{D_k}{D_k} is its duration.
+\deqn{D_P = \frac{\sum_{j=1}^r P_j D_j}{\sum_{j=1}^r P_j}}
+where \eqn{P_j} is the present value, price, or market value of position
+\eqn{j}, and \eqn{D_j} is its duration.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{P} denotes price, present value, or market value,
+and \code{D} denotes duration.
+
+The function is deliberately agnostic about the duration convention, but all
+individual durations must be expressed on the same basis within each
+portfolio. For example, do not mix Macaulay durations in years with
+durations measured in coupon periods.
 }
 \examples{
 # Simple example: one portfolio
 portfolio_duration(
-  market_value = c(1000, 2000, 500),
-  duration = c(7, 5, 10)
+  P = c(1000, 2000, 500),
+  D = c(7, 5, 10)
 )
 
 # Medium example: two portfolios
 positions <- tibble::tibble(
   portfolio_id = c("A", "A", "B", "B"),
-  market_value = c(1000, 2000, 1000 / 1.08^2, 1000 / 1.08^4),
-  duration = c(7, 5, 2, 4)
+  P = c(1000, 2000, 1000 / 1.08^2, 1000 / 1.08^4),
+  D = c(7, 5, 2, 4)
 )
 
 portfolio_duration(
   positions,
   col_portfolio = "portfolio_id",
-  col_market_value = "market_value",
-  col_duration = "duration"
+  col_P = "P",
+  col_D = "D"
 )
 
 }

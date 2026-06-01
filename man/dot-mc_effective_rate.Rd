@@ -5,54 +5,44 @@
 \title{Internal helper: convert interest rate to annual effective rate}
 \usage{
 .mc_effective_rate(
-  rate,
-  interest_type = c("effective", "nominal", "force"),
-  m = 1
+  i,
+  i_type = c("effective", "nominal_interest", "nominal_discount", "force"),
+  m = 1,
+  rate = NULL,
+  interest_type = NULL
 )
 }
 \arguments{
-\item{rate}{Numeric scalar. Interest rate.}
+\item{i}{Numeric scalar. Interest-rate input.}
 
-\item{interest_type}{Character string. Interest rate convention. One of
-\code{"effective"}, \code{"nominal"}, or \code{"force"}.}
+\item{i_type}{Character string. Interest-rate convention. One of
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.
+The legacy value \code{"nominal"} is accepted internally and treated as
+\code{"nominal_interest"}.}
 
-\item{m}{Numeric scalar. Number of interest conversion periods per year when
-\code{interest_type = "nominal"}. Default is \code{1}.}
+\item{m}{Numeric scalar. Number of interest conversion periods per year for
+nominal annual rates. Default is \code{1}.}
+
+\item{rate}{Deprecated internal alias for \code{i}.}
+
+\item{interest_type}{Deprecated internal alias for \code{i_type}.}
 }
 \value{
 Numeric scalar with the equivalent annual effective interest rate.
 }
 \description{
-Converts an interest rate supplied under a standard actuarial convention
-into an equivalent annual effective interest rate.
+Converts an interest rate supplied under a standard actuarial convention into
+an equivalent annual effective interest rate.
 }
 \details{
-This helper separates the financial interest-rate convention from the
-actuarial cash-flow structure. The argument \code{m} is used only to convert a
-nominal annual rate into an equivalent annual effective rate. It does not
-represent annuity payment frequency.
+This helper follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} is the interest-rate input, \code{i_type} is the
+interest-rate type, and \code{m} is the conversion frequency for nominal rates.
 
-The conversion rules are:
-\itemize{
-\item Effective annual rate:
-}
+The argument \code{m} is used only to convert nominal annual rates into equivalent
+annual effective rates. It does not represent annuity payment frequency.
 
-\deqn{
-  i_{\mathrm{eff}} = i.
-}
-\itemize{
-\item Nominal annual rate convertible \code{m} times per year:
-}
-
-\deqn{
-  i_{\mathrm{eff}} = \left(1 + \frac{i^{(m)}}{m}\right)^m - 1.
-}
-\itemize{
-\item Constant force of interest:
-}
-
-\deqn{
-  i_{\mathrm{eff}} = e^\delta - 1.
-}
+Transitional compatibility is intentionally retained for older internal Monte
+Carlo calls using \verb{rate =} and \verb{interest_type =}.
 }
 \keyword{internal}

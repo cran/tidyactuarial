@@ -5,10 +5,10 @@
 \title{Internal rate of return for a cash flow}
 \usage{
 irr_flow(
-  payment,
-  time = NULL,
+  cf,
+  t = NULL,
   date = NULL,
-  nominal_m = 1L,
+  m = 1L,
   interval = c(-0.99, 10),
   tol = 1e-10,
   maxiter = 1000,
@@ -16,15 +16,15 @@ irr_flow(
 )
 }
 \arguments{
-\item{payment}{Numeric vector of cash flows.}
+\item{cf}{Numeric vector of cash flows.}
 
-\item{time}{Optional numeric vector of cash-flow times in years.}
+\item{t}{Optional numeric vector of cash-flow times in years.}
 
 \item{date}{Optional vector of cash-flow dates. If supplied, the earliest
 date is treated as time 0.}
 
-\item{nominal_m}{Positive integer used only to report an equivalent nominal
-annual interest rate convertible \code{nominal_m} times per year.}
+\item{m}{Positive integer used only to report an equivalent nominal annual
+interest rate convertible \code{m} times per year.}
 
 \item{interval}{Numeric vector of length 2 giving the search interval for the
 annual effective IRR. Default is \code{c(-0.99, 10)}.}
@@ -43,14 +43,14 @@ A one-row tibble with:
 \item{irr}{Estimated IRR as an annual effective rate.}
 \item{i_effective_annual}{Same as \code{irr}, reported explicitly.}
 \item{j_nominal_interest}{Equivalent nominal annual interest rate
-convertible \code{nominal_m} times.}
+convertible \code{m} times.}
 \item{delta}{Equivalent force of interest.}
 \item{npv}{Present value at the estimated IRR, close to zero.}
 \item{interval_left}{Left endpoint of the search interval.}
 \item{interval_right}{Right endpoint of the search interval.}
 \item{converged}{Logical flag indicating whether a root was found.}
 \item{n_iter}{Number of iterations used by \code{uniroot}.}
-\item{n_cashflows}{Length of \code{payment}.}
+\item{n_cashflows}{Length of \code{cf}.}
 \item{has_both_signs}{Whether the cash flow has at least one positive
 and one negative value.}
 \item{n_sign_changes}{Number of sign changes in the nonzero cash-flow
@@ -63,14 +63,20 @@ sign over \code{interval}, the function returns \code{converged = FALSE} and
 }
 \description{
 Computes the internal rate of return (IRR) of a cash flow by finding the
-annual effective rate that makes its present value equal to zero.
+annual effective rate that makes its present value equal to zero, using
+compact actuarial notation.
 }
 \details{
-The cash flow is supplied explicitly through \code{payment}. Its timing is
-given either through \code{time} (in years) or \code{date} (calendar dates).
-If \code{date} is supplied, the earliest date is treated as time 0.
+The cash flow is supplied explicitly through \code{cf}. Its timing is given
+either through \code{t} (in years) or \code{date} (calendar dates). If
+\code{date} is supplied, the earliest date is treated as time 0.
 
-The IRR returned is therefore interpreted as an annual effective rate.
+The IRR returned is interpreted as an annual effective rate.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
+and \code{m} denotes the conversion frequency used to report the equivalent
+nominal annual interest rate.
 
 The IRR is defined as the rate \eqn{r} satisfying
 \deqn{\sum_{k} C_k (1+r)^{-t_k} = 0}{sum(C_k * (1+r)^(-t_k)) = 0}
@@ -83,17 +89,17 @@ can be bracketed and the function returns gracefully with
 \code{converged = FALSE}.
 
 The number of sign changes in the nonzero cash-flow sequence is reported as
-a diagnostic. By Descartes' rule of signs, if there is exactly one sign
-change, the IRR is unique.
+a diagnostic. If there is exactly one sign change, the IRR is usually unique
+under the usual ordered cash-flow setting.
 }
 \examples{
 irr_flow(
-  payment = c(-1000, 300, 400, 500),
-  time = c(0, 1, 2, 3)
+  cf = c(-1000, 300, 400, 500),
+  t = c(0, 1, 2, 3)
 )
 
 irr_flow(
-  payment = c(-1000, 300, 400, 500),
+  cf = c(-1000, 300, 400, 500),
   date = as.Date(c("2026-01-01", "2027-01-01", "2028-01-01", "2029-01-01"))
 )
 

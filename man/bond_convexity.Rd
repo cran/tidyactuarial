@@ -6,39 +6,40 @@
 \usage{
 bond_convexity(
   face,
-  coupon_rate,
-  years_to_maturity,
-  coupons_per_year = 1L,
+  c,
+  n,
+  k = 1L,
   y_effective_per_period = NULL,
-  y_rate = NULL,
+  y = NULL,
   y_type = "effective",
   y_m = 1L,
-  redemption = NULL,
+  R = NULL,
   tol = 1e-10,
   check = TRUE
 )
 }
 \arguments{
-\item{face}{Numeric scalar. Face (par) value of the bond.}
+\item{face}{Numeric scalar. Face value of the bond.}
 
-\item{coupon_rate}{Numeric scalar. Annual coupon rate as a proportion.}
+\item{c}{Numeric scalar. Annual coupon rate as a proportion.}
 
-\item{years_to_maturity}{Numeric scalar. Time to maturity in years.}
+\item{n}{Numeric scalar. Time to maturity in years.}
 
-\item{coupons_per_year}{Positive integer. Number of coupon payments per year.}
+\item{k}{Positive integer. Number of coupon payments per year.}
 
 \item{y_effective_per_period}{Optional numeric scalar. Effective yield per
 coupon period.}
 
-\item{y_rate}{Optional numeric scalar. Annual yield rate value.}
+\item{y}{Optional numeric scalar. Annual yield rate value.}
 
 \item{y_type}{Character string indicating the annual yield type:
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.}
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"},
+or \code{"force"}.}
 
-\item{y_m}{Positive integer. Compounding frequency for nominal annual yields.}
+\item{y_m}{Positive integer. Conversion frequency for nominal annual yields.}
 
-\item{redemption}{Numeric scalar. Redemption value at maturity.
-If \code{NULL}, defaults to \code{face}.}
+\item{R}{Numeric scalar. Redemption value at maturity. If \code{NULL},
+defaults to \code{face}.}
 
 \item{tol}{Numeric scalar. Tolerance used to check maturity alignment.}
 
@@ -52,21 +53,21 @@ A one-row tibble with:
 \item{discrete_convexity_years}{Discrete convexity in years.}
 \item{yield_per_period}{Effective yield per coupon period.}
 \item{yield_effective_annual}{Annual effective yield.}
-\item{coupons_per_year}{Coupon frequency.}
+\item{k}{Coupon frequency.}
 \item{n_periods}{Total number of coupon periods.}
 }
 }
 \description{
-Computes discrete convexity measures for a level coupon bond valued
-under a flat yield-to-maturity assumption.
+Computes discrete convexity measures for a level coupon bond valued under a
+flat yield-to-maturity assumption, using compact actuarial notation.
 }
 \details{
 Assumptions:
 \itemize{
 \item Coupons are paid in arrears at regular intervals.
-\item \code{years_to_maturity * coupons_per_year} must be an integer.
+\item \code{n * k} must be an integer.
 \item Stub periods are not supported.
-\item Valuation is at a coupon date (no accrued interest).
+\item Valuation is at a coupon date with no accrued interest.
 \item A single flat yield is used to discount all cash flows.
 }
 
@@ -74,45 +75,54 @@ Yield input conventions:
 \itemize{
 \item If \code{y_effective_per_period} is supplied, it is interpreted as the
 effective yield per coupon period.
-\item Otherwise, \code{y_rate}, \code{y_type}, and \code{y_m} define an annual yield
-specification, which is converted first to annual effective yield and
-then to effective yield per coupon period.
+\item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
+yield specification, which is converted first to annual effective
+yield and then to effective yield per coupon period.
 }
 
-Let \eqn{j} be the effective yield per coupon period, \eqn{m} the number of
-coupon payments per year, and let cash flows \eqn{C_k} occur at coupon
-periods \eqn{k = 1, \dots, N}. With \eqn{v = 1/(1+j)} and
-\eqn{P = \sum_{k} C_k v^k}, the discrete convexity in coupon periods is
-\deqn{C_p = \frac{1}{P} \cdot \frac{\sum_{k=1}^{N} C_k k(k+1) v^k}{(1+j)^2}}{C_p = (1/P) * sum(C_k * k*(k+1) * v^k) / (1+j)^2}
+This function follows the compact bond notation used in
+\code{tidyactuarial}: \code{face} is the face value, \code{c} is the annual
+coupon rate, \code{n} is the time to maturity, \code{k} is the coupon
+frequency, \code{y} is the annual yield input, and \code{R} is the redemption
+value.
 
-Discrete convexity in years is \eqn{C_p / m^2}.
+Let \eqn{j} be the effective yield per coupon period, \eqn{k} the number of
+coupon payments per year, and let cash flows \eqn{C_r} occur at coupon
+periods \eqn{r = 1, \dots, N}. With \eqn{v = 1/(1+j)} and
+\eqn{P = \sum_r C_r v^r}, the discrete convexity in coupon periods is
+\deqn{C_p =
+\frac{1}{P}
+\frac{\sum_{r=1}^{N} C_r r(r+1) v^r}{(1+j)^2}.}
 
-This is the second-order sensitivity of the bond price to changes in
-the yield per period. Together with \code{\link{bond_duration}}, it is used in
+Discrete convexity in years is \eqn{C_p / k^2}.
+
+This is the second-order sensitivity of the bond price to changes in the
+yield per period. Together with \code{\link{bond_duration}}, it is used in
 the second-order Taylor approximation of price changes.
 }
 \examples{
 bond_convexity(
   face = 100,
-  coupon_rate = 0.08,
-  years_to_maturity = 5,
-  coupons_per_year = 2,
-  y_rate = 0.06,
+  c = 0.08,
+  n = 5,
+  k = 2,
+  y = 0.06,
   y_type = "effective"
 )
 
 bond_convexity(
   face = 1000,
-  coupon_rate = 0.05,
-  years_to_maturity = 10,
-  coupons_per_year = 2,
+  c = 0.05,
+  n = 10,
+  k = 2,
   y_effective_per_period = 0.03
 )
 
 }
 \seealso{
-\code{\link{bond_duration}}, \code{\link{bond_price}}, \code{\link{bond_cash_flows}},
-\code{\link{bond_book_value}}, \code{\link{bond_ytm}}
+\code{\link{bond_duration}}, \code{\link{bond_price}},
+\code{\link{bond_cash_flows}}, \code{\link{bond_book_value}},
+\code{\link{bond_ytm}}
 
 Other bonds: 
 \code{\link{bond_book_value}()},

@@ -5,96 +5,107 @@
 \title{Compute Monte Carlo net premiums for life contingencies}
 \usage{
 mc_premium(
-  data,
-  benefit_col = "pv_benefit",
-  annuity_col = "pv_annuity",
-  premium_col = "premium",
+  .data = NULL,
+  col_Z = "pv_benefit",
+  col_Y = "pv_annuity",
+  col_P = "P",
   by = NULL,
-  na_rm = TRUE
+  na_rm = TRUE,
+  ...
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing simulated present values.
-Usually this object is obtained after applying \code{\link[=mc_insurance]{mc_insurance()}} and
-\code{\link[=mc_annuity]{mc_annuity()}} to the same simulated lifetime sample.}
+\item{.data}{A data frame or tibble containing simulated present values.
+Usually this object is obtained after applying \code{\link{mc_insurance}}
+and \code{\link{mc_annuity}} to the same simulated lifetime sample.}
 
-\item{benefit_col}{Character string. Name of the column containing the
-simulated present value of the insurance benefit. Default is
-\code{"pv_benefit"}.}
+\item{col_Z}{Character string. Name of the column containing the simulated
+present value of insurance benefits. Default is \code{"pv_benefit"}.}
 
-\item{annuity_col}{Character string. Name of the column containing the
-simulated present value of the premium annuity. Default is \code{"pv_annuity"}.}
+\item{col_Y}{Character string. Name of the column containing the simulated
+present value of the premium annuity. Default is \code{"pv_annuity"}.}
 
-\item{premium_col}{Character string. Name of the output column containing
-the simulated net premium. Default is \code{"premium"}.}
+\item{col_P}{Character string. Name of the output column containing the
+Monte Carlo net premium. Default is \code{"P"}.}
 
 \item{by}{Optional character vector with grouping columns. If supplied, the
 premium is computed separately within each group. If \code{by = NULL} and
-\code{data} is already grouped with \code{\link[dplyr:group_by]{dplyr::group_by()}}, the current grouping
-structure is used.}
+\code{.data} is already grouped with \code{dplyr::group_by()}, the current
+grouping structure is used.}
 
-\item{na_rm}{Logical. Should missing values be removed when computing
+\item{na_rm}{Logical scalar. Should missing values be removed when computing
 simulated means? Default is \code{TRUE}.}
+
+\item{...}{Transitional compatibility for older calls using \code{data},
+\code{benefit_col}, \code{annuity_col}, and \code{premium_col}.}
 }
 \value{
 A tibble with the original columns and one additional column
 containing the simulated net premium. The name of this column is controlled
-by \code{premium_col}.
+by \code{col_P}. For transition, if \code{col_P != "premium"} and the input
+does not already contain a column named \code{premium}, a legacy column
+\code{premium} is also added with the same value.
 }
 \description{
-Computes simulated net premiums from Monte Carlo present values of insurance
-benefits and premium annuities.
+Computes Monte Carlo net premiums from simulated present values of insurance
+benefits and premium annuities, using compact actuarial notation.
 }
 \details{
 This function applies the actuarial equivalence principle to simulated
-present value random variables. If \eqn{Z} denotes the present value random
-variable of the benefit and \eqn{Y} denotes the present value random variable
-of the premium annuity, the net premium is estimated as
+present value random variables. If \eqn{Z} denotes the simulated present
+value of benefits and \eqn{Y} denotes the simulated present value of the
+premium annuity, the Monte Carlo net premium is estimated as
 
 \deqn{
   \hat{P} = \frac{\bar{Z}}{\bar{Y}}.
 }
 
-Equivalently, this is the Monte Carlo estimator of
+Equivalently, this estimates
 
 \deqn{
   P = \frac{E[Z]}{E[Y]}.
 }
 
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{Z} denotes the present value random variable of
+benefits, \code{Y} denotes the present value random variable of the premium
+annuity, and \code{P} denotes the net premium per payment.
+
 The function does not simulate lifetimes and does not calculate present
 values directly. It only computes the Monte Carlo net premium from columns
 that already contain simulated present values.
 
-In a typical workflow, \code{\link[=simulate_lifetime]{simulate_lifetime()}} generates simulated values of
-\eqn{K_x} and possibly \eqn{T_x}; \code{\link[=mc_insurance]{mc_insurance()}} creates the simulated
-benefit present value \eqn{Z}; \code{\link[=mc_annuity]{mc_annuity()}} creates the simulated premium
-annuity present value \eqn{Y}; and \code{mc_premium()} estimates the net level
-premium.
+In a typical workflow, \code{\link{simulate_lifetime}} generates simulated
+values of \eqn{K_x} and possibly \eqn{T_x}; \code{\link{mc_insurance}}
+creates the simulated benefit present value \eqn{Z};
+\code{\link{mc_annuity}} creates the simulated premium annuity present value
+\eqn{Y}; and \code{mc_premium()} estimates the net level premium.
 
 The estimated premium is attached to every row of the input data. This is
-intentional: it makes it easy to construct the simulated loss random variable
-with \code{\link[=mc_loss]{mc_loss()}}, for example
+intentional: it makes it easy to construct the simulated loss random
+variable with \code{\link{mc_loss}}, for example
 
 \deqn{
   L = Z - \hat{P}Y.
 }
 
-The function is also valid for premiums payable more than once per year.
-In that case, the payment frequency is not specified in \code{mc_premium()};
+The function is also valid for premiums payable more than once per year. In
+that case, the payment frequency is not specified in \code{mc_premium()};
 it is already embedded in the simulated premium annuity present value
-supplied through \code{annuity_col}.
+supplied through \code{col_Y}.
 
-For example, if \code{\link[=mc_annuity]{mc_annuity()}} was called with
-\code{payment = 1 / 12} and \code{payments_per_year = 12}, then \code{pv_annuity}
-represents the present value of a monthly premium stream whose total annual
-amount is 1. The premium estimated by \code{mc_premium()} is then consistent with
-that monthly payment structure and corresponds to a Monte Carlo estimate of
-a premium such as \eqn{P_x^{(12)}}.
+For example, if \code{\link{mc_annuity}} was called with
+\code{payment = 1 / 12} and \code{k = 12}, then \code{pv_annuity} represents
+the present value of a monthly premium stream whose total annual amount is
+\enumerate{
+\item The premium estimated by \code{mc_premium()} is then consistent with that
+monthly payment structure.
+}
 
-If \code{\link[=mc_annuity]{mc_annuity()}} was called with \code{payment = 1} and
-\code{payments_per_year = 12}, then \code{pv_annuity} represents a stream of payments
-of 1 each month, and the resulting premium should be interpreted relative to
-that payment pattern.
+If \code{\link{mc_annuity}} was called with \code{payment = 1} and
+\code{k = 12}, then \code{pv_annuity} represents a stream of payments of 1
+each month, and the resulting premium should be interpreted relative to that
+payment pattern.
 
 This function computes net premiums only. It does not include expenses,
 safety loadings, profit margins, taxes, surrender charges, commissions, or
@@ -114,7 +125,7 @@ sim_values |>
 # Example 2: grouped premiums by age
 sim_by_age <- tibble::tibble(
   sim_id = rep(1:6, times = 2),
-  age = rep(c(40, 50), each = 6),
+  x = rep(c(40, 50), each = 6),
   pv_benefit = c(
     0.82, 0.74, 0.61, 0.95, 0.70, 0.88,
     0.91, 0.86, 0.79, 0.98, 0.83, 0.94
@@ -126,107 +137,118 @@ sim_by_age <- tibble::tibble(
 )
 
 sim_by_age |>
-  mc_premium(by = "age")
+  mc_premium(by = "x")
 
 # Example 3: using dplyr grouping
 sim_by_age |>
-  dplyr::group_by(age) |>
+  dplyr::group_by(x) |>
   mc_premium()
 
 # Example 4: annual whole life net premium
-life_table <- tibble::tibble(
-  age = 40:100,
+lt <- tibble::tibble(
+  x = 40:100,
   qx = seq(0.002, 1, length.out = 61)
 )
 
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 500, seed = 123) |>
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    seed = 123
+  ) |>
   mc_insurance(
-    rate = 0.05,
-    insurance = "whole_life",
+    i = 0.05,
+    type = "whole",
     benefit = 1
   ) |>
   mc_annuity(
-    rate = 0.05,
-    annuity = "whole_life",
+    i = 0.05,
+    type = "whole",
     payment = 1,
-    payments_per_year = 1,
+    k = 1,
     timing = "due"
   ) |>
   mc_premium()
 
 # Example 5: monthly whole life net premium
-life_table |>
+lt |>
   simulate_lifetime(
-    age = 40,
-    n_sim = 500,
-    fractional = "udd",
+    x = 40,
+    n_sim = 25,
+    frac = "udd",
     seed = 123
   ) |>
   mc_insurance(
-    rate = 0.05,
-    insurance = "whole_life",
+    i = 0.05,
+    type = "whole",
     benefit = 1
   ) |>
   mc_annuity(
-    rate = 0.05,
-    annuity = "whole_life",
+    i = 0.05,
+    type = "whole",
     payment = 1 / 12,
-    payments_per_year = 12,
+    k = 12,
     timing = "due"
   ) |>
   mc_premium()
 
 # Example 6: term insurance with monthly premium annuity
-life_table |>
+lt |>
   simulate_lifetime(
-    age = 45,
-    n_sim = 500,
-    fractional = "udd",
+    x = 45,
+    n_sim = 25,
+    frac = "udd",
     seed = 123
   ) |>
   mc_insurance(
-    rate = 0.04,
-    insurance = "term",
-    term = 20,
+    i = 0.04,
+    type = "term",
+    n = 20,
     benefit = 100000
   ) |>
   mc_annuity(
-    rate = 0.04,
-    annuity = "temporary",
-    term = 20,
+    i = 0.04,
+    type = "temporary",
+    n = 20,
     payment = 1 / 12,
-    payments_per_year = 12,
+    k = 12,
     timing = "due"
   ) |>
   mc_premium()
 
-# Example 7: joint-life monthly net premium
-life_table |>
+# Example 7: joint-life annual net premium
+lt |>
   simulate_lifetimes(
-    ages = c(60, 58),
-    n_sim = 500,
-    fractional = "udd",
+    x = c(60, 58),
+    n_sim = 25,
     seed = 123
   ) |>
-  mc_multilife_status(status = "joint_life") |>
+  mc_multilife_status(status = "joint") |>
   mc_insurance(
-    rate = 0.04,
-    insurance = "whole_life",
+    i = 0.04,
+    type = "whole",
     benefit = 100000,
-    k_col = "K_status",
-    tx_col = "T_status"
+    col_K = "K_status",
+    col_T = "T_status"
   ) |>
   mc_annuity(
-    rate = 0.04,
-    annuity = "whole_life",
-    payment = 1 / 12,
-    payments_per_year = 12,
+    i = 0.04,
+    type = "whole",
+    payment = 1,
+    k = 1,
     timing = "due",
-    k_col = "K_status",
-    tx_col = "T_status"
+    col_K = "K_status",
+    col_T = "T_status"
   ) |>
   mc_premium()
+
+# Transitional compatibility with old column arguments
+sim_values |>
+  mc_premium(
+    benefit_col = "pv_benefit",
+    annuity_col = "pv_annuity",
+    premium_col = "premium"
+  )
 
 }
 \references{
@@ -235,6 +257,17 @@ and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 Society of Actuaries.
 }
 \seealso{
-\code{\link[=simulate_lifetime]{simulate_lifetime()}}, \code{\link[=simulate_lifetimes]{simulate_lifetimes()}}, \code{\link[=mc_insurance]{mc_insurance()}},
-\code{\link[=mc_annuity]{mc_annuity()}}, \code{\link[=mc_loss]{mc_loss()}}, \code{\link[=mc_reserve]{mc_reserve()}}, \code{\link[=summary_mc]{summary_mc()}}
+\code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
+\code{\link{mc_insurance}}, \code{\link{mc_annuity}},
+\code{\link{mc_loss}}, \code{\link{mc_reserve}},
+\code{\link{summary_mc}}
+
+Other monte-carlo: 
+\code{\link{mc_annuity}()},
+\code{\link{mc_insurance}()},
+\code{\link{mc_loss}()},
+\code{\link{mc_reserve}()},
+\code{\link{simulate_lifetime}()},
+\code{\link{summary_mc}()}
 }
+\concept{monte-carlo}

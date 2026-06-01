@@ -7,11 +7,13 @@
 apv_life_flow(
   lt,
   ages,
-  time = NULL,
+  t = NULL,
   date = NULL,
-  start_date = NULL,
+  date0 = NULL,
   cf,
   i,
+  i_type = "effective",
+  m = 1L,
   status = c("single", "first", "last", "reversionary"),
   alpha = NULL,
   plot = FALSE
@@ -21,46 +23,52 @@ apv_life_flow(
 \item{lt}{A life table data frame with column \code{x} and at least one of
 \code{lx}, \code{px}, or \code{qx}.}
 
-\item{ages}{Integer vector of actuarial ages (length 1 for single life,
-length 2+ for multiple lives).}
+\item{ages}{Integer vector of actuarial ages. Use length 1 for a single life
+and length 2 or more for multiple lives.}
 
-\item{time}{Numeric vector of payment times in years (\code{>= 0}). Provide
-either \code{time} or \code{date}.}
+\item{t}{Numeric vector of payment times in years, measured from time 0.
+Provide either \code{t} or \code{date}.}
 
 \item{date}{Optional vector of \code{Date} payment dates. Provide either
-\code{time} or \code{date}.}
+\code{t} or \code{date}.}
 
-\item{start_date}{Optional \code{Date} used as time 0 when \code{date} is
+\item{date0}{Optional \code{Date} used as time 0 when \code{date} is
 provided. If missing, the minimum of \code{date} is used.}
 
-\item{cf}{Numeric vector of cash flows (same length as \code{time} or
-\code{date}).}
+\item{cf}{Numeric vector of cash flows. Must have the same length as
+\code{t} or \code{date}.}
 
-\item{i}{Annual effective interest rate (single numeric value).}
+\item{i}{Numeric scalar. Annual interest-rate input.}
+
+\item{i_type}{Character string indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
+for \code{i_type = "effective"} and \code{i_type = "force"}.}
 
 \item{status}{Survival status: \code{"single"}, \code{"first"},
 \code{"last"}, or \code{"reversionary"}.}
 
-\item{alpha}{Reversionary fraction for \code{status = "reversionary"}
-(single numeric value). While all lives are alive, full benefit is paid;
-while at least one but not all are alive, \code{alpha} times the benefit
-is paid.}
+\item{alpha}{Reversionary fraction for \code{status = "reversionary"}.
+While all lives are alive, full benefit is paid; while at least one but
+not all are alive, \code{alpha} times the benefit is paid.}
 
-\item{plot}{Logical; if \code{TRUE}, attaches a ggplot object in
+\item{plot}{Logical. If \code{TRUE}, attaches a ggplot object in
 \code{attr(result, "plot")} showing cumulative APV over time.}
 }
 \value{
 A tibble with one row per payment and columns:
-\code{time}, \code{cf}, \code{surv_prob}, \code{discount},
-\code{expected_cf}, \code{pv}, \code{pv_cum}.
-If \code{date} was provided, a \code{date} column is included.
-The total APV is stored as \code{attr(result, "apv")}.
+\code{t}, \code{cf}, \code{surv_prob}, \code{discount},
+\code{expected_cf}, \code{pv}, and \code{pv_cum}. If \code{date} was
+provided, a \code{date} column is included. The total APV is stored as
+\code{attr(result, "apv")}.
 }
 \description{
 Computes the actuarial present value (APV) of a cash-flow stream contingent
 on survival. The life table is supplied as the first argument
-(pipe-friendly). Payments may be specified by numeric times (years from 0)
-or by calendar dates.
+(pipe-friendly). Payments may be specified by numeric times or by calendar
+dates.
 }
 \details{
 Multiple lives are supported under an independence assumption, through
@@ -68,21 +76,49 @@ common statuses: single-life, first-death (all alive), last-survivor
 (any alive), and reversionary (joint-and-survivor) with fraction
 \code{alpha}.
 
-For each payment at time \eqn{t}, the contribution to the APV is
-(Finan, Sections 33 and 37):
-\deqn{PV(t) = C(t) \times v^t \times P(StatusAliveMatT)}
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{t} denotes payment time, \code{cf} denotes cash
+flows, \code{i} denotes the interest rate, \code{i_type} denotes the
+interest-rate type, and \code{m} denotes the conversion frequency for nominal
+rates.
+
+For each payment at time \eqn{t}, the APV contribution is
+\deqn{PV(t) = C(t) v^t P(\text{status alive at } t).}
 
 The survival probability depends on the \code{status}:
 \itemize{
-\item \code{"single"}: \eqn{{}_t p_x} (single life).
-\item \code{"first"}: \eqn{{}_t p_{x_1} \cdot {}_t p_{x_2} \dots}
-(all must be alive - joint life).
-\item \code{"last"}: \eqn{1 - \prod (1 - {}_t p_{x_j})}
-(at least one alive - last survivor).
-\item \code{"reversionary"}: full benefit while all alive, fraction
-\eqn{\alpha} while partially alive.
+\item \code{"single"}: \eqn{{}_t p_x} for a single life.
+\item \code{"first"}: \eqn{{}_t p_{x_1} \cdot {}_t p_{x_2} \cdots},
+so all lives must be alive.
+\item \code{"last"}: \eqn{1 - \prod_j (1 - {}_t p_{x_j})},
+so at least one life must be alive.
+\item \code{"reversionary"}: full benefit while all lives are alive, and
+fraction \eqn{\alpha} while at least one but not all lives are alive.
 }
 
-Fractional-year survival is computed under UDD within each year
-(Finan, Section 24.1).
+Fractional-year survival is computed under UDD within each year.
+}
+\examples{
+lt <- data.frame(
+  x = 40:100,
+  lx = seq(100000, 0, length.out = 61)
+)
+
+apv_life_flow(
+  lt = lt,
+  ages = 40,
+  t = c(1, 2, 3),
+  cf = c(100, 100, 100),
+  i = 0.05
+)
+
+apv_life_flow(
+  lt = lt,
+  ages = c(60, 58),
+  t = c(1, 2, 3),
+  cf = c(100, 100, 100),
+  i = 0.05,
+  status = "first"
+)
+
 }

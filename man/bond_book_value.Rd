@@ -6,65 +6,64 @@
 \usage{
 bond_book_value(
   face,
-  coupon_rate,
-  years_to_maturity,
-  valuation_time,
-  coupons_per_year = 1L,
-  yield_effective_per_period = NULL,
-  yield_rate = NULL,
-  yield_rate_type = "effective",
-  yield_m = 1L,
-  redemption = NULL,
+  c,
+  n,
+  t,
+  k = 1L,
+  y_effective_per_period = NULL,
+  y = NULL,
+  y_type = "effective",
+  y_m = 1L,
+  R = NULL,
   tol = 1e-10,
   check = TRUE,
-  output = c("value", "table")
+  tidy = FALSE
 )
 }
 \arguments{
 \item{face}{Numeric scalar. Face or par value of the bond.}
 
-\item{coupon_rate}{Numeric scalar. Annual coupon rate as a proportion.}
+\item{c}{Numeric scalar. Annual coupon rate as a proportion.}
 
-\item{years_to_maturity}{Numeric scalar. Final maturity in years.}
+\item{n}{Numeric scalar. Final maturity in years.}
 
-\item{valuation_time}{Numeric vector. Valuation time(s) in years, measured
-from issue. Each value must lie between \code{0} and \code{years_to_maturity}
-and must align with coupon dates.}
+\item{t}{Numeric vector. Valuation time(s) in years, measured from issue.
+Each value must lie between \code{0} and \code{n} and must align with
+coupon dates.}
 
-\item{coupons_per_year}{Positive integer. Number of coupon payments per year.}
+\item{k}{Positive integer. Number of coupon payments per year.}
 
-\item{yield_effective_per_period}{Optional numeric scalar. Effective yield per
+\item{y_effective_per_period}{Optional numeric scalar. Effective yield per
 coupon period. If supplied, it is used directly.}
 
-\item{yield_rate}{Optional numeric scalar. Annual yield rate value.}
+\item{y}{Optional numeric scalar. Annual yield rate value.}
 
-\item{yield_rate_type}{Character string indicating the annual yield type:
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or
-\code{"force"}.}
+\item{y_type}{Character string indicating the annual yield type:
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"},
+or \code{"force"}.}
 
-\item{yield_m}{Positive integer. Compounding frequency for nominal annual yields.}
+\item{y_m}{Positive integer. Conversion frequency for nominal annual yields.}
 
-\item{redemption}{Numeric scalar. Redemption value at final maturity.
-If \code{NULL}, defaults to \code{face}.}
+\item{R}{Numeric scalar. Redemption value at final maturity. If \code{NULL},
+defaults to \code{face}.}
 
 \item{tol}{Numeric scalar. Tolerance used in alignment checks.}
 
 \item{check}{Logical scalar. If \code{TRUE}, performs input validation.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric vector
-of book values, or \code{"table"} to return a tibble with intermediate
-quantities.}
+\item{tidy}{Logical scalar. If \code{FALSE}, returns a numeric vector of book
+values. If \code{TRUE}, returns a tibble with intermediate quantities.}
 }
 \value{
-If \code{output = "value"}, a numeric vector of book values, one for each
-\code{valuation_time}.
+If \code{tidy = FALSE}, a numeric vector of book values, one for each
+\code{t}.
 
-If \code{output = "table"}, a tibble with valuation times, valuation periods,
-book values, yield information, and bond inputs.
+If \code{tidy = TRUE}, a tibble with valuation times, valuation periods, book
+values, yield information, and bond inputs.
 }
 \description{
 Computes the book value of a level coupon bond at one or more coupon dates,
-under a specified yield basis.
+under a specified yield basis, using compact actuarial notation.
 }
 \details{
 The book value is interpreted prospectively: at a valuation time that lies
@@ -72,37 +71,43 @@ on the coupon grid, it equals the present value at that time of all
 remaining future coupons and the final redemption amount, discounted at the
 bond's yield basis.
 
-This function interprets \code{valuation_time} as a time immediately after any
-coupon due at that date has been paid. Therefore:
+This function interprets \code{t} as a time immediately after any coupon due
+at that date has been paid. Therefore:
 \itemize{
-\item at \code{valuation_time = 0}, the book value equals the bond price,
-\item at \code{valuation_time = years_to_maturity}, the book value is 0.
+\item at \code{t = 0}, the book value equals the bond price,
+\item at \code{t = n}, the book value is 0.
 }
 
 Assumptions:
 \itemize{
 \item Coupons are paid in arrears at regular intervals.
-\item \code{years_to_maturity * coupons_per_year} must be an integer.
-\item Each \code{valuation_time * coupons_per_year} must be an integer.
+\item \code{n * k} must be an integer.
+\item Each \code{t * k} must be an integer.
 \item Stub periods are not supported.
 \item Valuation is performed at coupon dates; no accrued interest is included.
 }
 
 Yield input conventions:
 \itemize{
-\item If \code{yield_effective_per_period} is supplied, it takes precedence over
-\code{yield_rate}, \code{yield_rate_type}, and \code{yield_m}, and is interpreted
-as the effective yield per coupon period.
-\item Otherwise, \code{yield_rate}, \code{yield_rate_type}, and \code{yield_m} define
-an annual yield specification, which is converted first to annual effective
+\item If \code{y_effective_per_period} is supplied, it takes precedence over
+\code{y}, \code{y_type}, and \code{y_m}, and is interpreted as the
+effective yield per coupon period.
+\item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
+yield specification, which is converted first to annual effective
 yield and then to effective yield per coupon period.
 }
 
-Let the valuation time correspond to coupon period \eqn{k}, with total
+This function follows the compact bond notation used in
+\code{tidyactuarial}: \code{P} is price, \code{face} is the face value,
+\code{c} is the annual coupon rate, \code{n} is maturity, \code{k} is coupon
+frequency, \code{y} is the yield, \code{R} is redemption value, and \code{t}
+is valuation time.
+
+Let the valuation time correspond to coupon period \eqn{s}, with total
 maturity period count \eqn{N}. If the remaining future cash flows are
-\eqn{C_{k+1}, \dots, C_N}, and \eqn{i_p} is the effective yield per coupon
-period, then the book value at time \eqn{k} is
-\deqn{BV_k = \sum_{j=k+1}^{N} C_j (1+i_p)^{-(j-k)}}{BV_k = sum_{j=k+1}^{N} C_j (1+i_p)^(-(j-k))}
+\eqn{C_{s+1}, \dots, C_N}, and \eqn{i_p} is the effective yield per coupon
+period, then the book value at time \eqn{s} is
+\deqn{BV_s = \sum_{r=s+1}^{N} C_r (1+i_p)^{-(r-s)}.}
 
 This is the prospective book value on the bond's yield basis.
 }
@@ -110,45 +115,45 @@ This is the prospective book value on the bond's yield basis.
 # Book value at time 0 equals price
 bond_book_value(
   face = 100,
-  coupon_rate = 0.08,
-  years_to_maturity = 5,
-  valuation_time = 0,
-  coupons_per_year = 2,
-  yield_rate = 0.06,
-  yield_rate_type = "effective"
+  c = 0.08,
+  n = 5,
+  t = 0,
+  k = 2,
+  y = 0.06,
+  y_type = "effective"
 )
 
 # Book value at several coupon dates
 bond_book_value(
   face = 100,
-  coupon_rate = 0.08,
-  years_to_maturity = 5,
-  valuation_time = c(0, 1, 2, 3, 4, 5),
-  coupons_per_year = 1,
-  yield_rate = 0.06,
-  yield_rate_type = "effective"
+  c = 0.08,
+  n = 5,
+  t = c(0, 1, 2, 3, 4, 5),
+  k = 1,
+  y = 0.06,
+  y_type = "effective"
 )
 
-# Table output
+# Tidy output
 bond_book_value(
   face = 100,
-  coupon_rate = 0.08,
-  years_to_maturity = 5,
-  valuation_time = c(0, 1, 2, 3, 4, 5),
-  coupons_per_year = 1,
-  yield_rate = 0.06,
-  yield_rate_type = "effective",
-  output = "table"
+  c = 0.08,
+  n = 5,
+  t = c(0, 1, 2, 3, 4, 5),
+  k = 1,
+  y = 0.06,
+  y_type = "effective",
+  tidy = TRUE
 )
 
 # Yield given directly per coupon period
 bond_book_value(
   face = 1000,
-  coupon_rate = 0.05,
-  years_to_maturity = 10,
-  valuation_time = c(0, 2, 4, 6),
-  coupons_per_year = 2,
-  yield_effective_per_period = 0.03
+  c = 0.05,
+  n = 10,
+  t = c(0, 2, 4, 6),
+  k = 2,
+  y_effective_per_period = 0.03
 )
 
 }

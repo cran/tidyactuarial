@@ -5,74 +5,100 @@
 \title{Actuarial present value of a life annuity}
 \usage{
 annuity_x(
-  mortality_table,
-  age,
-  rate,
-  rate_type = "effective",
+  lt,
+  x,
+  i,
+  i_type = "effective",
   m = 1L,
-  term_years = Inf,
-  deferral_years = 0L,
-  payments_per_year = 1L,
+  n = NULL,
+  h = 0L,
+  k = 1L,
   timing = c("immediate", "due"),
   woolhouse = c("none", "first", "second"),
-  output = c("value", "table")
+  frac = NULL,
+  tidy = FALSE
 )
 }
 \arguments{
-\item{mortality_table}{A life table as produced by \code{\link{lifetable}}.
-It must contain columns \code{x} and \code{lx}.}
+\item{lt}{A life table as produced by \code{\link{lifetable}}, or a
+\code{tidyact_life_contract} object created by \code{\link{life_contract}}.
+A life table must contain columns \code{x} and \code{lx}.}
 
-\item{age}{Integer actuarial age.}
+\item{x}{Integer actuarial age. Optional when \code{lt} is a single-life
+\code{tidyact_life_contract}.}
 
-\item{rate}{Numeric scalar. Annual interest-rate input.}
+\item{i}{Numeric scalar. Annual interest-rate input. Optional when \code{lt}
+is a single-life \code{tidyact_life_contract}.}
 
-\item{rate_type}{Character string indicating the rate type. Allowed values
-are \code{"effective"}, \code{"nominal_interest"},
+\item{i_type}{Character string indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Positive integer. Compounding frequency for nominal rates. Ignored
-for \code{rate_type = "effective"} and \code{rate_type = "force"}.}
+\item{m}{Positive integer. Conversion frequency for nominal interest rates.
+Ignored for \code{i_type = "effective"} and \code{i_type = "force"}.
+In \code{tidyactuarial}, \code{m} is reserved for interest conversion
+frequency, not deferment.}
 
-\item{term_years}{Integer term in years. Use \code{Inf} for a whole-life
-annuity.}
+\item{n}{Integer term in years. Use \code{NULL} or \code{Inf} for a
+whole-life annuity.}
 
-\item{deferral_years}{Integer deferral period in years.}
+\item{h}{Integer deferment period in years.}
 
-\item{payments_per_year}{Positive integer. Number of payments per year.
-For example, use \code{12} for monthly payments.}
+\item{k}{Positive integer. Number of annuity payments per year. For example,
+use \code{k = 12} for monthly payments.}
 
 \item{timing}{Character string. Either \code{"immediate"} for payments at
 the end of each payment period or \code{"due"} for payments at the
 beginning of each payment period.}
 
-\item{woolhouse}{Character string. For \code{payments_per_year > 1}, use
-\code{"none"} for exact UDD, \code{"first"} for the first-order Woolhouse
-approximation, or \code{"second"} for the second-order Woolhouse
-approximation.}
+\item{woolhouse}{Character string. For \code{k > 1}, use \code{"none"} for
+exact fractional-age computation, \code{"first"} for the first-order
+Woolhouse approximation, or \code{"second"} for the second-order
+Woolhouse approximation.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric APV
-or \code{"table"} to return a one-row tibble with intermediate quantities.}
+\item{frac}{Character string. Fractional-age assumption used when
+\code{k > 1} and \code{woolhouse = "none"}. Allowed values are
+\code{"UDD"}, \code{"CF"}, \code{"CML"}, and \code{"Balducci"}. If
+\code{NULL}, the \code{frac} attribute of \code{lt} is used when available;
+otherwise \code{"UDD"} is used.}
+
+\item{tidy}{Logical. If \code{FALSE}, returns a numeric APV. If \code{TRUE},
+returns a one-row tibble with intermediate quantities.}
 }
 \value{
-If \code{output = "value"}, a numeric scalar containing the actuarial present
+If \code{tidy = FALSE}, a numeric scalar containing the actuarial present
 value.
 
-If \code{output = "table"}, a one-row tibble with the main input values,
-equivalent interest rate, deferral factor, pure endowment factor, and APV.
+If \code{tidy = TRUE}, a one-row tibble with the main input values,
+equivalent interest rate, deferment factor, pure endowment factor, and APV.
 }
 \description{
-Computes the actuarial present value of a discrete life annuity using a life
-table.
+Computes the actuarial present value of a discrete life annuity using compact
+actuarial notation.
 }
 \details{
 The function supports:
 \itemize{
 \item whole-life annuities,
 \item temporary annuities,
-\item integer deferral,
+\item integer deferment,
 \item annual or k-thly payments,
-\item exact fractional survival under UDD,
+\item exact fractional survival for k-thly payments,
 \item first- and second-order Woolhouse approximations.
+}
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}:
+
+\itemize{
+\item \code{lt}: life table;
+\item \code{x}: actuarial age;
+\item \code{i}: interest rate;
+\item \code{i_type}: interest-rate type;
+\item \code{m}: interest conversion frequency;
+\item \code{n}: annuity term;
+\item \code{h}: deferment period;
+\item \code{k}: payment frequency.
 }
 
 For annual annuities-due,
@@ -83,12 +109,12 @@ For annual annuities-immediate,
 \deqn{a_{x:\overline{n}|} =
 \sum_{j=1}^{n} v^j\,{}_jp_x.}
 
-Deferral is handled through
-\deqn{v^h\,{}_hp_x}
-where \eqn{h} is \code{deferral_years}.
+Deferment is handled through
+\deqn{v^h\,{}_hp_x,}
+where \eqn{h} is the deferment period.
 
 For k-thly payments with \code{woolhouse = "none"}, fractional survival is
-computed under UDD.
+computed under the selected fractional-age assumption.
 }
 \examples{
 lt <- data.frame(
@@ -98,47 +124,51 @@ lt <- data.frame(
 
 # Annual annuity-immediate
 annuity_x(
-  mortality_table = lt,
-  age = 60,
-  rate = 0.06,
+  lt = lt,
+  x = 60,
+  i = 0.06,
   timing = "immediate"
 )
 
 # Annual annuity-due
 annuity_x(
-  mortality_table = lt,
-  age = 60,
-  rate = 0.06,
+  lt = lt,
+  x = 60,
+  i = 0.06,
   timing = "due"
 )
 
 # Temporary annuity
 annuity_x(
-  mortality_table = lt,
-  age = 60,
-  rate = 0.06,
-  term_years = 3,
+  lt = lt,
+  x = 60,
+  i = 0.06,
+  n = 3,
   timing = "due"
 )
 
 # Deferred annuity
 annuity_x(
-  mortality_table = lt,
-  age = 60,
-  rate = 0.06,
-  deferral_years = 2,
+  lt = lt,
+  x = 60,
+  i = 0.06,
+  h = 2,
   timing = "due"
 )
 
-# Table output
+# Tidy output
 annuity_x(
-  mortality_table = lt,
-  age = 60,
-  rate = 0.06,
-  term_years = 3,
+  lt = lt,
+  x = 60,
+  i = 0.06,
+  n = 3,
   timing = "due",
-  output = "table"
+  tidy = TRUE
 )
+
+# Pipe workflow with a life contract
+life_contract(lt = lt, lives = "single", x = 60, i = 0.06) |>
+  annuity_x(n = 3, timing = "due")
 
 }
 \seealso{
@@ -146,7 +176,9 @@ annuity_x(
 \code{\link{reserve_x}}, \code{\link{t_px}}, \code{\link{t_Ex}}
 
 Other life-contingencies: 
+\code{\link{annuity_multi}()},
 \code{\link{annuity_xy}()},
+\code{\link{insurance_variable_k}()},
 \code{\link{insurance_x}()},
 \code{\link{insurance_xy}()},
 \code{\link{life_contract}()},

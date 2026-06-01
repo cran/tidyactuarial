@@ -4,43 +4,43 @@
 \alias{immunize_duration_convexity}
 \title{Duration and convexity immunization with multiple assets}
 \usage{
-immunize_duration_convexity(
-  liabilities,
-  t_liabilities,
-  pv_assets,
-  duration_assets,
-  convexity_assets,
-  i
-)
+immunize_duration_convexity(L, t, P, D, C, i, i_type = "effective", m = 1L)
 }
 \arguments{
-\item{liabilities}{Numeric vector with liability payments.}
+\item{L}{Numeric vector with liability payments.}
 
-\item{t_liabilities}{Numeric vector with the times (in periods) at which
-each liability payment occurs. Must have the same length as
-\code{liabilities}.}
+\item{t}{Numeric vector of the same length as \code{L}, giving the times at
+which each liability payment occurs.}
 
-\item{pv_assets}{Numeric vector with present values (prices) of each asset
-evaluated at the same yield rate \code{i}.}
+\item{P}{Numeric vector with present values or prices of the immunizing
+assets, evaluated on the same yield basis.}
 
-\item{duration_assets}{Numeric vector with the Macaulay duration of each
-asset, in the same time units as \code{t_liabilities}.}
+\item{D}{Numeric vector with the Macaulay duration of each asset, expressed
+in the same time units as \code{t}.}
 
-\item{convexity_assets}{Numeric vector with the discrete convexity of each
-asset, in the same time units (periods) as \code{t_liabilities}.}
+\item{C}{Numeric vector with the discrete convexity of each asset, expressed
+in the same time units as \code{t}.}
 
-\item{i}{Yield rate used to discount the liabilities (effective per period).}
+\item{i}{Numeric scalar. Interest-rate input used to discount the
+liabilities.}
+
+\item{i_type}{Character string indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
+for \code{i_type = "effective"} and \code{i_type = "force"}.}
 }
 \value{
 A tibble with:
 \describe{
-\item{weight_asset}{Numeric vector of asset weights (amounts of each asset).}
-\item{PV_liabilities}{Present value of the liabilities.}
-\item{Duration_liabilities}{Macaulay duration of the liabilities.}
-\item{Convexity_liabilities}{Discrete convexity of the liabilities.}
-\item{PV_assets}{Present value of the asset portfolio.}
-\item{Duration_assets}{Macaulay duration of the asset portfolio.}
-\item{Convexity_assets}{Discrete convexity of the asset portfolio.}
+\item{w}{Numeric vector of asset weights or units.}
+\item{PV_L}{Present value of the liabilities.}
+\item{D_L}{Macaulay duration of the liabilities.}
+\item{C_L}{Discrete convexity of the liabilities.}
+\item{PV_A}{Present value of the asset portfolio.}
+\item{D_A}{Macaulay duration of the asset portfolio.}
+\item{C_A}{Discrete convexity of the asset portfolio.}
 \item{n_assets}{Number of assets used.}
 }
 }
@@ -48,49 +48,81 @@ A tibble with:
 Computes asset weights that immunize a stream of liabilities using three or
 more assets, enforcing:
 \enumerate{
-\item Present value of assets = PV of liabilities;
+\item present value of assets = present value of liabilities;
 \item Macaulay duration of assets = Macaulay duration of liabilities;
-\item Convexity of assets = convexity of liabilities.
+\item convexity of assets = convexity of liabilities.
 }
 }
 \details{
 For exactly three assets, the system is solved directly. For four or more
-assets, a minimum-norm solution is computed via linear algebra.
+assets, a minimum-norm solution is computed by linear algebra.
 
-Let \eqn{PV_L}{PV_L}, \eqn{D_L}{D_L}, and \eqn{C_L}{C_L} be the present
-value, Macaulay duration, and discrete convexity of the liability stream at
-yield \eqn{i}. The discrete convexity of the liabilities is computed as:
-\deqn{C_L = \frac{\sum_t L_t \, t(t+1) \, v^{t+2}}{PV_L}}{C_L = sum(L_t * t*(t+1) * v^(t+2)) / PV_L}
-where \eqn{v = 1/(1+i)}.
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{L} denotes liabilities, \code{t} denotes payment
+times, \code{P} denotes asset prices or present values, \code{D} denotes
+asset durations, \code{C} denotes asset convexities, \code{i} denotes the
+interest rate, \code{i_type} denotes the interest-rate type, and \code{m}
+denotes the conversion frequency for nominal rates.
 
-The weights \eqn{w_j}{w_j} satisfy the \eqn{3 \times k}{3 x k} system
-\eqn{A w = b}, where the rows of \eqn{A} are
-\eqn{(PV_j)}, \eqn{(PV_j D_j)}, \eqn{(PV_j C_j)}, and
-\eqn{b = (PV_L,\; PV_L D_L,\; PV_L C_L)^T}{b = (PV_L, PV_L*D_L, PV_L*C_L)}.
+Let \eqn{PV_L}, \eqn{D_L}, and \eqn{C_L} be the present value, Macaulay
+duration, and discrete convexity of the liability stream at yield \eqn{i}.
+The discrete convexity of the liabilities is computed as:
+\deqn{
+C_L =
+\frac{\sum_t L_t\,t(t+1)\,v^{t+2}}{PV_L},
+}
+where \eqn{v = 1/(1+i)} after converting \code{i} to the equivalent
+effective rate.
 
-For \eqn{k = 3} assets, the system is square and solved directly.
-For \eqn{k \geq 4}{k >= 4} assets, the minimum-norm solution
-\eqn{w = A^T (A A^T)^{-1} b}{w = t(A) solve(A t(A), b)} is computed.
+The weights \eqn{w_j} satisfy the \eqn{3 \times r} system \eqn{Aw = b},
+where the rows of \eqn{A} are
+\deqn{(P_1,\ldots,P_r),}
+\deqn{(P_1D_1,\ldots,P_rD_r),}
+and
+\deqn{(P_1C_1,\ldots,P_rC_r),}
+and
+\deqn{
+b = (PV_L,\; PV_LD_L,\; PV_LC_L)^T.
+}
+
+For three assets, the system is square and solved directly. For four or more
+assets, the minimum-norm solution
+\deqn{
+w = A^T(AA^T)^{-1}b
+}
+is computed.
 }
 \examples{
-# Three-asset immunization (exact solution)
+# Three-asset immunization
 immunize_duration_convexity(
-  liabilities = c(5000, 8000, 10000),
-  t_liabilities = c(3, 5, 7),
-  pv_assets = c(100, 150, 200),
-  duration_assets = c(2, 5, 8),
-  convexity_assets = c(6, 30, 72),
+  L = c(5000, 8000, 10000),
+  t = c(3, 5, 7),
+  P = c(100, 150, 200),
+  D = c(2, 5, 8),
+  C = c(6, 30, 72),
   i = 0.05
 )
 
-# Four-asset immunization (minimum-norm)
+# Four-asset immunization: minimum-norm solution
 immunize_duration_convexity(
-  liabilities = c(5000, 8000, 10000),
-  t_liabilities = c(3, 5, 7),
-  pv_assets = c(100, 120, 150, 200),
-  duration_assets = c(2, 4, 6, 8),
-  convexity_assets = c(6, 20, 42, 72),
+  L = c(5000, 8000, 10000),
+  t = c(3, 5, 7),
+  P = c(100, 120, 150, 200),
+  D = c(2, 4, 6, 8),
+  C = c(6, 20, 42, 72),
   i = 0.05
+)
+
+# Nominal annual interest rate convertible monthly
+immunize_duration_convexity(
+  L = c(5000, 8000, 10000),
+  t = c(3, 5, 7),
+  P = c(100, 150, 200),
+  D = c(2, 5, 8),
+  C = c(6, 30, 72),
+  i = 0.06,
+  i_type = "nominal_interest",
+  m = 12
 )
 
 }

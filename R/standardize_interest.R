@@ -1,25 +1,33 @@
 #' Standardize an interest rate to the annual effective rate i
 #'
-#' Converts common interest-rate specifications to the equivalent
-#' annual effective interest rate \code{i}.
+#' Converts common interest-rate specifications to the equivalent annual
+#' effective interest rate \code{i}, using compact actuarial notation.
 #'
-#' @param type Character vector indicating the rate type.
-#'   Must be one of \code{"effective"}, \code{"nominal_interest"},
+#' @param i_type Character vector indicating the interest-rate type. Must be one
+#'   of \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, or \code{"force"}.
-#' @param rate Numeric vector of rate values.
-#' @param m Positive integer vector giving the compounding frequency
-#'   for nominal rates. Ignored for \code{"effective"} and \code{"force"}.
+#' @param i Numeric vector of interest-rate values.
+#' @param m Positive integer vector giving the conversion frequency for nominal
+#'   rates. Ignored for \code{"effective"} and \code{"force"}.
+#' @param ... Transitional compatibility for older internal calls using
+#'   \code{type = } and \code{rate = }. These names are accepted and mapped to
+#'   \code{i_type} and \code{i}.
 #'
-#' @return Numeric vector of annual effective rates.
-#'   Missing values are propagated.
+#' @return Numeric vector of annual effective rates. Missing values are
+#' propagated.
 #'
 #' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{i} denotes the interest-rate value,
+#' \code{i_type} denotes the interest-rate type, and \code{m} denotes the
+#' conversion frequency for nominal rates.
+#'
 #' The conversion formulas are:
 #' \describe{
-#'   \item{effective:}{\eqn{i = \text{rate}}{i = rate} (identity)}
-#'   \item{nominal_interest:}{\eqn{i = (1 + j^{(m)}/m)^m - 1}{i = (1 + j(m)/m)^m - 1}}
-#'   \item{nominal_discount:}{\eqn{i = (1 - d^{(m)}/m)^{-m} - 1}{i = (1 - d(m)/m)^(-m) - 1}}
-#'   \item{force:}{\eqn{i = e^{\delta} - 1}{i = exp(delta) - 1}}
+#'   \item{effective:}{\eqn{i = i}{i = i} (identity)}
+#'   \item{nominal_interest:}{\eqn{i_e = (1 + j^{(m)}/m)^m - 1}{i_e = (1 + j(m)/m)^m - 1}}
+#'   \item{nominal_discount:}{\eqn{i_e = (1 - d^{(m)}/m)^{-m} - 1}{i_e = (1 - d(m)/m)^(-m) - 1}}
+#'   \item{force:}{\eqn{i_e = e^{\delta} - 1}{i_e = exp(delta) - 1}}
 #' }
 #'
 #' Input vectors must have length 1 or a common length.
@@ -31,14 +39,14 @@
 #'
 #' @examples
 #' # Scalar cases
-#' standardize_interest("nominal_interest", rate = 0.18, m = 4)
-#' standardize_interest("nominal_discount", rate = 0.10, m = 12)
-#' standardize_interest("force", rate = 0.12)
+#' standardize_interest(i_type = "nominal_interest", i = 0.18, m = 4)
+#' standardize_interest(i_type = "nominal_discount", i = 0.10, m = 12)
+#' standardize_interest(i_type = "force", i = 0.12)
 #'
 #' # Vectorized case
 #' standardize_interest(
-#'   type = c("nominal_interest", "force", "effective"),
-#'   rate = c(0.06, 0.05, 0.04),
+#'   i_type = c("nominal_interest", "force", "effective"),
+#'   i = c(0.06, 0.05, 0.04),
 #'   m = c(12, 1, 1)
 #' )
 #'
@@ -46,58 +54,87 @@
 #' if (requireNamespace("dplyr", quietly = TRUE) &&
 #'     requireNamespace("tibble", quietly = TRUE)) {
 #'   portfolio <- tibble::tibble(
-#'     policy_id  = 1:3,
-#'     gross_rate = c(0.05, 0.08, 0.10),
-#'     rate_type  = c("force", "nominal_interest", "nominal_discount"),
-#'     frequency  = c(NA, 4, 12)
+#'     policy_id = 1:3,
+#'     i = c(0.05, 0.08, 0.10),
+#'     i_type = c("force", "nominal_interest", "nominal_discount"),
+#'     m = c(1, 4, 12)
 #'   )
 #'
 #'   dplyr::mutate(
 #'     portfolio,
-#'     effective_rate = standardize_interest(
-#'       type = rate_type,
-#'       rate = gross_rate,
-#'       m = frequency
+#'     i_effective = standardize_interest(
+#'       i_type = i_type,
+#'       i = i,
+#'       m = m
 #'     )
 #'   )
 #' }
 #'
 #' @export
 standardize_interest <- function(
-    type = "effective",
-    rate,
-    m = 1
+    i_type = "effective",
+    i,
+    m = 1,
+    ...
 ) {
-  if (missing(rate)) {
-    stop("`rate` must be provided.", call. = FALSE)
+  dots <- list(...)
+
+  if (length(dots) > 0L) {
+    allowed_old <- c("type", "rate")
+    bad_dots <- setdiff(names(dots), allowed_old)
+
+    if (length(bad_dots) > 0L) {
+      stop(
+        "Unused argument(s): ",
+        paste(sprintf("`%s`", bad_dots), collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+
+    # Transitional compatibility: many internal calls still use
+    # standardize_interest(type = ..., rate = ..., m = ...).
+    if (!is.null(dots$type)) {
+      i_type <- dots$type
+    }
+
+    if (missing(i) && !is.null(dots$rate)) {
+      i <- dots$rate
+    } else if (!missing(i) && !is.null(dots$rate)) {
+      stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
+    }
   }
 
-  if (!is.character(type)) {
-    stop("`type` must be a character vector.", call. = FALSE)
+  if (missing(i)) {
+    stop("`i` must be provided.", call. = FALSE)
   }
 
-  if (!is.numeric(rate)) {
-    stop("`rate` must be a numeric vector.", call. = FALSE)
+  if (!is.character(i_type)) {
+    stop("`i_type` must be a character vector.", call. = FALSE)
+  }
+
+  if (!is.numeric(i)) {
+    stop("`i` must be a numeric vector.", call. = FALSE)
   }
 
   if (!is.numeric(m)) {
     stop("`m` must be a numeric vector.", call. = FALSE)
   }
 
-  size <- max(length(type), length(rate), length(m))
+  size <- max(length(i_type), length(i), length(m))
 
   valid_size <- function(x) length(x) %in% c(1L, size)
 
-  if (!valid_size(type) || !valid_size(rate) || !valid_size(m)) {
+  if (!valid_size(i_type) || !valid_size(i) || !valid_size(m)) {
     stop(
-      "`type`, `rate`, and `m` must have length 1 or a common length.",
+      "`i_type`, `i`, and `m` must have length 1 or a common length.",
       call. = FALSE
     )
   }
 
-  type <- rep_len(tolower(type), size)
-  rate <- rep_len(rate, size)
-  m    <- rep_len(m, size)
+  i_type <- rep_len(tolower(i_type), size)
+  i      <- rep_len(i, size)
+  m      <- rep_len(m, size)
 
   valid_types <- c(
     "effective",
@@ -106,24 +143,24 @@ standardize_interest <- function(
     "force"
   )
 
-  bad_type <- !is.na(type) & !(type %in% valid_types)
+  bad_type <- !is.na(i_type) & !(i_type %in% valid_types)
   if (any(bad_type)) {
     stop(
-      "`type` must contain only 'effective', 'nominal_interest', ",
+      "`i_type` must contain only 'effective', 'nominal_interest', ",
       "'nominal_discount', or 'force'.",
       call. = FALSE
     )
   }
 
-  bad_rate <- !is.na(rate) & !is.finite(rate)
-  if (any(bad_rate)) {
-    stop("`rate` must contain only finite numeric values or NA.", call. = FALSE)
+  bad_i <- !is.na(i) & !is.finite(i)
+  if (any(bad_i)) {
+    stop("`i` must contain only finite numeric values or NA.", call. = FALSE)
   }
 
-  idx_nom_i <- type == "nominal_interest"
-  idx_nom_d <- type == "nominal_discount"
-  idx_eff   <- type == "effective"
-  idx_force <- type == "force"
+  idx_nom_i <- i_type == "nominal_interest"
+  idx_nom_d <- i_type == "nominal_discount"
+  idx_eff   <- i_type == "effective"
+  idx_force <- i_type == "force"
   idx_nom   <- idx_nom_i | idx_nom_d
 
   missing_m <- idx_nom & is.na(m)
@@ -139,43 +176,43 @@ standardize_interest <- function(
     )
   }
 
-  bad_eff <- idx_eff & !is.na(rate) & rate <= -1
+  bad_eff <- idx_eff & !is.na(i) & i <= -1
   if (any(bad_eff)) {
     stop(
-      "For `type = 'effective'`, `rate` must be greater than -1.",
+      "For `i_type = 'effective'`, `i` must be greater than -1.",
       call. = FALSE
     )
   }
 
-  bad_nom_i <- idx_nom_i & !is.na(rate) & (1 + rate / m) <= 0
+  bad_nom_i <- idx_nom_i & !is.na(i) & (1 + i / m) <= 0
   if (any(bad_nom_i)) {
     stop(
-      "For `type = 'nominal_interest'`, `1 + rate / m` must be positive.",
+      "For `i_type = 'nominal_interest'`, `1 + i / m` must be positive.",
       call. = FALSE
     )
   }
 
-  bad_nom_d <- idx_nom_d & !is.na(rate) & (1 - rate / m) <= 0
+  bad_nom_d <- idx_nom_d & !is.na(i) & (1 - i / m) <= 0
   if (any(bad_nom_d)) {
     stop(
-      "For `type = 'nominal_discount'`, `1 - rate / m` must be positive.",
+      "For `i_type = 'nominal_discount'`, `1 - i / m` must be positive.",
       call. = FALSE
     )
   }
 
   out <- rep(NA_real_, size)
 
-  ok_eff <- idx_eff & !is.na(rate)
-  out[ok_eff] <- rate[ok_eff]
+  ok_eff <- idx_eff & !is.na(i)
+  out[ok_eff] <- i[ok_eff]
 
-  ok_nom_i <- idx_nom_i & !is.na(rate)
-  out[ok_nom_i] <- (1 + rate[ok_nom_i] / m[ok_nom_i])^m[ok_nom_i] - 1
+  ok_nom_i <- idx_nom_i & !is.na(i)
+  out[ok_nom_i] <- (1 + i[ok_nom_i] / m[ok_nom_i])^m[ok_nom_i] - 1
 
-  ok_nom_d <- idx_nom_d & !is.na(rate)
-  out[ok_nom_d] <- (1 - rate[ok_nom_d] / m[ok_nom_d])^(-m[ok_nom_d]) - 1
+  ok_nom_d <- idx_nom_d & !is.na(i)
+  out[ok_nom_d] <- (1 - i[ok_nom_d] / m[ok_nom_d])^(-m[ok_nom_d]) - 1
 
-  ok_force <- idx_force & !is.na(rate)
-  out[ok_force] <- exp(rate[ok_force]) - 1
+  ok_force <- idx_force & !is.na(i)
+  out[ok_force] <- exp(i[ok_force]) - 1
 
   out
 }

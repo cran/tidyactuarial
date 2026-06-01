@@ -1,7 +1,7 @@
 Package: tidyactuarial
 Type: Package
 Title: Tidy Tools for Actuarial Mathematics and Life Contingencies
-Version: 0.1.3
+Version: 0.1.4
 Authors@R: person(given = "Julian", family = "Fajardo", email = "julian.fajardo1908@gmail.com", role = c("aut", "cre"))
 Description: Provides tidyverse-aligned tools for actuarial mathematics
     and life contingencies, including life tables, survival probabilities,
@@ -20,8 +20,8 @@ LazyDataCompression: xz
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-05-28 22:32:46 UTC; LENOVO
+Packaged: 2026-06-01 17:34:08 UTC; LENOVO
 Author: Julian Fajardo [aut, cre]
 Maintainer: Julian Fajardo <julian.fajardo1908@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-05-28 22:50:02 UTC
+Date/Publication: 2026-06-01 19:30:02 UTC

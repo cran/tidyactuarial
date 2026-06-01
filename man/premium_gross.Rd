@@ -2,21 +2,16 @@
 % Please edit documentation in R/premium_gross.R
 \name{premium_gross}
 \alias{premium_gross}
-\title{Gross (expense-loaded) premium from net premium}
+\title{Gross (expense-loaded) premium from a net premium}
 \usage{
-premium_gross(
-  prem,
-  alpha = 0,
-  beta = 0,
-  gamma = 0,
-  output = c("value", "table")
-)
+premium_gross(prem, alpha = 0, beta = 0, gamma = 0, tidy = FALSE, ...)
 }
 \arguments{
 \item{prem}{A one-row data frame or tibble containing at least:
 \itemize{
-\item \code{premium}: net premium per payment.
-\item \code{apv_premiums}: APV of the premium annuity.
+\item \code{premium} or \code{P}: net premium per payment.
+\item \code{apv_premiums} or \code{a_premiums}: APV of the premium
+annuity.
 }}
 
 \item{alpha}{Numeric scalar greater than or equal to 0. Initial acquisition
@@ -29,27 +24,36 @@ as a fraction of each gross premium payment.}
 \item{gamma}{Numeric scalar greater than or equal to 0. Fixed maintenance
 expense per premium payment period, in monetary units.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric gross
-premium, or \code{"table"} to return a one-row tibble with the expense
+\item{tidy}{Logical scalar. If \code{FALSE}, returns the gross premium as a
+numeric value. If \code{TRUE}, returns a one-row tibble with the expense
 breakdown.}
+
+\item{...}{Transitional compatibility for older calls using
+\code{output = "value"} or \code{output = "table"}. This argument will be
+removed in a future version.}
 }
 \value{
-If \code{output = "value"}, a numeric gross premium per payment.
+If \code{tidy = FALSE}, a numeric gross premium per payment.
 
-If \code{output = "table"}, a one-row tibble with columns
-\code{gross_premium}, \code{net_premium}, \code{alpha}, \code{beta},
-\code{gamma}, \code{loading_pct}, and \code{apv_premiums}.
+If \code{tidy = TRUE}, a one-row tibble with columns \code{G},
+\code{P_net}, \code{alpha}, \code{beta}, \code{gamma}, \code{loading_pct},
+and \code{a_premiums}.
 }
 \description{
 Adjusts a net premium using a simple expense structure
 \eqn{(\alpha, \beta, \gamma)} to obtain the gross or commercial premium
-through the extended equivalence principle.
+through the extended equivalence principle, using compact actuarial notation.
 }
 \details{
 The function is designed to work with the detailed output of
-\code{\link{premium_x}} using \code{output = "table"}. It can also be used
-with any one-row tibble containing the columns \code{premium} and
-\code{apv_premiums}.
+\code{\link{premium_x}} or \code{\link{premium_xy}} when those functions
+return a one-row tibble containing the APV of the premium annuity. It can
+also be used with any compatible one-row tibble.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}. The gross premium is denoted by \code{G}, the net
+premium by \code{P_net}, and the APV of the premium annuity by
+\code{a_premiums}.
 
 The extended equivalence principle equates the APV of gross premiums with
 the APV of benefits plus expenses:
@@ -69,22 +73,13 @@ G =
 }
 
 In this function, \eqn{\ddot{a}} is supplied through the
-\code{apv_premiums} column of \code{prem}.
+\code{apv_premiums} or \code{a_premiums} column of \code{prem}.
 }
 \examples{
-lt <- data.frame(
-  x  = 60:66,
-  lx = c(100000, 99000, 97500, 95500, 93000, 90000, 86000)
-)
-
-# Full workflow: net premium -> gross premium
-net <- premium_x(
-  mortality_table = lt,
-  age = 60,
-  rate = 0.05,
-  insurance_type = "whole",
-  benefit = 100000,
-  output = "table"
+# Compatible one-row premium table
+net <- tibble::tibble(
+  premium = 1200,
+  apv_premiums = 12.5
 )
 
 premium_gross(net, alpha = 0.5, beta = 0.05, gamma = 50)
@@ -99,11 +94,16 @@ premium_gross(
   alpha = 0.5,
   beta = 0.05,
   gamma = 50,
-  output = "table"
+  tidy = TRUE
 )
 
-# No expenses: gross = net
-premium_gross(net)
+# Also accepts compact actuarial column names
+net2 <- tibble::tibble(
+  P = 1200,
+  a_premiums = 12.5
+)
+
+premium_gross(net2, alpha = 0.5, beta = 0.05, gamma = 50)
 
 }
 \seealso{
@@ -112,8 +112,10 @@ premium_gross(net)
 \code{\link{annuity_x}} for building custom expense APVs.
 
 Other life-contingencies: 
+\code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{annuity_xy}()},
+\code{\link{insurance_variable_k}()},
 \code{\link{insurance_x}()},
 \code{\link{insurance_xy}()},
 \code{\link{life_contract}()},

@@ -5,33 +5,43 @@
 #'
 #' @description
 #' This dataset is intended for reproducible examples, internal validation, and
-#' benchmark tests for life-contingency functions such as [annuity_x()],
-#' [insurance_x()], [premium_x()], [reserve_x()], [annuity_xy()],
-#' [insurance_xy()], [premium_xy()], and [reserve_xy()].
+#' benchmark tests for life-contingency functions such as \code{\link{annuity_x}},
+#' \code{\link{insurance_x}}, \code{\link{premium_x}},
+#' \code{\link{reserve_x}}, \code{\link{annuity_xy}},
+#' \code{\link{insurance_xy}}, \code{\link{premium_xy}}, and
+#' \code{\link{reserve_xy}}.
 #'
-#' @format A data frame with one row per integer age and the following columns:
+#' @format A tibble with one row per integer age and the following columns:
 #' \describe{
-#'   \item{x}{Integer age.}
-#'   \item{lx}{Number of lives surviving to exact age `x`.}
-#'   \item{dx}{Number of deaths between exact ages `x` and `x + 1`.}
-#'   \item{qx}{One-year probability of death between exact ages `x` and `x + 1`.}
-#'   \item{px}{One-year probability of survival from exact age `x` to `x + 1`.}
+#'   \item{x}{Integer actuarial age.}
+#'   \item{lx}{Number of lives surviving to exact age \code{x}.}
+#'   \item{dx}{Number of deaths between exact ages \code{x} and \code{x + 1}.}
+#'   \item{qx}{One-year probability of death between exact ages \code{x} and
+#'   \code{x + 1}.}
+#'   \item{px}{One-year probability of survival from exact age \code{x} to
+#'   \code{x + 1}.}
 #' }
 #'
 #' @details
 #' The table is included as a convenient benchmark table for actuarial
-#' calculations. The build script in `data-raw/soa08lt.R` constructs this tidy
-#' dataset from the SOA illustrative actuarial table object distributed in the
-#' `lifecontingencies` package.
+#' calculations. The build script in \code{data-raw/soa08lt.R} constructs this
+#' tidy dataset from the SOA illustrative actuarial table object distributed in
+#' the \code{lifecontingencies} package.
+#'
+#' The column names already follow the compact actuarial notation used in
+#' \code{tidyactuarial}: \code{x} for age, \code{lx} for lives, \code{dx} for
+#' deaths, \code{qx} for one-year death probability, and \code{px} for
+#' one-year survival probability.
 #'
 #' @source Society of Actuaries illustrative life table, commonly referenced in
-#' Bowers et al. (1997), *Actuarial Mathematics*, Appendix 2A.
+#' Bowers et al. (1997), \emph{Actuarial Mathematics}, Appendix 2A.
 #'
 #' @references
 #' Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A., and Nesbitt,
-#' C. J. (1997). *Actuarial Mathematics*. Second edition. Society of Actuaries.
+#' C. J. (1997). \emph{Actuarial Mathematics}. Second edition. Society of
+#' Actuaries.
 #'
-#' Spedicato, G. A. (2013). The `lifecontingencies` package: performing
+#' Spedicato, G. A. (2013). The \code{lifecontingencies} package: performing
 #' financial and actuarial mathematics calculations in R.
 #'
 #' @examples
@@ -39,11 +49,12 @@
 #' head(soa08lt)
 #'
 #' annuity_x(
-#'   mortality_table = soa08lt,
-#'   age = 65,
-#'   rate = 0.06,
+#'   lt = soa08lt,
+#'   x = 65,
+#'   i = 0.06,
 #'   timing = "due"
 #' )
 #'
+#' @docType data
 #' @keywords datasets
 "soa08lt"

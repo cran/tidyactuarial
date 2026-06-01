@@ -11,66 +11,114 @@ mortality_law_table(
   x_max,
   ...,
   params = NULL,
-  frac = c("CF", "UDD", "Balducci"),
-  radix = 1e+05,
+  frac = c("CF", "UDD", "Balducci", "CML"),
+  l0 = 1e+05,
   close = TRUE,
-  ax = 0.5,
+  a_x = 0.5,
   check = TRUE,
-  tol = 1e-10
+  tol = 1e-10,
+  radix = NULL,
+  ax = NULL
 )
 }
 \arguments{
 \item{law}{Character. Mortality law. One of \code{"Exponential"},
-\code{"Gompertz"}, \code{"Makeham"}, \code{"Weibull"}, \code{"Logistic"},
-\code{"DeMoivre"}, \code{"Beta"}, or \code{"HeligmanPollard"}.}
+\code{"Gompertz"}, \code{"Makeham"}, \code{"Weibull"},
+\code{"Logistic"}, \code{"DeMoivre"}, \code{"Beta"}, or
+\code{"HeligmanPollard"}.}
 
 \item{x_min}{Integer. Minimum age, inclusive.}
 
-\item{x_max}{Integer. Maximum age, inclusive. Must satisfy \code{x_min < x_max}.}
+\item{x_max}{Integer. Maximum age, inclusive. Must satisfy
+\code{x_min < x_max}.}
 
-\item{...}{Named law parameters. These values override \code{params}. Placing
-\code{...} before arguments such as \code{close} and \code{check} avoids
-partial-matching conflicts with the Gompertz/Makeham parameter \code{c}.}
+\item{...}{Named law parameters. These values override \code{params}.
+Placing \code{...} before arguments such as \code{close} and \code{check}
+avoids partial-matching conflicts with the Gompertz and Makeham parameter
+\code{c}.}
 
-\item{params}{Named list of law parameters, or \code{NULL}. Direct parameters
-supplied through \code{...} override values in \code{params}.}
+\item{params}{Named list of law parameters, or \code{NULL}.}
 
 \item{frac}{Character. Within-year assumption used to convert \eqn{\mu_x} to
-\eqn{q_x}. One of \code{"CF"}, \code{"UDD"}, or \code{"Balducci"}.}
+\eqn{q_x}. One of \code{"CF"}, \code{"UDD"}, \code{"Balducci"}, or
+\code{"CML"}. \code{"CML"} is treated as \code{"CF"}.}
 
-\item{radix}{Numeric. Starting cohort size at age \code{x_min}.}
+\item{l0}{Numeric scalar. Initial radix, that is, the starting value
+\eqn{l_{x_min}}.}
 
 \item{close}{Logical. If \code{TRUE}, forces the last age to close.}
 
-\item{ax}{Numeric. Average fraction of the year lived by those dying.}
+\item{a_x}{Numeric scalar. Average fraction of the year lived by those dying
+between age \eqn{x} and \eqn{x+1}. Default is \code{0.5}.}
 
 \item{check}{Logical. If \code{TRUE}, performs strict input validation.}
 
-\item{tol}{Numeric. Tolerance used in checks.}
+\item{tol}{Numeric tolerance used in checks.}
+
+\item{radix}{Deprecated. Use \code{l0}.}
+
+\item{ax}{Deprecated. Use \code{a_x}.}
 }
 \value{
-A tibble with columns \code{x}, \code{law}, \code{frac}, \code{mu_x},
-\code{qx}, \code{px}, \code{lx}, \code{dx}, \code{Lx}, \code{Tx},
-\code{ex}, and \code{mx}.
+A tibble with columns \code{x}, \code{law}, \code{frac},
+\code{mu_x}, \code{qx}, \code{px}, \code{lx}, \code{dx}, \code{Lx},
+\code{Tx}, \code{ex}, and \code{mx}.
 }
 \description{
 Creates a tidy life table with one row per integer age from a parametric
-mortality law. The output follows tidyactuarial conventions and includes
-columns such as \code{x}, \code{qx}, \code{px}, \code{lx}, \code{dx}, and
-\code{mx}.
+mortality law, using compact actuarial notation.
+}
+\details{
+The output follows tidyactuarial conventions and includes columns such as
+\code{x}, \code{qx}, \code{px}, \code{lx}, \code{dx}, \code{Lx},
+\code{Tx}, \code{ex}, and \code{mx}.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{x} denotes age, \code{l0} denotes the starting
+radix, \code{a_x} denotes the average fraction of the year lived by those
+dying during the age interval, \code{qx} denotes the one-year death
+probability, and \code{px = 1 - qx}.
+
+The parameter \code{F_hp} is used for the Heligman-Pollard law instead of
+\code{F}, because \code{F} is historically associated with \code{FALSE} in
+R and should not be promoted in a CRAN-facing API. The old name \code{F} is
+still accepted as a transitional alias.
 }
 \section{Supported laws}{
 
 \itemize{
-\item \strong{Exponential}: \eqn{\mu_x = \lambda}
-\item \strong{Gompertz}: \eqn{\mu_x = B c^x}
-\item \strong{Makeham}: \eqn{\mu_x = A + B c^x}
-\item \strong{Weibull}: \eqn{\mu_x = (k/\lambda)(x/\lambda)^{k-1}}
-\item \strong{Logistic}: \eqn{\mu_x = (A + B c^x)/(1 + C c^x)}
-\item \strong{DeMoivre}: finite lifetime law with \eqn{q_x = 1/(\omega - x)}
-for \eqn{x < \omega}
-\item \strong{Beta}: scaled lifetime model \eqn{X/\omega \sim Beta(\alpha,\beta)}
-\item \strong{HeligmanPollard}: odds model returning \eqn{q_x} directly
+\item \strong{Exponential}: \eqn{\mu_x = \lambda}.
+\item \strong{Gompertz}: \eqn{\mu_x = Bc^x}.
+\item \strong{Makeham}: \eqn{\mu_x = A + Bc^x}.
+\item \strong{Weibull}: \eqn{\mu_x = (shape/scale)(x/scale)^{shape-1}}.
+\item \strong{Logistic}: \eqn{\mu_x = (A + Bc^x)/(1 + Cc^x)}.
+\item \strong{DeMoivre}: finite lifetime law with
+\eqn{q_x = 1/(\omega - x)} for \eqn{x < \omega}.
+\item \strong{Beta}: scaled lifetime model
+\eqn{X/\omega \sim Beta(\alpha,\beta)}.
+\item \strong{HeligmanPollard}: odds model returning \eqn{q_x} directly.
+}
+}
+
+\section{Law parameters}{
+
+Parameters for the selected law are supplied either through \code{...} or
+through the named list \code{params}. Direct parameters supplied through
+\code{...} override values in \code{params}.
+
+Required parameters:
+\itemize{
+\item \code{"Exponential"}: \code{lambda}.
+\item \code{"Gompertz"}: \code{B}, \code{c}.
+\item \code{"Makeham"}: \code{A}, \code{B}, \code{c}.
+\item \code{"Weibull"}: \code{shape}, \code{scale}. Transitional aliases
+\code{k} and \code{lambda} are accepted.
+\item \code{"Logistic"}: \code{A}, \code{B}, \code{c}, \code{C}.
+\item \code{"DeMoivre"}: \code{omega}.
+\item \code{"Beta"}: \code{alpha}, \code{beta}, \code{omega}.
+\item \code{"HeligmanPollard"}: \code{A}, \code{B}, \code{C},
+\code{D}, \code{E}, \code{F_hp}, and \code{G}. Transitional alias
+\code{F} is accepted and mapped to \code{F_hp}.
 }
 }
 
@@ -79,9 +127,9 @@ for \eqn{x < \omega}
 For laws defined by a force of mortality \eqn{\mu_x}, the one-year death
 probability \eqn{q_x} is obtained using \code{frac}:
 \itemize{
-\item \code{"CF"}: \eqn{q_x = 1 - \exp(-\mu_x)}
-\item \code{"UDD"}: \eqn{q_x = \mu_x}
-\item \code{"Balducci"}: \eqn{q_x = \mu_x/(1+\mu_x)}
+\item \code{"CF"} or \code{"CML"}: \eqn{q_x = 1 - \exp(-\mu_x)}.
+\item \code{"UDD"}: \eqn{q_x = \mu_x}.
+\item \code{"Balducci"}: \eqn{q_x = \mu_x/(1+\mu_x)}.
 }
 }
 
@@ -105,17 +153,50 @@ mortality_law_table("Gompertz", 0, 110, B = 1e-5, c = 1.08)
 
 mortality_law_table("Makeham", 0, 110, A = 5e-4, B = 1e-6, c = 1.10)
 
-mortality_law_table("Weibull", 1, 110, k = 2.5, lambda = 90)
+mortality_law_table("Weibull", 1, 110, shape = 2.5, scale = 90)
 
-mortality_law_table("Logistic", 0, 110, A = 1e-4, B = 1e-6, c = 1.10, C = 1e-3)
+mortality_law_table(
+  "Logistic",
+  0, 110,
+  A = 1e-4,
+  B = 1e-6,
+  c = 1.10,
+  C = 1e-3
+)
 
 mortality_law_table("DeMoivre", 0, 100, omega = 100)
 
 mortality_law_table("Beta", 0, 100, alpha = 2, beta = 5, omega = 101)
 
 mortality_law_table(
-  "HeligmanPollard", 1, 110,
-  A = 0.0002, B = 0.1, C = 0.03, D = 10, E = 20, F = 0.00005, G = 1.08
+  "HeligmanPollard",
+  1, 110,
+  A = 0.0002,
+  B = 0.1,
+  C = 0.03,
+  D = 10,
+  E = 20,
+  F_hp = 0.00005,
+  G = 1.08
+)
+
+# Transitional compatibility with older names
+mortality_law_table("Weibull", 1, 110, k = 2.5, lambda = 90)
+
+mortality_law_table(
+  "HeligmanPollard",
+  1, 110,
+  A = 0.0002,
+  B = 0.1,
+  C = 0.03,
+  D = 10,
+  E = 20,
+  F = 0.00005,
+  G = 1.08
 )
 
 }
+\seealso{
+\code{\link{lifetable}}, \code{\link{t_px}}, \code{\link{e_xy}}
+}
+\concept{life-tables}

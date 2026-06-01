@@ -4,25 +4,18 @@
 \alias{.mc_annuity_payment_times_annual}
 \title{Internal helper: annual annuity payment times}
 \usage{
-.mc_annuity_payment_times_annual(
-  k,
-  annuity,
-  term,
-  deferral_years,
-  guarantee_years,
-  timing
-)
+.mc_annuity_payment_times_annual(K, type, n, h, n_guar, timing)
 }
 \arguments{
-\item{k}{Numeric scalar. Simulated curtate future lifetime.}
+\item{K}{Numeric scalar. Simulated curtate future lifetime.}
 
-\item{annuity}{Character string. Annuity type.}
+\item{type}{Character string. Canonical annuity type.}
 
-\item{term}{Numeric scalar or \code{NULL}.}
+\item{n}{Numeric scalar or \code{NULL}.}
 
-\item{deferral_years}{Numeric scalar.}
+\item{h}{Numeric scalar. Deferral period.}
 
-\item{guarantee_years}{Numeric scalar or \code{NULL}.}
+\item{n_guar}{Numeric scalar or \code{NULL}.}
 
 \item{timing}{Character string. Either \code{"immediate"} or \code{"due"}.}
 }

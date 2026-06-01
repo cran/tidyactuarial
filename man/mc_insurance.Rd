@@ -5,221 +5,240 @@
 \title{Compute simulated present values for life insurance benefits}
 \usage{
 mc_insurance(
-  data,
-  rate,
+  .data = NULL,
+  i = NULL,
   benefit = 1,
-  insurance = c("whole_life", "term", "deferred", "deferred_term", "pure_endowment",
-    "endowment"),
-  term = NULL,
-  deferral_years = 0,
-  payment_timing = c("end_of_year", "moment_of_death"),
-  interest_type = c("effective", "nominal", "force"),
+  type = c("whole", "term", "deferred", "deferred_term", "pure_endowment", "endowment",
+    "whole_life", "deferred_temporary"),
+  n = NULL,
+  h = 0,
+  timing = c("end_of_year", "moment_of_death"),
+  i_type = c("effective", "nominal_interest", "nominal_discount", "force", "nominal"),
   m = 1,
-  k_col = "Kx",
-  tx_col = "Tx",
-  benefit_col = "pv_benefit"
+  col_K = "Kx",
+  col_T = "Tx",
+  col_pv = "pv_benefit",
+  ...
 )
 }
 \arguments{
-\item{data}{A data frame or tibble containing simulated future lifetimes,
-typically returned by \code{\link[=simulate_lifetime]{simulate_lifetime()}} or by \code{\link[=mc_multilife_status]{mc_multilife_status()}}
-when working with multiple-life statuses.}
+\item{.data}{A data frame or tibble containing simulated future lifetimes,
+typically returned by \code{\link{simulate_lifetime}} or by
+\code{\link{mc_multilife_status}} when working with multiple-life statuses.}
 
-\item{rate}{Numeric scalar. Interest rate used for discounting.}
+\item{i}{Numeric scalar. Interest-rate input used for discounting.}
 
 \item{benefit}{Numeric scalar. Benefit amount payable under the insurance.
 Default is \code{1}.}
 
-\item{insurance}{Character string specifying the type of insurance.
-Available options are \code{"whole_life"}, \code{"term"}, \code{"deferred"},
-\code{"deferred_term"}, \code{"pure_endowment"}, and \code{"endowment"}.}
+\item{type}{Character string specifying the insurance type. Canonical
+options are \code{"whole"}, \code{"term"}, \code{"deferred"},
+\code{"deferred_term"}, \code{"pure_endowment"}, and \code{"endowment"}.
+Transitional aliases \code{"whole_life"} and \code{"deferred_temporary"}
+are also accepted.}
 
-\item{term}{Numeric scalar. Term of the insurance in years. Required for
-\code{"term"}, \code{"deferred_term"}, \code{"pure_endowment"}, and \code{"endowment"}.}
+\item{n}{Numeric scalar. Insurance term in years. Required for
+\code{"term"}, \code{"deferred_term"}, \code{"pure_endowment"}, and
+\code{"endowment"}.}
 
-\item{deferral_years}{Numeric scalar. Deferral period in years. Default is
-\code{0}. Required to be positive for \code{"deferred"} and \code{"deferred_term"}
-insurance.}
+\item{h}{Numeric scalar. Deferral period in years. Default is \code{0}.
+Required to be positive for \code{"deferred"} and
+\code{"deferred_term"} insurance.}
 
-\item{payment_timing}{Character string specifying when death benefits are
-paid. Available options are \code{"end_of_year"} and \code{"moment_of_death"}.
-Default is \code{"end_of_year"}.}
+\item{timing}{Character string specifying when death benefits are paid.
+Available options are \code{"end_of_year"} and
+\code{"moment_of_death"}. Default is \code{"end_of_year"}.}
 
-\item{interest_type}{Character string specifying the interest rate convention.
-Available options are \code{"effective"}, \code{"nominal"}, and \code{"force"}.
-Default is \code{"effective"}.}
+\item{i_type}{Character string specifying the interest-rate convention.
+Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}. The transitional value
+\code{"nominal"} is accepted and treated as
+\code{"nominal_interest"}.}
 
-\item{m}{Numeric scalar. Number of interest conversion periods per year when
-\code{interest_type = "nominal"}. Default is \code{1}. This argument controls the
+\item{m}{Positive integer. Number of interest conversion periods per year
+for nominal annual rates. Default is \code{1}. This argument controls the
 interest-rate conversion frequency only. It does not represent benefit
 frequency or premium payment frequency.}
 
-\item{k_col}{Character string. Name of the column containing simulated
+\item{col_K}{Character string. Name of the column containing simulated
 curtate future lifetimes. Default is \code{"Kx"}.}
 
-\item{tx_col}{Character string. Name of the column containing simulated
+\item{col_T}{Character string. Name of the column containing simulated
 complete future lifetimes. Required when
-\code{payment_timing = "moment_of_death"}. Default is \code{"Tx"}.}
+\code{timing = "moment_of_death"}. Default is \code{"Tx"}.}
 
-\item{benefit_col}{Character string. Name of the output column containing
+\item{col_pv}{Character string. Name of the output column containing
 simulated present values of benefits. Default is \code{"pv_benefit"}.}
+
+\item{...}{Transitional compatibility for older calls using \code{data},
+\code{rate}, \code{insurance}, \code{term}, \code{deferral_years},
+\code{payment_timing}, \code{interest_type}, \code{k_col},
+\code{tx_col}, and \code{benefit_col}.}
 }
 \value{
 A tibble with the original simulation columns and additional columns:
-\itemize{
-\item \code{rate}: original rate supplied.
-\item \code{interest_type}: interest rate convention.
-\item \code{m}: interest conversion frequency.
-\item \code{effective_rate}: equivalent annual effective interest rate.
-\item \code{discount_factor}: annual discount factor.
-\item \code{insurance}: insurance type.
-\item \code{benefit}: benefit amount.
-\item \code{term}: insurance term, if applicable.
-\item \code{deferral_years}: deferral period.
-\item \code{payment_timing}: timing used for death benefits.
-\item \code{benefit_time}: simulated payment time of the benefit.
-\item \code{benefit_indicator}: indicator that the benefit is paid.
-\item \code{pv_benefit}: simulated present value of the benefit, or another name
-supplied through \code{benefit_col}.
+\describe{
+\item{i}{Original interest-rate input.}
+\item{i_type}{Interest-rate convention.}
+\item{m}{Interest conversion frequency.}
+\item{i_effective}{Equivalent annual effective interest rate.}
+\item{v}{Annual discount factor.}
+\item{type}{Canonical insurance type.}
+\item{benefit}{Benefit amount.}
+\item{n}{Insurance term, if applicable.}
+\item{h}{Deferral period.}
+\item{timing}{Timing used for death benefits.}
+\item{benefit_time}{Simulated payment time of the benefit.}
+\item{benefit_indicator}{Indicator that the benefit is paid.}
+\item{pv_benefit}{Simulated present value of the benefit, or another name
+supplied through \code{col_pv}.}
 }
+
+For transition, the output also includes legacy columns such as
+\code{rate}, \code{interest_type}, \code{effective_rate},
+\code{discount_factor}, \code{insurance}, \code{term},
+\code{deferral_years}, and \code{payment_timing}.
 }
 \description{
-Computes Monte Carlo simulated present values of life insurance benefits
-from simulated future lifetimes.
+Computes Monte Carlo simulated present values of life insurance benefits from
+simulated future lifetimes, using compact actuarial notation.
 }
 \details{
-This function is designed to be used after \code{\link[=simulate_lifetime]{simulate_lifetime()}}. It takes
-simulated values of the curtate future lifetime \eqn{K_x}, and optionally
-the complete future lifetime \eqn{T_x}, and evaluates the present value
-random variable associated with classical life insurance benefits.
+This function is designed to be used after \code{\link{simulate_lifetime}},
+\code{\link{simulate_lifetimes}}, or \code{\link{mc_multilife_status}}. It
+takes simulated values of the curtate future lifetime \eqn{K_x}, and when
+needed the complete future lifetime \eqn{T_x}, and evaluates the present
+value random variable associated with classical life insurance benefits.
 
-Let \eqn{K_x} denote the curtate future lifetime of a life aged \eqn{x},
-let \eqn{T_x} denote the complete future lifetime, and let \eqn{v} denote
-the annual discount factor.
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} is the interest-rate input, \code{i_type}
+is the interest-rate convention, \code{m} is the nominal conversion
+frequency, \code{n} is the insurance term, and \code{h} is the deferral
+period.
 
-If \code{payment_timing = "end_of_year"}, death benefits are discounted using
-\eqn{K_x + 1}. If \code{payment_timing = "moment_of_death"}, death benefits are
+The arguments \code{m} and \code{col_K} have deliberately different roles:
+\itemize{
+\item \code{m} is used only for nominal interest-rate conversion.
+\item \code{col_K} identifies the simulated curtate future lifetime column.
+}
+
+If \code{timing = "end_of_year"}, death benefits are discounted using
+\eqn{K_x + 1}. If \code{timing = "moment_of_death"}, death benefits are
 discounted using \eqn{T_x}.
-
-The arguments \code{interest_type} and \code{m} determine how the supplied rate is
-converted into an annual effective rate before discounting. When
-\code{interest_type = "effective"}, \code{rate} is interpreted as an annual effective
-interest rate. When \code{interest_type = "nominal"}, \code{rate} is interpreted as a
-nominal annual interest rate convertible \code{m} times per year. When
-\code{interest_type = "force"}, \code{rate} is interpreted as a constant force of
-interest.
 
 The following insurance types are supported:
 \itemize{
-\item \code{"whole_life"}: benefit is paid whenever death occurs.
-\item \code{"term"}: benefit is paid if death occurs within \code{term} years.
-\item \code{"deferred"}: benefit is paid if death occurs after the deferral period.
-\item \code{"deferred_term"}: benefit is paid if death occurs after the deferral
-period and within the following \code{term} years.
-\item \code{"pure_endowment"}: benefit is paid at time \code{term} if the life survives
-to that time.
-\item \code{"endowment"}: death benefit is paid if death occurs within \code{term} years;
-otherwise, a survival benefit is paid at time \code{term}.
+\item \code{"whole"}: benefit is paid whenever death occurs.
+\item \code{"term"}: benefit is paid if death occurs within \code{n}
+years.
+\item \code{"deferred"}: benefit is paid if death occurs after the
+deferral period \code{h}.
+\item \code{"deferred_term"}: benefit is paid if death occurs after
+\code{h} and within the following \code{n} years.
+\item \code{"pure_endowment"}: benefit is paid at time \code{n} if the
+life survives to that time.
+\item \code{"endowment"}: death benefit is paid if death occurs within
+\code{n} years; otherwise, a survival benefit is paid at time \code{n}.
 }
 
-The function returns simulated present values, not only their expected
-values. Therefore the resulting column can be summarized with
-\code{\link[=summary_mc]{summary_mc()}}, plotted with \code{ggplot2}, or used to construct premiums,
-losses, and reserves.
+The function returns simulated present values, not only their expected value.
+Therefore the resulting column can be summarized with
+\code{\link{summary_mc}}, plotted with \code{ggplot2}, or used to construct
+premiums, losses, and reserves.
 }
 \examples{
-life_table <- tibble::tibble(
-  age = 40:100,
+lt <- tibble::tibble(
+  x = 40:100,
   qx = seq(0.002, 1, length.out = 61)
 )
 
-# Whole life insurance payable at the end of the year of death
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
+# Whole-life insurance payable at the end of the year of death
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    seed = 123
+  ) |>
   mc_insurance(
-    rate = 0.05,
-    insurance = "whole_life",
+    i = 0.05,
+    type = "whole",
     benefit = 1
   )
 
 # 20-year term insurance
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    seed = 123
+  ) |>
   mc_insurance(
-    rate = 0.05,
-    insurance = "term",
-    term = 20,
+    i = 0.05,
+    type = "term",
+    n = 20,
     benefit = 100000
   )
 
-# 10-year deferred whole life insurance
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
+# 10-year deferred whole-life insurance
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    seed = 123
+  ) |>
   mc_insurance(
-    rate = 0.05,
-    insurance = "deferred",
-    deferral_years = 10,
-    benefit = 1
-  )
-
-# 10-year deferred, 20-year term insurance
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
-  mc_insurance(
-    rate = 0.05,
-    insurance = "deferred_term",
-    deferral_years = 10,
-    term = 20,
-    benefit = 1
-  )
-
-# Pure endowment
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
-  mc_insurance(
-    rate = 0.05,
-    insurance = "pure_endowment",
-    term = 20,
+    i = 0.05,
+    type = "deferred",
+    h = 10,
     benefit = 1
   )
 
 # Endowment insurance payable at the moment of death if death occurs
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, fractional = "udd", seed = 123) |>
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    frac = "udd",
+    seed = 123
+  ) |>
   mc_insurance(
-    rate = 0.05,
-    insurance = "endowment",
-    term = 20,
-    payment_timing = "moment_of_death",
+    i = 0.05,
+    type = "endowment",
+    n = 20,
+    timing = "moment_of_death",
     benefit = 1
   )
 
-# Nominal rate convertible monthly
-life_table |>
-  simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
+# Nominal interest rate convertible monthly
+lt |>
+  simulate_lifetime(
+    x = 40,
+    n_sim = 25,
+    seed = 123
+  ) |>
   mc_insurance(
-    rate = 0.06,
-    interest_type = "nominal",
+    i = 0.06,
+    i_type = "nominal_interest",
     m = 12,
-    insurance = "whole_life",
+    type = "whole",
     benefit = 1
   )
 
 # First-death insurance using a multiple-life status
-life_table |>
+lt |>
   simulate_lifetimes(
-    ages = c(60, 58),
-    n_sim = 1000,
-    fractional = "udd",
+    x = c(60, 58),
+    n_sim = 25,
+    frac = "udd",
     seed = 123
   ) |>
-  mc_multilife_status(status = "first_death") |>
+  mc_multilife_status(status = "joint") |>
   mc_insurance(
-    rate = 0.04,
-    insurance = "whole_life",
+    i = 0.04,
+    type = "whole",
     benefit = 100000,
-    k_col = "K_status",
-    tx_col = "T_status"
+    col_K = "K_status",
+    col_T = "T_status"
   )
 
 }
@@ -229,7 +248,17 @@ and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 Society of Actuaries.
 }
 \seealso{
-\code{\link[=simulate_lifetime]{simulate_lifetime()}}, \code{\link[=simulate_lifetimes]{simulate_lifetimes()}}, \code{\link[=mc_multilife_status]{mc_multilife_status()}},
-\code{\link[=mc_annuity]{mc_annuity()}}, \code{\link[=mc_premium]{mc_premium()}}, \code{\link[=mc_loss]{mc_loss()}}, \code{\link[=mc_reserve]{mc_reserve()}},
-\code{\link[=summary_mc]{summary_mc()}}
+\code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
+\code{\link{mc_multilife_status}}, \code{\link{mc_annuity}},
+\code{\link{mc_premium}}, \code{\link{mc_loss}}, \code{\link{mc_reserve}},
+\code{\link{summary_mc}}
+
+Other monte-carlo: 
+\code{\link{mc_annuity}()},
+\code{\link{mc_loss}()},
+\code{\link{mc_premium}()},
+\code{\link{mc_reserve}()},
+\code{\link{simulate_lifetime}()},
+\code{\link{summary_mc}()}
 }
+\concept{monte-carlo}

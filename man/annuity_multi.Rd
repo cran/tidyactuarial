@@ -7,70 +7,88 @@
 annuity_multi(
   lt,
   ages,
+  i,
+  i_type = "effective",
+  m = 1L,
+  n = NULL,
+  h = 0L,
+  k = 1L,
   annuity = c("cohort", "reversionary"),
   cohort = c("first", "last"),
   alpha = NULL,
-  n = NULL,
-  m = 0L,
-  k = 1L,
   timing = c("immediate", "due"),
-  woolhouse = c("none", "first", "second"),
-  i
+  woolhouse = c("none", "first", "second")
 )
 }
 \arguments{
-\item{lt}{A lifetable object (data.frame/tibble) with column \code{x} and at least
-one of \code{lx}, \code{px}, \code{qx}. For different mortality assumptions by life,
-you may pass a list of lifetables of the same length as \code{ages}
-(e.g., \code{list(lt_male, lt_female, lt_child)}).}
+\item{lt}{A life table object (data frame or tibble) with column \code{x}
+and at least one of \code{lx}, \code{px}, or \code{qx}. For different
+mortality assumptions by life, pass a list of life tables of the same
+length as \code{ages}, for example \code{list(lt_male, lt_female)}.}
 
-\item{ages}{Integer vector of actuarial ages for the lives at issue. Must have
-length 1--3.}
+\item{ages}{Integer vector of actuarial ages for the lives at issue. Must
+have length 1, 2, or 3.}
+
+\item{i}{Numeric scalar. Annual interest-rate input.}
+
+\item{i_type}{Character string indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
+for \code{i_type = "effective"} and \code{i_type = "force"}. In
+\code{tidyactuarial}, \code{m} is reserved for interest conversion
+frequency, not deferment.}
+
+\item{n}{Integer term in years after deferment. If \code{NULL}, runs to the
+end of the available table horizon, conservatively based on the smallest
+omega across life tables.}
+
+\item{h}{Integer deferment period in years.}
+
+\item{k}{Integer payments per year. If \code{k > 1}, Woolhouse
+approximations may be applied.}
 
 \item{annuity}{Type of annuity logic: \code{"cohort"} uses the status
 defined in \code{cohort}; \code{"reversionary"} uses the \eqn{\alpha}
 fractional reduction.}
 
-\item{cohort}{Survival status: \code{"first"} (joint-life, pays while all
-are alive) or \code{"last"} (last-survivor, pays while at least one
-remains alive). Used only when \code{annuity = "cohort"}.}
+\item{cohort}{Survival status: \code{"first"} for joint-life, paying while
+all lives are alive, or \code{"last"} for last-survivor, paying while at
+least one life remains alive. Used only when \code{annuity = "cohort"}.}
 
-\item{alpha}{Reversionary fraction (typically \eqn{0 \le \alpha \le 1}).
-Used only when \code{annuity = "reversionary"}.
-Note: \code{alpha = 0} matches joint-life; \code{alpha = 1}
-matches last-survivor.}
-
-\item{n}{Integer term in years after deferment. If \code{NULL}, runs to
-the end of the available table horizon (conservatively based on the
-smallest omega across lifetables).}
-
-\item{m}{Integer deferment in years.}
-
-\item{k}{Integer payments per year. If \code{k > 1}, Woolhouse approximations
-may be applied.}
+\item{alpha}{Reversionary fraction, typically \eqn{0 \le \alpha \le 1}.
+Used only when \code{annuity = "reversionary"}. Note: \code{alpha = 0}
+matches joint-life; \code{alpha = 1} matches last-survivor.}
 
 \item{timing}{\code{"immediate"} or \code{"due"}.}
 
 \item{woolhouse}{\code{"none"}, \code{"first"}, or \code{"second"}.}
-
-\item{i}{Annual effective interest rate.}
 }
 \value{
 A single numeric value representing the APV.
 }
 \description{
-Computes the APV of a discrete annuity contingent on multiple independent lives.
-This implementation supports up to three lives (the most common practical case,
-e.g., parent–parent–child arrangements).
+Computes the APV of a discrete annuity contingent on multiple independent
+lives using compact actuarial notation.
 }
 \details{
-Supports status-based annuities (joint-life / last-survivor) and a
-joint-and-survivor style annuity ("reversionary") that pays 1 while all
-lives are alive and then pays a fraction \eqn{\alpha} while at least one
-life remains alive.
+This implementation supports up to three lives, which covers the most common
+practical multi-life arrangements.
 
-Under the assumption of independent future lifetimes (Finan, Section 51),
-the survival probability for the status is calculated as:
+Supports status-based annuities (joint-life / last-survivor) and a
+joint-and-survivor style annuity (\code{"reversionary"}) that pays 1 while all
+lives are alive and then pays a fraction \eqn{\alpha} while at least one life
+remains alive.
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{i} is the interest rate, \code{i_type} is the
+interest-rate type, \code{m} is the conversion frequency for nominal rates,
+\code{n} is the term, \code{h} is the deferment period, and \code{k} is the
+payment frequency.
+
+Under the assumption of independent future lifetimes, the survival
+probability for the status is calculated as:
 \itemize{
 \item \strong{Joint-life (first-death):}
 \eqn{{}_t p_{x_1 x_2 \dots x_n} = \prod_{j=1}^n {}_t p_{x_j}}
@@ -78,11 +96,53 @@ the survival probability for the status is calculated as:
 \eqn{{}_t p_{\overline{x_1 x_2 \dots x_n}} = 1 - \prod_{j=1}^n (1 - {}_t p_{x_j})}
 }
 
-For \code{annuity = "reversionary"}, the APV is a weighted combination
-of the two statuses (Finan, Section 53.3):
-\deqn{APV = APV(\text{joint-life}) + \alpha [APV(\text{last-survivor}) - APV(\text{joint-life})]}
+For \code{annuity = "reversionary"}, the APV is a weighted combination of
+the two statuses:
+\deqn{APV = APV(\text{joint-life}) +
+\alpha [APV(\text{last-survivor}) - APV(\text{joint-life})].}
+}
+\examples{
+lt <- data.frame(
+  x = 60:90,
+  lx = seq(100000, 0, length.out = 31)
+)
+
+annuity_multi(
+  lt = lt,
+  ages = c(60, 62),
+  i = 0.05,
+  n = 5,
+  cohort = "first",
+  timing = "due"
+)
+
+annuity_multi(
+  lt = lt,
+  ages = c(60, 62),
+  i = 0.05,
+  n = 5,
+  cohort = "last",
+  timing = "due"
+)
+
 }
 \seealso{
 \code{\link{annuity_x}} for single-life annuities,
 \code{\link{t_px}} for survival probabilities.
+
+Other life-contingencies: 
+\code{\link{annuity_x}()},
+\code{\link{annuity_xy}()},
+\code{\link{insurance_variable_k}()},
+\code{\link{insurance_x}()},
+\code{\link{insurance_xy}()},
+\code{\link{life_contract}()},
+\code{\link{premium_gross}()},
+\code{\link{premium_x}()},
+\code{\link{premium_xy}()},
+\code{\link{reserve_x}()},
+\code{\link{reserve_xy}()},
+\code{\link{simulate_annuity_x}()},
+\code{\link{simulate_insurance_x}()}
 }
+\concept{life-contingencies}

@@ -8,23 +8,23 @@
 A tibble with 4 rows and 7 variables:
 \describe{
 \item{loan_id}{Loan identifier.}
-\item{principal}{Initial loan principal.}
-\item{annual_effective_rate}{Annual effective interest rate.}
-\item{term_months}{Loan term in months.}
-\item{payments_per_year}{Number of payments per year.}
+\item{L}{Initial loan principal.}
+\item{i}{Annual effective interest rate.}
+\item{n_months}{Loan term in months.}
+\item{k}{Number of payments per year.}
 \item{loan_type}{Short loan type label.}
-\item{payment}{Level payment amount.}
+\item{R}{Level payment amount per payment period.}
 }
 
 A tibble with 4 rows and 7 variables:
 \describe{
 \item{loan_id}{Loan identifier.}
-\item{principal}{Initial loan principal.}
-\item{annual_effective_rate}{Annual effective interest rate.}
-\item{term_months}{Loan term in months.}
-\item{payments_per_year}{Number of payments per year.}
+\item{L}{Initial loan principal.}
+\item{i}{Annual effective interest rate.}
+\item{n_months}{Loan term in months.}
+\item{k}{Number of payments per year.}
 \item{loan_type}{Short loan type label.}
-\item{payment}{Level payment amount.}
+\item{R}{Level payment amount per payment period.}
 }
 }
 \source{
@@ -44,16 +44,27 @@ amortization schedule and outstanding balance examples.
 A small pedagogical dataset containing level-payment loan contracts for
 amortization schedule and outstanding balance examples.
 }
+\details{
+This dataset uses compact loan notation: \code{L} is the initial loan
+principal, \code{i} is the annual effective interest rate, \code{n_months}
+is the loan term in months, \code{k} is the payment frequency, and \code{R}
+is the level payment.
+
+This dataset uses compact loan notation: \code{L} is the initial loan
+principal, \code{i} is the annual effective interest rate, \code{n_months}
+is the loan term in months, \code{k} is the payment frequency, and \code{R}
+is the level payment.
+}
 \examples{
 data(loans_sample)
 
 loans_sample |>
-  dplyr::select(loan_id, principal, annual_effective_rate, term_months, payment)
+  dplyr::select(loan_id, L, i, n_months, k, R)
 
 data(loans_sample)
 
 loans_sample |>
-  dplyr::select(loan_id, principal, annual_effective_rate, term_months, payment)
+  dplyr::select(loan_id, L, i, n_months, k, R)
 
 }
 \keyword{datasets}

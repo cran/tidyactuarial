@@ -1,7 +1,7 @@
 #' Arithmetic annuity factor
 #'
 #' Computes the actuarial present value or accumulated value factor for an
-#' arithmetic annuity.
+#' arithmetic annuity, using compact actuarial notation.
 #'
 #' This function covers increasing, decreasing, and custom arithmetic payment
 #' patterns. It replaces the more specific increasing and decreasing annuity
@@ -9,8 +9,8 @@
 #'
 #' Supported payment patterns:
 #' \itemize{
-#'   \item \code{"increasing"}: payments \eqn{1, 2, \ldots, n}.
-#'   \item \code{"decreasing"}: payments \eqn{n, n-1, \ldots, 1}.
+#'   \item \code{"increasing"}: payments \eqn{1, 2, \ldots, N}.
+#'   \item \code{"decreasing"}: payments \eqn{N, N-1, \ldots, 1}.
 #'   \item \code{"custom"}: payments following
 #'     \eqn{P_r = P_1 + (r - 1)g}.
 #' }
@@ -21,50 +21,53 @@
 #'   \item \code{"due"}: payments at the beginning of each period.
 #' }
 #'
-#' @param n_years Numeric vector of payment durations in years.
-#'   Each value must be positive and finite.
-#' @param payments_per_year Positive integer vector giving the number of
-#'   payments per year.
-#' @param rate Numeric vector of rate values.
-#' @param rate_type Character vector indicating the rate type.
-#'   Allowed values are \code{"effective"}, \code{"nominal_interest"},
+#' @param n Numeric vector of payment durations in years. Each value must be
+#'   positive and finite.
+#' @param k Positive integer vector giving the number of payments per year.
+#' @param i Numeric vector of interest-rate values.
+#' @param i_type Character vector indicating the interest-rate type. Allowed
+#'   values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
-#' @param m Positive integer vector giving the compounding frequency
-#'   for nominal rates.
-#' @param deferral_years Numeric vector of deferral times in years.
-#'   Must be greater than or equal to 0.
+#' @param m Positive integer vector giving the conversion frequency for nominal
+#'   rates. Ignored for \code{"effective"} and \code{"force"}.
+#' @param h Numeric vector of deferment times in years. Must be greater than or
+#'   equal to 0.
 #' @param timing Character vector. One of \code{"immediate"} or \code{"due"}.
 #' @param pattern Character vector. One of \code{"increasing"},
 #'   \code{"decreasing"}, or \code{"custom"}.
-#' @param first_payment Numeric vector. First payment for
-#'   \code{pattern = "custom"}. Ignored for \code{"increasing"} and
-#'   \code{"decreasing"}.
-#' @param increment Numeric vector. Arithmetic increment for
+#' @param P1 Numeric vector. First payment for \code{pattern = "custom"}.
+#'   Ignored for \code{"increasing"} and \code{"decreasing"}.
+#' @param g Numeric vector. Arithmetic increment for
 #'   \code{pattern = "custom"}. Ignored for \code{"increasing"} and
 #'   \code{"decreasing"}.
 #' @param valuation Character string. Use \code{"present"} for present value
 #'   or \code{"accumulated"} for accumulated value at the end of the term.
-#' @param output Character string. Use \code{"value"} to return a numeric
-#'   factor, or \code{"table"} to return a tibble with intermediate quantities.
+#' @param tidy Logical scalar. If \code{FALSE}, returns a numeric factor. If
+#'   \code{TRUE}, returns a tibble with intermediate quantities.
 #'
 #' @return
-#' If \code{output = "value"}, a numeric vector of arithmetic annuity factors.
+#' If \code{tidy = FALSE}, a numeric vector of arithmetic annuity factors.
 #'
-#' If \code{output = "table"}, a tibble with input values, equivalent rates,
-#' period quantities, and both present and accumulated value factors.
+#' If \code{tidy = TRUE}, a tibble with input values, equivalent rates, period
+#' quantities, and both present and accumulated value factors.
 #'
 #' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{n} is the term, \code{k} is the payment
+#' frequency, \code{i} is the interest-rate input, \code{i_type} is the
+#' interest-rate type, \code{m} is the conversion frequency for nominal rates,
+#' and \code{h} is the deferment period.
+#'
 #' The function first converts the supplied rate to the equivalent annual
 #' effective interest rate using \code{\link{standardize_interest}}.
 #'
 #' For each scenario, the total number of payments is
-#' \deqn{N = n \times k}
-#' where \eqn{n} is \code{n_years} and \eqn{k} is \code{payments_per_year}.
+#' \deqn{N = n k.}
 #'
-#' The present value is computed by summing the discounted payment stream.
-#' The accumulated value is computed at the end of the annuity term. Under
-#' this convention, \code{deferral_years} affects the present value factor but
-#' not the accumulated value factor.
+#' The present value is computed by summing the discounted payment stream. The
+#' accumulated value is computed at the end of the annuity term. Under this
+#' convention, \code{h} affects the present value factor but not the
+#' accumulated value factor.
 #'
 #' @seealso \code{\link{a_angle}}, \code{\link{s_angle}},
 #'   \code{\link{standardize_interest}}
@@ -73,79 +76,82 @@
 #'
 #' @examples
 #' # Increasing arithmetic annuity
-#' annuity_arith(n_years = 10, rate = 0.05, pattern = "increasing")
+#' annuity_arith(n = 10, i = 0.05, pattern = "increasing")
 #'
 #' # Decreasing arithmetic annuity
-#' annuity_arith(n_years = 10, rate = 0.05, pattern = "decreasing")
+#' annuity_arith(n = 10, i = 0.05, pattern = "decreasing")
 #'
 #' # Custom arithmetic annuity
 #' annuity_arith(
-#'   n_years = 10,
-#'   rate = 0.05,
+#'   n = 10,
+#'   i = 0.05,
 #'   pattern = "custom",
-#'   first_payment = 100,
-#'   increment = 25
+#'   P1 = 100,
+#'   g = 25
 #' )
 #'
 #' # Accumulated value factor
 #' annuity_arith(
-#'   n_years = 10,
-#'   rate = 0.05,
+#'   n = 10,
+#'   i = 0.05,
 #'   pattern = "increasing",
 #'   valuation = "accumulated"
 #' )
 #'
 #' # Tibble output
 #' annuity_arith(
-#'   n_years = 10,
-#'   rate = 0.05,
+#'   n = 10,
+#'   i = 0.05,
 #'   pattern = "decreasing",
-#'   output = "table"
+#'   tidy = TRUE
 #' )
 #'
 #' @export
 annuity_arith <- function(
-    n_years,
-    payments_per_year = 1L,
-    rate,
-    rate_type = "effective",
+    n,
+    k = 1L,
+    i,
+    i_type = "effective",
     m = 1L,
-    deferral_years = 0,
+    h = 0,
     timing = "immediate",
     pattern = "increasing",
-    first_payment = 1,
-    increment = 1,
+    P1 = 1,
+    g = 1,
     valuation = c("present", "accumulated"),
-    output = c("value", "table")
+    tidy = FALSE
 ) {
   valuation <- match.arg(valuation)
-  output <- match.arg(output)
 
-  if (missing(n_years)) {
-    stop("`n_years` must be provided.", call. = FALSE)
+  if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
+    stop("`tidy` must be a logical scalar.", call. = FALSE)
   }
-  if (missing(rate)) {
-    stop("`rate` must be provided.", call. = FALSE)
+
+  if (missing(n)) {
+    stop("`n` must be provided.", call. = FALSE)
+  }
+  if (missing(i)) {
+    stop("`i` must be provided.", call. = FALSE)
   }
 
   # --- Early type validation ---
-  if (!is.numeric(n_years)) {
-    stop("`n_years` must be a numeric vector.", call. = FALSE)
+  if (!is.numeric(n)) {
+    stop("`n` must be a numeric vector.", call. = FALSE)
   }
-  if (!is.numeric(payments_per_year)) {
-    stop("`payments_per_year` must be numeric.", call. = FALSE)
+  if (!is.numeric(k)) {
+    stop("`k` must be numeric.", call. = FALSE)
   }
-  if (!is.numeric(rate)) {
-    stop("`rate` must be a numeric vector.", call. = FALSE)
+  if (!is.numeric(i)) {
+    stop("`i` must be a numeric vector.", call. = FALSE)
   }
-  if (!is.character(rate_type)) {
-    stop("`rate_type` must be a character vector.", call. = FALSE)
+  if (!is.character(i_type)) {
+    stop("`i_type` must be a character vector.", call. = FALSE)
   }
   if (!is.numeric(m)) {
     stop("`m` must be numeric.", call. = FALSE)
   }
-  if (!is.numeric(deferral_years)) {
-    stop("`deferral_years` must be numeric.", call. = FALSE)
+  if (!is.numeric(h)) {
+    stop("`h` must be numeric.", call. = FALSE)
   }
   if (!is.character(timing)) {
     stop("`timing` must be a character vector.", call. = FALSE)
@@ -153,81 +159,83 @@ annuity_arith <- function(
   if (!is.character(pattern)) {
     stop("`pattern` must be a character vector.", call. = FALSE)
   }
-  if (!is.numeric(first_payment)) {
-    stop("`first_payment` must be numeric.", call. = FALSE)
+  if (!is.numeric(P1)) {
+    stop("`P1` must be numeric.", call. = FALSE)
   }
-  if (!is.numeric(increment)) {
-    stop("`increment` must be numeric.", call. = FALSE)
+  if (!is.numeric(g)) {
+    stop("`g` must be numeric.", call. = FALSE)
   }
 
   # --- Determine common size ---
   size <- max(
-    length(n_years),
-    length(payments_per_year),
-    length(rate),
-    length(rate_type),
+    length(n),
+    length(k),
+    length(i),
+    length(i_type),
     length(m),
-    length(deferral_years),
+    length(h),
     length(timing),
     length(pattern),
-    length(first_payment),
-    length(increment),
+    length(P1),
+    length(g),
     1L
   )
 
   valid_size <- function(x) length(x) %in% c(1L, size)
 
-  if (!valid_size(n_years) ||
-      !valid_size(payments_per_year) ||
-      !valid_size(rate) ||
-      !valid_size(rate_type) ||
+  if (!valid_size(n) ||
+      !valid_size(k) ||
+      !valid_size(i) ||
+      !valid_size(i_type) ||
       !valid_size(m) ||
-      !valid_size(deferral_years) ||
+      !valid_size(h) ||
       !valid_size(timing) ||
       !valid_size(pattern) ||
-      !valid_size(first_payment) ||
-      !valid_size(increment)) {
+      !valid_size(P1) ||
+      !valid_size(g)) {
     stop(
-      "`n_years`, `payments_per_year`, `rate`, `rate_type`, `m`, ",
-      "`deferral_years`, `timing`, `pattern`, `first_payment`, and ",
-      "`increment` must have length 1 or a common length.",
+      "`n`, `k`, `i`, `i_type`, `m`, `h`, `timing`, `pattern`, ",
+      "`P1`, and `g` must have length 1 or a common length.",
       call. = FALSE
     )
   }
 
   # --- Recycle ---
-  n_years <- rep_len(n_years, size)
-  payments_per_year <- rep_len(payments_per_year, size)
-  rate <- rep_len(rate, size)
-  rate_type <- rep_len(rate_type, size)
-  m <- rep_len(m, size)
-  deferral_years <- rep_len(deferral_years, size)
-  timing <- rep_len(timing, size)
+  n       <- rep_len(n, size)
+  k       <- rep_len(k, size)
+  i       <- rep_len(i, size)
+  i_type  <- rep_len(i_type, size)
+  m       <- rep_len(m, size)
+  h       <- rep_len(h, size)
+  timing  <- rep_len(timing, size)
   pattern <- rep_len(pattern, size)
-  first_payment <- rep_len(first_payment, size)
-  increment <- rep_len(increment, size)
+  P1      <- rep_len(P1, size)
+  g       <- rep_len(g, size)
 
   # --- Value-level validation ---
-  bad_n <- !is.na(n_years) & (!is.finite(n_years) | n_years <= 0)
+  bad_n <- !is.na(n) & (!is.finite(n) | n <= 0)
   if (any(bad_n)) {
-    stop("`n_years` must contain only finite values greater than 0 or NA.", call. = FALSE)
+    stop("`n` must contain only finite values greater than 0 or NA.", call. = FALSE)
   }
 
-  bad_deferral <- !is.na(deferral_years) &
-    (!is.finite(deferral_years) | deferral_years < 0)
-
-  if (any(bad_deferral)) {
-    stop("`deferral_years` must contain only finite values >= 0 or NA.", call. = FALSE)
+  bad_h <- !is.na(h) & (!is.finite(h) | h < 0)
+  if (any(bad_h)) {
+    stop("`h` must contain only finite values >= 0 or NA.", call. = FALSE)
   }
 
-  bad_first <- !is.na(first_payment) & !is.finite(first_payment)
-  if (any(bad_first)) {
-    stop("`first_payment` must contain only finite numeric values or NA.", call. = FALSE)
+  bad_P1 <- !is.na(P1) & !is.finite(P1)
+  if (any(bad_P1)) {
+    stop("`P1` must contain only finite numeric values or NA.", call. = FALSE)
   }
 
-  bad_increment <- !is.na(increment) & !is.finite(increment)
-  if (any(bad_increment)) {
-    stop("`increment` must contain only finite numeric values or NA.", call. = FALSE)
+  bad_g <- !is.na(g) & !is.finite(g)
+  if (any(bad_g)) {
+    stop("`g` must contain only finite numeric values or NA.", call. = FALSE)
+  }
+
+  bad_m <- !is.na(m) & (!is.finite(m) | m < 1 | abs(m - round(m)) > 1e-10)
+  if (any(bad_m)) {
+    stop("`m` must contain positive integer values or NA.", call. = FALSE)
   }
 
   timing <- tolower(timing)
@@ -247,7 +255,14 @@ annuity_arith <- function(
   }
 
   # --- Convert to effective annual rate ---
-  i_effective <- standardize_interest(type = rate_type, rate = rate, m = m)
+  i_effective <- standardize_interest(i_type = i_type, i = i, m = m)
+
+  if (any(!is.na(i_effective) & (!is.finite(i_effective) | i_effective <= -1))) {
+    stop(
+      "The standardized annual effective interest rates must be greater than -1.",
+      call. = FALSE
+    )
+  }
 
   present_value_factor <- rep(NA_real_, size)
   accumulated_value_factor <- rep(NA_real_, size)
@@ -256,120 +271,121 @@ annuity_arith <- function(
   i_period <- rep(NA_real_, size)
   v_period <- rep(NA_real_, size)
   n_periods <- rep(NA_real_, size)
-  deferral_periods <- rep(NA_real_, size)
-  first_payment_used <- rep(NA_real_, size)
-  increment_used <- rep(NA_real_, size)
+  h_periods <- rep(NA_real_, size)
+  P1_used <- rep(NA_real_, size)
+  g_used <- rep(NA_real_, size)
 
-  is_na_elem <- is.na(n_years) |
-    is.na(payments_per_year) |
-    is.na(rate) |
+  is_na_elem <- is.na(n) |
+    is.na(k) |
+    is.na(i) |
     is.na(i_effective) |
-    is.na(deferral_years) |
+    is.na(h) |
     is.na(timing) |
     is.na(pattern)
 
   computable_idx <- which(!is_na_elem)
 
-  for (j in computable_idx) {
-    k <- payments_per_year[j]
+  for (idx in computable_idx) {
+    kk <- k[idx]
 
-    if (is.na(k) || !is.finite(k) || k < 1 || k != floor(k)) {
-      stop("`payments_per_year` must be a positive integer.", call. = FALSE)
+    if (is.na(kk) || !is.finite(kk) || kk < 1 || kk != floor(kk)) {
+      stop("`k` must be a positive integer.", call. = FALSE)
     }
 
-    k <- as.integer(k)
+    kk <- as.integer(kk)
 
-    n_raw <- n_years[j] * k
-    n <- round(n_raw)
+    n_raw <- n[idx] * kk
+    N <- round(n_raw)
 
-    if (abs(n_raw - n) > 1e-10) {
+    if (abs(n_raw - N) > 1e-10) {
       stop(
-        "For discrete annuities, `n_years * payments_per_year` must be an integer.",
+        "For discrete annuities, `n * k` must be an integer.",
         call. = FALSE
       )
     }
 
-    h_raw <- deferral_years[j] * k
-    h <- round(h_raw)
+    h_raw <- h[idx] * kk
+    H <- round(h_raw)
 
-    if (abs(h_raw - h) > 1e-10) {
+    if (abs(h_raw - H) > 1e-10) {
       stop(
-        "For discrete annuities, `deferral_years * payments_per_year` must be an integer.",
+        "For discrete annuities, `h * k` must be an integer.",
         call. = FALSE
       )
     }
 
-    i_period[j] <- (1 + i_effective[j])^(1 / k) - 1
-    v_period[j] <- 1 / (1 + i_period[j])
-    n_periods[j] <- n
-    deferral_periods[j] <- h
+    i_period[idx] <- (1 + i_effective[idx])^(1 / kk) - 1
+    v_period[idx] <- 1 / (1 + i_period[idx])
+    n_periods[idx] <- N
+    h_periods[idx] <- H
 
-    if (pattern[j] == "increasing") {
+    if (pattern[idx] == "increasing") {
       p1 <- 1
-      g <- 1
-    } else if (pattern[j] == "decreasing") {
-      p1 <- n
-      g <- -1
+      inc <- 1
+    } else if (pattern[idx] == "decreasing") {
+      p1 <- N
+      inc <- -1
     } else {
-      if (is.na(first_payment[j]) || is.na(increment[j])) {
+      if (is.na(P1[idx]) || is.na(g[idx])) {
         stop(
-          "`first_payment` and `increment` must not be NA when `pattern = 'custom'`.",
+          "`P1` and `g` must not be NA when `pattern = 'custom'`.",
           call. = FALSE
         )
       }
 
-      p1 <- first_payment[j]
-      g <- increment[j]
+      p1 <- P1[idx]
+      inc <- g[idx]
     }
 
-    first_payment_used[j] <- p1
-    increment_used[j] <- g
+    P1_used[idx] <- p1
+    g_used[idx] <- inc
 
-    payment_index <- seq_len(n)
-    payments <- p1 + (payment_index - 1) * g
+    payment_index <- seq_len(N)
+    payments <- p1 + (payment_index - 1) * inc
 
-    local_times <- if (timing[j] == "immediate") {
+    local_times <- if (timing[idx] == "immediate") {
       payment_index
     } else {
       payment_index - 1
     }
 
-    present_value_factor[j] <- sum(payments * v_period[j]^(h + local_times))
+    present_value_factor[idx] <- sum(payments * v_period[idx]^(H + local_times))
 
-    accumulated_value_factor[j] <- sum(
-      payments * (1 + i_period[j])^(n - local_times)
+    accumulated_value_factor[idx] <- sum(
+      payments * (1 + i_period[idx])^(N - local_times)
     )
 
-    selected_factor[j] <- if (valuation == "present") {
-      present_value_factor[j]
+    selected_factor[idx] <- if (valuation == "present") {
+      present_value_factor[idx]
     } else {
-      accumulated_value_factor[j]
+      accumulated_value_factor[idx]
     }
   }
 
-  if (output == "value") {
+  if (!tidy) {
     return(selected_factor)
   }
 
   tibble::tibble(
-    n_years = n_years,
-    payments_per_year = as.integer(payments_per_year),
-    deferral_years = deferral_years,
+    n = n,
+    k = as.integer(k),
+    h = h,
     timing = timing,
     pattern = pattern,
     valuation = valuation,
-    rate_input = rate,
-    rate_type = rate_type,
+    i_input = i,
+    i_type = i_type,
     m = m,
     i_effective = i_effective,
     i_period = i_period,
     v_period = v_period,
     n_periods = n_periods,
-    deferral_periods = deferral_periods,
-    first_payment = first_payment_used,
-    increment = increment_used,
+    h_periods = h_periods,
+    P1 = P1_used,
+    g = g_used,
     present_value_factor = present_value_factor,
     accumulated_value_factor = accumulated_value_factor,
     annuity_factor = selected_factor
   )
 }
+

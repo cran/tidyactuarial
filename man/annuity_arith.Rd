@@ -5,67 +5,65 @@
 \title{Arithmetic annuity factor}
 \usage{
 annuity_arith(
-  n_years,
-  payments_per_year = 1L,
-  rate,
-  rate_type = "effective",
+  n,
+  k = 1L,
+  i,
+  i_type = "effective",
   m = 1L,
-  deferral_years = 0,
+  h = 0,
   timing = "immediate",
   pattern = "increasing",
-  first_payment = 1,
-  increment = 1,
+  P1 = 1,
+  g = 1,
   valuation = c("present", "accumulated"),
-  output = c("value", "table")
+  tidy = FALSE
 )
 }
 \arguments{
-\item{n_years}{Numeric vector of payment durations in years.
-Each value must be positive and finite.}
+\item{n}{Numeric vector of payment durations in years. Each value must be
+positive and finite.}
 
-\item{payments_per_year}{Positive integer vector giving the number of
-payments per year.}
+\item{k}{Positive integer vector giving the number of payments per year.}
 
-\item{rate}{Numeric vector of rate values.}
+\item{i}{Numeric vector of interest-rate values.}
 
-\item{rate_type}{Character vector indicating the rate type.
-Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\item{i_type}{Character vector indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Positive integer vector giving the compounding frequency
-for nominal rates.}
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. Ignored for \code{"effective"} and \code{"force"}.}
 
-\item{deferral_years}{Numeric vector of deferral times in years.
-Must be greater than or equal to 0.}
+\item{h}{Numeric vector of deferment times in years. Must be greater than or
+equal to 0.}
 
 \item{timing}{Character vector. One of \code{"immediate"} or \code{"due"}.}
 
 \item{pattern}{Character vector. One of \code{"increasing"},
 \code{"decreasing"}, or \code{"custom"}.}
 
-\item{first_payment}{Numeric vector. First payment for
-\code{pattern = "custom"}. Ignored for \code{"increasing"} and
-\code{"decreasing"}.}
+\item{P1}{Numeric vector. First payment for \code{pattern = "custom"}.
+Ignored for \code{"increasing"} and \code{"decreasing"}.}
 
-\item{increment}{Numeric vector. Arithmetic increment for
+\item{g}{Numeric vector. Arithmetic increment for
 \code{pattern = "custom"}. Ignored for \code{"increasing"} and
 \code{"decreasing"}.}
 
 \item{valuation}{Character string. Use \code{"present"} for present value
 or \code{"accumulated"} for accumulated value at the end of the term.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric
-factor, or \code{"table"} to return a tibble with intermediate quantities.}
+\item{tidy}{Logical scalar. If \code{FALSE}, returns a numeric factor. If
+\code{TRUE}, returns a tibble with intermediate quantities.}
 }
 \value{
-If \code{output = "value"}, a numeric vector of arithmetic annuity factors.
+If \code{tidy = FALSE}, a numeric vector of arithmetic annuity factors.
 
-If \code{output = "table"}, a tibble with input values, equivalent rates,
-period quantities, and both present and accumulated value factors.
+If \code{tidy = TRUE}, a tibble with input values, equivalent rates, period
+quantities, and both present and accumulated value factors.
 }
 \description{
 Computes the actuarial present value or accumulated value factor for an
-arithmetic annuity.
+arithmetic annuity, using compact actuarial notation.
 }
 \details{
 This function covers increasing, decreasing, and custom arithmetic payment
@@ -74,8 +72,8 @@ functions.
 
 Supported payment patterns:
 \itemize{
-\item \code{"increasing"}: payments \eqn{1, 2, \ldots, n}.
-\item \code{"decreasing"}: payments \eqn{n, n-1, \ldots, 1}.
+\item \code{"increasing"}: payments \eqn{1, 2, \ldots, N}.
+\item \code{"decreasing"}: payments \eqn{N, N-1, \ldots, 1}.
 \item \code{"custom"}: payments following
 \eqn{P_r = P_1 + (r - 1)g}.
 }
@@ -86,48 +84,53 @@ Supported timing conventions:
 \item \code{"due"}: payments at the beginning of each period.
 }
 
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{n} is the term, \code{k} is the payment
+frequency, \code{i} is the interest-rate input, \code{i_type} is the
+interest-rate type, \code{m} is the conversion frequency for nominal rates,
+and \code{h} is the deferment period.
+
 The function first converts the supplied rate to the equivalent annual
 effective interest rate using \code{\link{standardize_interest}}.
 
 For each scenario, the total number of payments is
-\deqn{N = n \times k}
-where \eqn{n} is \code{n_years} and \eqn{k} is \code{payments_per_year}.
+\deqn{N = n k.}
 
-The present value is computed by summing the discounted payment stream.
-The accumulated value is computed at the end of the annuity term. Under
-this convention, \code{deferral_years} affects the present value factor but
-not the accumulated value factor.
+The present value is computed by summing the discounted payment stream. The
+accumulated value is computed at the end of the annuity term. Under this
+convention, \code{h} affects the present value factor but not the
+accumulated value factor.
 }
 \examples{
 # Increasing arithmetic annuity
-annuity_arith(n_years = 10, rate = 0.05, pattern = "increasing")
+annuity_arith(n = 10, i = 0.05, pattern = "increasing")
 
 # Decreasing arithmetic annuity
-annuity_arith(n_years = 10, rate = 0.05, pattern = "decreasing")
+annuity_arith(n = 10, i = 0.05, pattern = "decreasing")
 
 # Custom arithmetic annuity
 annuity_arith(
-  n_years = 10,
-  rate = 0.05,
+  n = 10,
+  i = 0.05,
   pattern = "custom",
-  first_payment = 100,
-  increment = 25
+  P1 = 100,
+  g = 25
 )
 
 # Accumulated value factor
 annuity_arith(
-  n_years = 10,
-  rate = 0.05,
+  n = 10,
+  i = 0.05,
   pattern = "increasing",
   valuation = "accumulated"
 )
 
 # Tibble output
 annuity_arith(
-  n_years = 10,
-  rate = 0.05,
+  n = 10,
+  i = 0.05,
   pattern = "decreasing",
-  output = "table"
+  tidy = TRUE
 )
 
 }

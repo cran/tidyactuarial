@@ -1,354 +1,526 @@
 #' Compute simulated present values for life annuities
 #'
 #' Computes Monte Carlo simulated present values of life annuity payments from
-#' simulated future lifetimes.
+#' simulated future lifetimes, using compact actuarial notation.
 #'
-#' This function is designed to be used after [simulate_lifetime()]. It takes
-#' simulated values of the curtate future lifetime \eqn{K_x}, and when needed
-#' the complete future lifetime \eqn{T_x}, and evaluates the present value
-#' random variable associated with several classical annuity benefits.
+#' This function is designed to be used after \code{\link{simulate_lifetime}},
+#' \code{\link{simulate_lifetimes}}, or \code{\link{mc_multilife_status}}. It
+#' takes simulated values of the curtate future lifetime \eqn{K_x}, and when
+#' needed the complete future lifetime \eqn{T_x}, and evaluates the present
+#' value random variable associated with classical annuity benefits.
 #'
-#' @param data A data frame or tibble containing simulated future lifetimes,
-#'   typically returned by [simulate_lifetime()] or by [mc_multilife_status()]
-#'   when working with multiple-life statuses.
-#' @param rate Numeric scalar. Interest rate used for discounting.
+#' @param .data A data frame or tibble containing simulated future lifetimes,
+#'   typically returned by \code{\link{simulate_lifetime}} or by
+#'   \code{\link{mc_multilife_status}} when working with multiple-life statuses.
+#' @param i Numeric scalar. Interest-rate input used for discounting.
 #' @param payment Numeric scalar. Amount of each annuity payment. Default is
-#'   `1`.
-#' @param payments_per_year Positive integer-like scalar. Number of annuity
-#'   payments per year. Default is `1`, corresponding to annual payments. For
-#'   example, use `payments_per_year = 12` for monthly payments, `4` for
-#'   quarterly payments, and `2` for semiannual payments.
-#' @param annuity Character string specifying the annuity type. Available
-#'   options are `"whole_life"`, `"temporary"`, `"deferred"`,
-#'   `"deferred_temporary"`, `"certain"`, and `"guaranteed"`.
-#' @param term Numeric scalar. Term of the annuity in years. Required for
-#'   `"temporary"`, `"deferred_temporary"`, and `"certain"` annuities.
-#' @param deferral_years Numeric scalar. Deferral period in years. Default is
-#'   `0`. Required to be positive for `"deferred"` and
-#'   `"deferred_temporary"` annuities.
-#' @param guarantee_years Numeric scalar. Guaranteed payment period in years.
-#'   Required for `"guaranteed"` annuities.
+#'   \code{1}.
+#' @param k Positive integer. Number of annuity payments per year. Default is
+#'   \code{1}, corresponding to annual payments.
+#' @param type Character string specifying the annuity type. Canonical options
+#'   are \code{"whole"}, \code{"temporary"}, \code{"deferred"},
+#'   \code{"deferred_temporary"}, \code{"certain"}, and
+#'   \code{"guaranteed"}. The transitional alias \code{"whole_life"} is also
+#'   accepted and mapped to \code{"whole"}.
+#' @param n Numeric scalar. Term of the annuity in years. Required for
+#'   \code{"temporary"}, \code{"deferred_temporary"}, and \code{"certain"}
+#'   annuities.
+#' @param h Numeric scalar. Deferral period in years. Default is \code{0}.
+#'   Required to be positive for \code{"deferred"} and
+#'   \code{"deferred_temporary"} annuities.
+#' @param n_guar Numeric scalar. Guaranteed payment period in years. Required
+#'   for \code{type = "guaranteed"}.
 #' @param timing Character string specifying the annuity payment timing.
-#'   Available options are `"immediate"` and `"due"`. Default is `"immediate"`.
-#' @param interest_type Character string specifying the interest rate convention.
-#'   Available options are `"effective"`, `"nominal"`, and `"force"`.
-#'   Default is `"effective"`.
-#' @param m Numeric scalar. Number of interest conversion periods per year when
-#'   `interest_type = "nominal"`. Default is `1`. This argument controls the
+#'   Available options are \code{"immediate"} and \code{"due"}.
+#' @param i_type Character string specifying the interest-rate convention.
+#'   Allowed values are \code{"effective"}, \code{"nominal_interest"},
+#'   \code{"nominal_discount"}, and \code{"force"}. The transitional value
+#'   \code{"nominal"} is accepted and treated as \code{"nominal_interest"}.
+#' @param m Positive integer. Number of interest conversion periods per year
+#'   for nominal annual rates. Default is \code{1}. This argument controls the
 #'   interest-rate conversion frequency only. It does not represent annuity
 #'   payment frequency.
-#' @param k_col Character string. Name of the column containing simulated
-#'   curtate future lifetimes. Default is `"Kx"`.
-#' @param tx_col Character string. Name of the column containing simulated
-#'   complete future lifetimes. Default is `"Tx"`. This column is required when
-#'   `payments_per_year > 1`, except for annuities certain.
-#' @param annuity_col Character string. Name of the output column containing
-#'   simulated present values of annuity payments. Default is `"pv_annuity"`.
+#' @param col_K Character string. Name of the column containing simulated
+#'   curtate future lifetimes. Default is \code{"Kx"}.
+#' @param col_T Character string. Name of the column containing simulated
+#'   complete future lifetimes. Default is \code{"Tx"}. This column is required
+#'   when \code{k > 1}, except for annuities certain.
+#' @param col_pv Character string. Name of the output column containing
+#'   simulated present values of annuity payments. Default is
+#'   \code{"pv_annuity"}.
+#' @param ... Transitional compatibility for older calls using \code{data},
+#'   \code{rate}, \code{payments_per_year}, \code{annuity}, \code{term},
+#'   \code{deferral_years}, \code{guarantee_years}, \code{interest_type},
+#'   \code{k_col}, \code{tx_col}, and \code{annuity_col}.
 #'
 #' @details
-#' Let \eqn{K_x} denote the curtate future lifetime of a life aged \eqn{x},
-#' let \eqn{T_x} denote the complete future lifetime, and let \eqn{v} denote
-#' the annual discount factor.
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{i} is the interest-rate input, \code{i_type}
+#' is the interest-rate convention, \code{m} is the nominal conversion
+#' frequency, \code{k} is the annuity payment frequency, \code{n} is the
+#' annuity term, and \code{h} is the deferral period.
 #'
-#' The arguments `m` and `payments_per_year` have different meanings:
+#' The arguments \code{m} and \code{k} have different meanings:
+#' \itemize{
+#'   \item \code{m} is used only for nominal interest-rate conversion.
+#'   \item \code{k} controls how frequently annuity payments are made.
+#' }
 #'
-#' * `m` is used only when `interest_type = "nominal"` and controls the
-#'   frequency of interest conversion.
-#' * `payments_per_year` controls how frequently annuity payments are made.
+#' The argument \code{payment} represents the amount of each annuity payment.
+#' Thus, for a monthly annuity with total annual payment equal to 1, use
+#' \code{payment = 1 / 12} and \code{k = 12}.
 #'
-#' The argument `payment` represents the amount of each annuity payment. Thus,
-#' for a monthly annuity with total annual payment equal to 1, use
-#' `payment = 1 / 12` and `payments_per_year = 12`.
-#'
-#' For annual payments, `payments_per_year = 1`, the function works directly
-#' with \eqn{K_x}. For fractional payments, such as monthly, quarterly, or
+#' For annual payments, \code{k = 1}, the function works directly with
+#' \eqn{K_x}. For fractional payments, such as monthly, quarterly, or
 #' semiannual payments, the function uses \eqn{T_x} to determine whether the
 #' life is alive at each fractional payment time.
 #'
-#' For annual whole life annuity-immediate, the simulated present value is
-#'
+#' For annual whole-life annuity-immediate, the simulated present value is
 #' \deqn{
 #'   Y = \sum_{j=1}^{K_x} c v^j,
 #' }
-#'
 #' where \eqn{c} is the amount of each payment.
 #'
-#' For annual whole life annuity-due, the simulated present value is
-#'
+#' For annual whole-life annuity-due, the simulated present value is
 #' \deqn{
 #'   \ddot{Y} = \sum_{j=0}^{K_x} c v^j.
 #' }
 #'
-#' For fractional payments with payment frequency \eqn{m_p}, annuity-immediate
-#' payments are made at times \eqn{1/m_p, 2/m_p, \ldots} while the life is
-#' alive. Annuity-due payments are made at times
-#' \eqn{0, 1/m_p, 2/m_p, \ldots} while the life is alive.
-#'
-#' The following annuity types are supported:
-#'
-#' * `"whole_life"`: payments continue while the life is alive.
-#' * `"temporary"`: payments continue while the life is alive, but for at most
-#'   `term` years.
-#' * `"deferred"`: payments begin after `deferral_years` years and continue
-#'   while the life is alive.
-#' * `"deferred_temporary"`: payments begin after `deferral_years` years and
-#'   continue while the life is alive, but for at most `term` years after the
-#'   deferral period.
-#' * `"certain"`: payments are made for `term` years regardless of survival.
-#' * `"guaranteed"`: payments continue while the life is alive, with at least
-#'   `guarantee_years` years of payments guaranteed.
-#'
 #' The function returns simulated present values, not only their expected value.
-#' Therefore the resulting column can be summarized with [summary_mc()],
-#' plotted with `ggplot2`, or used to construct premiums, losses, and reserves.
+#' Therefore the resulting column can be summarized with \code{\link{summary_mc}},
+#' plotted with \code{ggplot2}, or used to construct premiums, losses, and
+#' reserves.
 #'
 #' @return A tibble with the original simulation columns and additional columns:
+#' \describe{
+#'   \item{i}{Original interest-rate input.}
+#'   \item{i_type}{Interest-rate convention.}
+#'   \item{m}{Interest conversion frequency.}
+#'   \item{i_effective}{Equivalent annual effective interest rate.}
+#'   \item{v}{Annual discount factor.}
+#'   \item{type}{Canonical annuity type.}
+#'   \item{payment}{Amount of each annuity payment.}
+#'   \item{k}{Annuity payment frequency.}
+#'   \item{n}{Annuity term, if applicable.}
+#'   \item{h}{Deferral period.}
+#'   \item{n_guar}{Guaranteed period, if applicable.}
+#'   \item{timing}{Annuity payment timing.}
+#'   \item{n_payments}{Number of payments made in the simulated scenario.}
+#'   \item{first_payment_time}{First payment time in the simulated scenario.}
+#'   \item{last_payment_time}{Last payment time in the simulated scenario.}
+#'   \item{pv_annuity}{Simulated present value of annuity payments, or another
+#'   name supplied through \code{col_pv}.}
+#' }
 #'
-#' * `rate`: original rate supplied.
-#' * `interest_type`: interest rate convention.
-#' * `m`: interest conversion frequency.
-#' * `effective_rate`: equivalent annual effective interest rate.
-#' * `discount_factor`: annual discount factor.
-#' * `annuity`: annuity type.
-#' * `payment`: amount of each annuity payment.
-#' * `payments_per_year`: annuity payment frequency.
-#' * `term`: annuity term, if applicable.
-#' * `deferral_years`: deferral period.
-#' * `guarantee_years`: guaranteed period, if applicable.
-#' * `timing`: annuity payment timing.
-#' * `n_payments`: number of payments made in the simulated scenario.
-#' * `first_payment_time`: first payment time in the simulated scenario.
-#' * `last_payment_time`: last payment time in the simulated scenario.
-#' * `pv_annuity`: simulated present value of annuity payments, or another
-#'   name supplied through `annuity_col`.
+#' For transition, the output also includes legacy columns such as
+#' \code{rate}, \code{interest_type}, \code{effective_rate},
+#' \code{discount_factor}, \code{annuity}, \code{payments_per_year},
+#' \code{term}, \code{deferral_years}, and \code{guarantee_years}.
 #'
 #' @seealso
-#' [simulate_lifetime()], [simulate_lifetimes()], [mc_multilife_status()],
-#' [mc_insurance()], [mc_premium()], [mc_loss()], [mc_reserve()],
-#' [summary_mc()]
+#' \code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
+#' \code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
+#' \code{\link{mc_premium}}, \code{\link{mc_loss}}, \code{\link{mc_reserve}},
+#' \code{\link{summary_mc}}
 #'
 #' @references
 #' Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
-#' and Nesbitt, C. J. (1997). *Actuarial Mathematics*. Second Edition.
+#' and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 #' Society of Actuaries.
 #'
+#' @family monte-carlo
+#'
 #' @examples
-#' life_table <- tibble::tibble(
-#'   age = 40:100,
+#' lt <- tibble::tibble(
+#'   x = 40:100,
 #'   qx = seq(0.002, 1, length.out = 61)
 #' )
 #'
-#' # Annual whole life annuity-due
-#' life_table |>
-#'   simulate_lifetime(age = 40, n_sim = 1000, seed = 123) |>
-#'   mc_annuity(
-#'     rate = 0.05,
-#'     annuity = "whole_life",
-#'     payment = 1,
-#'     payments_per_year = 1,
-#'     timing = "due"
-#'   )
-#'
-#' # Monthly whole life annuity-due with total annual payment equal to 1
-#' life_table |>
+#' # Annual whole-life annuity-due
+#' lt |>
 #'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 1000,
-#'     fractional = "udd",
+#'     x = 40,
+#'     n_sim = 25,
 #'     seed = 123
 #'   ) |>
 #'   mc_annuity(
-#'     rate = 0.05,
-#'     annuity = "whole_life",
+#'     i = 0.05,
+#'     type = "whole",
+#'     payment = 1,
+#'     k = 1,
+#'     timing = "due"
+#'   )
+#'
+#' # Monthly whole-life annuity-due with total annual payment equal to 1
+#' lt |>
+#'   simulate_lifetime(
+#'     x = 40,
+#'     n_sim = 25,
+#'     frac = "udd",
+#'     seed = 123
+#'   ) |>
+#'   mc_annuity(
+#'     i = 0.05,
+#'     type = "whole",
 #'     payment = 1 / 12,
-#'     payments_per_year = 12,
+#'     k = 12,
 #'     timing = "due"
 #'   )
 #'
 #' # Quarterly temporary life annuity-immediate
-#' life_table |>
+#' lt |>
 #'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 1000,
-#'     fractional = "udd",
+#'     x = 40,
+#'     n_sim = 25,
+#'     frac = "udd",
 #'     seed = 123
 #'   ) |>
 #'   mc_annuity(
-#'     rate = 0.05,
-#'     annuity = "temporary",
-#'     term = 20,
+#'     i = 0.05,
+#'     type = "temporary",
+#'     n = 20,
 #'     payment = 1 / 4,
-#'     payments_per_year = 4,
+#'     k = 4,
 #'     timing = "immediate"
 #'   )
 #'
-#' # Monthly joint-life annuity using a multiple-life status
-#' life_table |>
-#'   simulate_lifetimes(
-#'     ages = c(60, 58),
-#'     n_sim = 1000,
-#'     fractional = "udd",
-#'     seed = 123
-#'   ) |>
-#'   mc_multilife_status(status = "joint_life") |>
-#'   mc_annuity(
-#'     rate = 0.04,
-#'     annuity = "whole_life",
-#'     payment = 1 / 12,
-#'     payments_per_year = 12,
-#'     timing = "due",
-#'     k_col = "K_status",
-#'     tx_col = "T_status"
-#'   )
-#'
-#' # Nominal rate convertible monthly, with quarterly payments
-#' life_table |>
+#' # Nominal interest convertible monthly, with quarterly payments
+#' lt |>
 #'   simulate_lifetime(
-#'     age = 40,
-#'     n_sim = 1000,
-#'     fractional = "udd",
+#'     x = 40,
+#'     n_sim = 25,
+#'     frac = "udd",
 #'     seed = 123
 #'   ) |>
 #'   mc_annuity(
-#'     rate = 0.06,
-#'     interest_type = "nominal",
+#'     i = 0.06,
+#'     i_type = "nominal_interest",
 #'     m = 12,
-#'     annuity = "whole_life",
+#'     type = "whole",
 #'     payment = 1 / 4,
-#'     payments_per_year = 4,
+#'     k = 4,
 #'     timing = "due"
 #'   )
 #'
+#' # Multiple-life status workflow
+#' lt |>
+#'   simulate_lifetimes(
+#'     x = c(60, 58),
+#'     n_sim = 25,
+#'     frac = "udd",
+#'     seed = 123
+#'   ) |>
+#'   mc_multilife_status(status = "joint") |>
+#'   mc_annuity(
+#'     i = 0.04,
+#'     type = "whole",
+#'     payment = 1,
+#'     k = 1,
+#'     timing = "due",
+#'     col_K = "K_status",
+#'     col_T = "T_status"
+#'   )
+#'
 #' @export
-mc_annuity <- function(data,
-                       rate,
-                       payment = 1,
-                       payments_per_year = 1,
-                       annuity = c(
-                         "whole_life",
-                         "temporary",
-                         "deferred",
-                         "deferred_temporary",
-                         "certain",
-                         "guaranteed"
-                       ),
-                       term = NULL,
-                       deferral_years = 0,
-                       guarantee_years = NULL,
-                       timing = c("immediate", "due"),
-                       interest_type = c("effective", "nominal", "force"),
-                       m = 1,
-                       k_col = "Kx",
-                       tx_col = "Tx",
-                       annuity_col = "pv_annuity") {
-  annuity <- match.arg(annuity)
+mc_annuity <- function(
+    .data = NULL,
+    i,
+    payment = 1,
+    k = 1L,
+    type = c(
+      "whole",
+      "temporary",
+      "deferred",
+      "deferred_temporary",
+      "certain",
+      "guaranteed",
+      "whole_life"
+    ),
+    n = NULL,
+    h = 0,
+    n_guar = NULL,
+    timing = c("immediate", "due"),
+    i_type = c(
+      "effective",
+      "nominal_interest",
+      "nominal_discount",
+      "force",
+      "nominal"
+    ),
+    m = 1,
+    col_K = "Kx",
+    col_T = "Tx",
+    col_pv = "pv_annuity",
+    ...
+) {
+  dots <- list(...)
+  type_missing <- missing(type)
+
+  # -------------------------------------------------------------------------
+  # Transitional compatibility with the previous public API
+  # -------------------------------------------------------------------------
+
+  allowed_old <- c(
+    "data",
+    "rate",
+    "payments_per_year",
+    "annuity",
+    "term",
+    "deferral_years",
+    "guarantee_years",
+    "interest_type",
+    "k_col",
+    "tx_col",
+    "annuity_col"
+  )
+
+  bad_dots <- setdiff(names(dots), allowed_old)
+
+  if (length(bad_dots) > 0L) {
+    stop(
+      "Unused argument(s): ",
+      paste(sprintf("`%s`", bad_dots), collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  if (!is.null(dots$data)) {
+    if (!is.null(.data)) {
+      stop("Provide only one of `.data` or deprecated `data`.", call. = FALSE)
+    }
+
+    .data <- dots$data
+  }
+
+  if (!is.null(dots$rate)) {
+    if (!missing(i)) {
+      stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
+    }
+
+    i <- dots$rate
+  }
+
+  if (!is.null(dots$payments_per_year)) {
+    if (!identical(k, 1L) && !identical(k, 1)) {
+      stop(
+        "Provide only one of `k` or deprecated `payments_per_year`.",
+        call. = FALSE
+      )
+    }
+
+    k <- dots$payments_per_year
+  }
+
+  if (!is.null(dots$annuity)) {
+    if (!type_missing) {
+      stop("Provide only one of `type` or deprecated `annuity`.", call. = FALSE)
+    }
+
+    type <- dots$annuity
+  }
+
+  if (!is.null(dots$term)) {
+    if (!is.null(n)) {
+      stop("Provide only one of `n` or deprecated `term`.", call. = FALSE)
+    }
+
+    n <- dots$term
+  }
+
+  if (!is.null(dots$deferral_years)) {
+    if (!identical(h, 0) && !identical(h, 0L)) {
+      stop("Provide only one of `h` or deprecated `deferral_years`.", call. = FALSE)
+    }
+
+    h <- dots$deferral_years
+  }
+
+  if (!is.null(dots$guarantee_years)) {
+    if (!is.null(n_guar)) {
+      stop("Provide only one of `n_guar` or deprecated `guarantee_years`.",
+           call. = FALSE)
+    }
+
+    n_guar <- dots$guarantee_years
+  }
+
+  if (!is.null(dots$interest_type)) {
+    if (!missing(i_type)) {
+      stop("Provide only one of `i_type` or deprecated `interest_type`.",
+           call. = FALSE)
+    }
+
+    i_type <- dots$interest_type
+  }
+
+  if (!is.null(dots$k_col)) {
+    if (!identical(col_K, "Kx")) {
+      stop("Provide only one of `col_K` or deprecated `k_col`.", call. = FALSE)
+    }
+
+    col_K <- dots$k_col
+  }
+
+  if (!is.null(dots$tx_col)) {
+    if (!identical(col_T, "Tx")) {
+      stop("Provide only one of `col_T` or deprecated `tx_col`.", call. = FALSE)
+    }
+
+    col_T <- dots$tx_col
+  }
+
+  if (!is.null(dots$annuity_col)) {
+    if (!identical(col_pv, "pv_annuity")) {
+      stop("Provide only one of `col_pv` or deprecated `annuity_col`.",
+           call. = FALSE)
+    }
+
+    col_pv <- dots$annuity_col
+  }
+
+  type <- match.arg(
+    type,
+    choices = c(
+      "whole",
+      "temporary",
+      "deferred",
+      "deferred_temporary",
+      "certain",
+      "guaranteed",
+      "whole_life"
+    )
+  )
+
+  if (identical(type, "whole_life")) {
+    type <- "whole"
+  }
+
   timing <- match.arg(timing)
-  interest_type <- match.arg(interest_type)
+  i_type <- match.arg(i_type)
 
-  if (!is.data.frame(data)) {
-    stop("`data` must be a data frame or tibble.", call. = FALSE)
+  if (identical(i_type, "nominal")) {
+    i_type <- "nominal_interest"
   }
 
-  .mc_assert_numeric_scalar(rate, "rate")
+  # -------------------------------------------------------------------------
+  # Validation
+  # -------------------------------------------------------------------------
+
+  if (!is.data.frame(.data)) {
+    stop("`.data` must be a data frame or tibble.", call. = FALSE)
+  }
+
+  if (missing(i)) {
+    stop("`i` must be provided.", call. = FALSE)
+  }
+
+  .mc_assert_numeric_scalar(i, "i")
   .mc_assert_numeric_scalar(payment, "payment", min = 0)
-  .mc_assert_positive_integer(payments_per_year, "payments_per_year")
+  .mc_assert_positive_integer(k, "k")
   .mc_assert_numeric_scalar(m, "m", min = 0, strict_min = TRUE)
-  .mc_assert_numeric_column(data, k_col, "k_col")
-  .mc_assert_character_scalar(tx_col, "tx_col")
-  .mc_assert_character_scalar(annuity_col, "annuity_col")
+  .mc_assert_numeric_column(.data, col_K, "col_K")
+  .mc_assert_character_scalar(col_T, "col_T")
+  .mc_assert_character_scalar(col_pv, "col_pv")
 
-  if (annuity %in% c("temporary", "deferred_temporary", "certain")) {
-    .mc_assert_numeric_scalar(term, "term", min = 0, strict_min = TRUE)
+  if (type %in% c("temporary", "deferred_temporary", "certain")) {
+    .mc_assert_numeric_scalar(n, "n", min = 0, strict_min = TRUE)
   }
 
-  if (annuity %in% c("deferred", "deferred_temporary")) {
-    .mc_assert_numeric_scalar(
-      deferral_years,
-      "deferral_years",
-      min = 0,
-      strict_min = TRUE
-    )
+  if (type %in% c("deferred", "deferred_temporary")) {
+    .mc_assert_numeric_scalar(h, "h", min = 0, strict_min = TRUE)
   } else {
-    .mc_assert_numeric_scalar(deferral_years, "deferral_years", min = 0)
+    .mc_assert_numeric_scalar(h, "h", min = 0)
   }
 
-  if (annuity == "guaranteed") {
+  if (type == "guaranteed") {
     .mc_assert_numeric_scalar(
-      guarantee_years,
-      "guarantee_years",
+      n_guar,
+      "n_guar",
       min = 0,
       strict_min = TRUE
     )
   } else {
     .mc_assert_numeric_scalar(
-      guarantee_years,
-      "guarantee_years",
+      n_guar,
+      "n_guar",
       min = 0,
       allow_null = TRUE
     )
   }
 
-  needs_tx <- payments_per_year > 1 && annuity != "certain"
+  k <- as.integer(round(k))
+  m <- as.integer(round(m))
 
-  if (needs_tx) {
-    .mc_assert_numeric_column(data, tx_col, "tx_col")
+  needs_T <- k > 1L && type != "certain"
 
-    if (all(is.na(data[[tx_col]]))) {
+  if (needs_T) {
+    .mc_assert_numeric_column(.data, col_T, "col_T")
+
+    if (all(is.na(.data[[col_T]]))) {
       stop(
-        "`tx_col` contains only missing values. Fractional life-contingent ",
+        "`col_T` contains only missing values. Fractional life-contingent ",
         "payments require complete future lifetimes.",
         call. = FALSE
       )
     }
   }
 
-  effective_rate <- .mc_effective_rate(
-    rate = rate,
-    interest_type = interest_type,
+  i_effective <- .mc_effective_rate(
+    i = i,
+    i_type = i_type,
     m = m
   )
 
-  v <- 1 / (1 + effective_rate)
-
-  Kx <- data[[k_col]]
-
-  if (any(Kx < 0, na.rm = TRUE)) {
-    stop("`k_col` must contain non-negative simulated lifetimes.", call. = FALSE)
+  if (!is.finite(i_effective) || i_effective <= -1) {
+    stop(
+      "The annual effective interest rate implied by `i`, `i_type`, and `m` ",
+      "must be greater than -1.",
+      call. = FALSE
+    )
   }
 
-  Tx <- if (tx_col %in% names(data) && is.numeric(data[[tx_col]])) {
-    data[[tx_col]]
+  v <- 1 / (1 + i_effective)
+
+  Kx <- .data[[col_K]]
+
+  if (any(Kx < 0, na.rm = TRUE)) {
+    stop("`col_K` must contain non-negative simulated lifetimes.", call. = FALSE)
+  }
+
+  Tx <- if (col_T %in% names(.data) && is.numeric(.data[[col_T]])) {
+    .data[[col_T]]
   } else {
     rep(NA_real_, length(Kx))
   }
 
-  if (needs_tx && any(Tx < 0, na.rm = TRUE)) {
-    stop("`tx_col` must contain non-negative simulated lifetimes.", call. = FALSE)
+  if (needs_T && any(Tx < 0, na.rm = TRUE)) {
+    stop("`col_T` must contain non-negative simulated lifetimes.", call. = FALSE)
   }
 
-  payment_interval <- 1 / payments_per_year
+  payment_interval <- 1 / k
 
   payment_times <- Map(
-    function(k, tx) {
-      if (payments_per_year == 1) {
+    function(K, T) {
+      if (k == 1L) {
         return(
           .mc_annuity_payment_times_annual(
-            k = k,
-            annuity = annuity,
-            term = term,
-            deferral_years = deferral_years,
-            guarantee_years = guarantee_years,
+            K = K,
+            type = type,
+            n = n,
+            h = h,
+            n_guar = n_guar,
             timing = timing
           )
         )
       }
 
       .mc_annuity_payment_times_fractional(
-        tx = tx,
-        annuity = annuity,
-        term = term,
-        deferral_years = deferral_years,
-        guarantee_years = guarantee_years,
+        T = T,
+        type = type,
+        n = n,
+        h = h,
+        n_guar = n_guar,
         timing = timing,
         payment_interval = payment_interval
       )
@@ -370,7 +542,7 @@ mc_annuity <- function(data,
   first_payment_time <- vapply(
     payment_times,
     function(times) {
-      if (length(times) == 0) {
+      if (length(times) == 0L) {
         return(NA_real_)
       }
 
@@ -382,7 +554,7 @@ mc_annuity <- function(data,
   last_payment_time <- vapply(
     payment_times,
     function(times) {
-      if (length(times) == 0) {
+      if (length(times) == 0L) {
         return(NA_real_)
       }
 
@@ -391,82 +563,101 @@ mc_annuity <- function(data,
     numeric(1)
   )
 
-  data |>
+  n_out <- if (is.null(n)) NA_real_ else n
+  n_guar_out <- if (is.null(n_guar)) NA_real_ else n_guar
+
+  .data |>
     dplyr::mutate(
-      rate = rate,
-      interest_type = interest_type,
+      i = i,
+      rate = i,
+      i_type = i_type,
+      interest_type = i_type,
       m = m,
-      effective_rate = effective_rate,
+      i_effective = i_effective,
+      effective_rate = i_effective,
+      v = v,
       discount_factor = v,
-      annuity = annuity,
+      type = type,
+      annuity = ifelse(type == "whole", "whole_life", type),
       payment = payment,
-      payments_per_year = payments_per_year,
-      term = term,
-      deferral_years = deferral_years,
-      guarantee_years = guarantee_years,
+      k = k,
+      payments_per_year = k,
+      n = n_out,
+      term = n_out,
+      h = h,
+      deferral_years = h,
+      n_guar = n_guar_out,
+      guarantee_years = n_guar_out,
       timing = timing,
       n_payments = n_payments,
       first_payment_time = first_payment_time,
       last_payment_time = last_payment_time,
-      "{annuity_col}" := pv_annuity
+      "{col_pv}" := pv_annuity
     )
 }
 
 
 #' Internal helper: annual annuity payment times
 #'
-#' @param k Numeric scalar. Simulated curtate future lifetime.
-#' @param annuity Character string. Annuity type.
-#' @param term Numeric scalar or `NULL`.
-#' @param deferral_years Numeric scalar.
-#' @param guarantee_years Numeric scalar or `NULL`.
+#' @param K Numeric scalar. Simulated curtate future lifetime.
+#' @param type Character string. Canonical annuity type.
+#' @param n Numeric scalar or `NULL`.
+#' @param h Numeric scalar. Deferral period.
+#' @param n_guar Numeric scalar or `NULL`.
 #' @param timing Character string. Either `"immediate"` or `"due"`.
 #'
 #' @return Numeric vector with annual payment times.
 #'
 #' @keywords internal
-.mc_annuity_payment_times_annual <- function(k,
-                                             annuity,
-                                             term,
-                                             deferral_years,
-                                             guarantee_years,
-                                             timing) {
-  if (annuity == "whole_life") {
+.mc_annuity_payment_times_annual <- function(
+    K,
+    type,
+    n,
+    h,
+    n_guar,
+    timing
+) {
+  if (type != "certain" &&
+      (is.na(K) || !is.finite(K) || K < 0)) {
+    return(numeric(0))
+  }
+
+  if (type == "whole") {
     if (timing == "immediate") {
-      return(.mc_payment_times(1, k))
+      return(.mc_payment_times(1, K))
     }
 
     if (timing == "due") {
-      return(.mc_payment_times(0, k))
+      return(.mc_payment_times(0, K))
     }
   }
 
-  if (annuity == "temporary") {
+  if (type == "temporary") {
     if (timing == "immediate") {
-      return(.mc_payment_times(1, min(k, term)))
+      return(.mc_payment_times(1, min(K, n)))
     }
 
     if (timing == "due") {
-      return(.mc_payment_times(0, min(k, term - 1)))
+      return(.mc_payment_times(0, min(K, n - 1)))
     }
   }
 
-  if (annuity == "deferred") {
+  if (type == "deferred") {
     if (timing == "immediate") {
-      return(.mc_payment_times(deferral_years + 1, k))
+      return(.mc_payment_times(h + 1, K))
     }
 
     if (timing == "due") {
-      return(.mc_payment_times(deferral_years, k))
+      return(.mc_payment_times(h, K))
     }
   }
 
-  if (annuity == "deferred_temporary") {
+  if (type == "deferred_temporary") {
     if (timing == "immediate") {
       return(
         .mc_payment_times(
-          deferral_years + 1,
-          min(k, deferral_years + term)
+          h + 1,
+          min(K, h + n)
         )
       )
     }
@@ -474,30 +665,30 @@ mc_annuity <- function(data,
     if (timing == "due") {
       return(
         .mc_payment_times(
-          deferral_years,
-          min(k, deferral_years + term - 1)
+          h,
+          min(K, h + n - 1)
         )
       )
     }
   }
 
-  if (annuity == "certain") {
+  if (type == "certain") {
     if (timing == "immediate") {
-      return(.mc_payment_times(1, term))
+      return(.mc_payment_times(1, n))
     }
 
     if (timing == "due") {
-      return(.mc_payment_times(0, term - 1))
+      return(.mc_payment_times(0, n - 1))
     }
   }
 
-  if (annuity == "guaranteed") {
+  if (type == "guaranteed") {
     if (timing == "immediate") {
-      return(.mc_payment_times(1, max(k, guarantee_years)))
+      return(.mc_payment_times(1, max(K, n_guar)))
     }
 
     if (timing == "due") {
-      return(.mc_payment_times(0, max(k, guarantee_years - 1)))
+      return(.mc_payment_times(0, max(K, n_guar - 1)))
     }
   }
 
@@ -507,57 +698,59 @@ mc_annuity <- function(data,
 
 #' Internal helper: fractional annuity payment times
 #'
-#' @param tx Numeric scalar. Simulated complete future lifetime.
-#' @param annuity Character string. Annuity type.
-#' @param term Numeric scalar or `NULL`.
-#' @param deferral_years Numeric scalar.
-#' @param guarantee_years Numeric scalar or `NULL`.
+#' @param T Numeric scalar. Simulated complete future lifetime.
+#' @param type Character string. Canonical annuity type.
+#' @param n Numeric scalar or `NULL`.
+#' @param h Numeric scalar. Deferral period.
+#' @param n_guar Numeric scalar or `NULL`.
 #' @param timing Character string. Either `"immediate"` or `"due"`.
 #' @param payment_interval Numeric scalar. Time between payments.
 #'
 #' @return Numeric vector with fractional payment times.
 #'
 #' @keywords internal
-.mc_annuity_payment_times_fractional <- function(tx,
-                                                 annuity,
-                                                 term,
-                                                 deferral_years,
-                                                 guarantee_years,
-                                                 timing,
-                                                 payment_interval) {
+.mc_annuity_payment_times_fractional <- function(
+    T,
+    type,
+    n,
+    h,
+    n_guar,
+    timing,
+    payment_interval
+) {
   eps <- sqrt(.Machine$double.eps)
 
-  if (annuity == "certain") {
+  if (type == "certain") {
     if (timing == "immediate") {
-      return(.mc_payment_times(payment_interval, term, by = payment_interval))
+      return(.mc_payment_times(payment_interval, n, by = payment_interval))
     }
 
     if (timing == "due") {
       return(
         .mc_payment_times(
           0,
-          term - payment_interval,
+          n - payment_interval,
           by = payment_interval
         )
       )
     }
   }
 
-  if (is.na(tx) || !is.finite(tx) || tx < 0) {
+  if (is.na(T) || !is.finite(T) || T < 0) {
     return(numeric(0))
   }
 
   last_alive_time <- if (timing == "immediate") {
-    floor(tx / payment_interval + eps) * payment_interval
+    floor(T / payment_interval + eps) * payment_interval
   } else {
-    floor((tx - eps) / payment_interval) * payment_interval
+    floor((T - eps) / payment_interval) * payment_interval
   }
 
   if (last_alive_time < 0) {
     return(numeric(0))
   }
 
-  if (annuity == "whole_life") {
+  if (type == "whole") {
     if (timing == "immediate") {
       return(
         .mc_payment_times(
@@ -573,9 +766,9 @@ mc_annuity <- function(data,
     }
   }
 
-  if (annuity == "temporary") {
+  if (type == "temporary") {
     if (timing == "immediate") {
-      last_time <- min(last_alive_time, term)
+      last_time <- min(last_alive_time, n)
 
       return(
         .mc_payment_times(
@@ -587,45 +780,45 @@ mc_annuity <- function(data,
     }
 
     if (timing == "due") {
-      last_time <- min(last_alive_time, term - payment_interval)
+      last_time <- min(last_alive_time, n - payment_interval)
 
       return(.mc_payment_times(0, last_time, by = payment_interval))
     }
   }
 
-  if (annuity == "deferred") {
+  if (type == "deferred") {
     if (timing == "immediate") {
-      first_time <- deferral_years + payment_interval
+      first_time <- h + payment_interval
 
       return(.mc_payment_times(first_time, last_alive_time, by = payment_interval))
     }
 
     if (timing == "due") {
-      first_time <- deferral_years
+      first_time <- h
 
       return(.mc_payment_times(first_time, last_alive_time, by = payment_interval))
     }
   }
 
-  if (annuity == "deferred_temporary") {
+  if (type == "deferred_temporary") {
     if (timing == "immediate") {
-      first_time <- deferral_years + payment_interval
-      last_time <- min(last_alive_time, deferral_years + term)
+      first_time <- h + payment_interval
+      last_time <- min(last_alive_time, h + n)
 
       return(.mc_payment_times(first_time, last_time, by = payment_interval))
     }
 
     if (timing == "due") {
-      first_time <- deferral_years
-      last_time <- min(last_alive_time, deferral_years + term - payment_interval)
+      first_time <- h
+      last_time <- min(last_alive_time, h + n - payment_interval)
 
       return(.mc_payment_times(first_time, last_time, by = payment_interval))
     }
   }
 
-  if (annuity == "guaranteed") {
+  if (type == "guaranteed") {
     if (timing == "immediate") {
-      guaranteed_last_time <- guarantee_years
+      guaranteed_last_time <- n_guar
       last_time <- max(last_alive_time, guaranteed_last_time)
 
       return(
@@ -638,7 +831,7 @@ mc_annuity <- function(data,
     }
 
     if (timing == "due") {
-      guaranteed_last_time <- guarantee_years - payment_interval
+      guaranteed_last_time <- n_guar - payment_interval
       last_time <- max(last_alive_time, guaranteed_last_time)
 
       return(.mc_payment_times(0, last_time, by = payment_interval))

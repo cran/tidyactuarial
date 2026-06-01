@@ -5,59 +5,56 @@
 \title{Geometric annuity factor}
 \usage{
 annuity_geom(
-  n_years = NULL,
-  payments_per_year = 1L,
-  rate,
-  rate_type = "effective",
+  n = NULL,
+  k = 1L,
+  i,
+  i_type = "effective",
   m = 1L,
-  growth_rate = 0,
-  growth_rate_type = "effective",
-  growth_m = 1L,
-  deferral_years = 0,
+  g = 0,
+  g_type = "effective",
+  g_m = 1L,
+  h = 0,
   timing = "immediate",
-  first_payment = 1,
+  P1 = 1,
   perpetuity = FALSE,
   valuation = c("present", "accumulated"),
-  output = c("value", "table")
+  tidy = FALSE
 )
 }
 \arguments{
-\item{n_years}{Numeric vector of payment durations in years.
-Ignored only when \code{perpetuity = TRUE} and
-\code{valuation = "present"}. Otherwise, each value must be positive
-and finite.}
+\item{n}{Numeric vector of payment durations in years. Ignored only when
+\code{perpetuity = TRUE} and \code{valuation = "present"}. Otherwise,
+each value must be positive and finite.}
 
-\item{payments_per_year}{Positive integer vector giving the number of
-payments per year.}
+\item{k}{Positive integer vector giving the number of payments per year.}
 
-\item{rate}{Numeric vector of annual interest-rate values.}
+\item{i}{Numeric vector of interest-rate values.}
 
-\item{rate_type}{Character vector indicating the interest-rate type.
-Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\item{i_type}{Character vector indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{m}{Positive integer vector giving the compounding frequency for
-nominal interest-rate inputs.}
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+interest-rate inputs. Ignored for \code{"effective"} and \code{"force"}.}
 
-\item{growth_rate}{Numeric vector of annual growth-rate values for the
-payments.}
+\item{g}{Numeric vector of annual growth-rate values for the payments.}
 
-\item{growth_rate_type}{Character vector indicating the growth-rate type.
-Allowed values are \code{"effective"}, \code{"nominal_interest"},
+\item{g_type}{Character vector indicating the growth-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
-\item{growth_m}{Positive integer vector giving the compounding frequency for
-nominal growth-rate inputs.}
+\item{g_m}{Positive integer vector giving the conversion frequency for
+nominal growth-rate inputs. Ignored for \code{"effective"} and
+\code{"force"}.}
 
-\item{deferral_years}{Numeric vector of deferral times in years.
-Must be greater than or equal to 0. For present values, the deferral
-discounts the payment block. For accumulated values, it is recorded but
-does not change the factor under the adopted terminal-horizon convention.}
+\item{h}{Numeric vector of deferment times in years. Must be greater than or
+equal to 0. For present values, the deferment discounts the payment block.
+For accumulated values, it is recorded but does not change the factor under
+the adopted terminal-horizon convention.}
 
 \item{timing}{Character vector. One of \code{"immediate"} or \code{"due"}.}
 
-\item{first_payment}{Numeric vector giving the first payment of the
-geometric sequence.}
+\item{P1}{Numeric vector giving the first payment of the geometric sequence.}
 
 \item{perpetuity}{Logical vector. If \code{TRUE}, computes the geometric
 perpetuity present value. Perpetuities are not supported for
@@ -66,28 +63,35 @@ perpetuity present value. Perpetuities are not supported for
 \item{valuation}{Character string. Use \code{"present"} for present value
 or \code{"accumulated"} for accumulated value at the end of the term.}
 
-\item{output}{Character string. Use \code{"value"} to return a numeric
-value, or \code{"table"} to return a tibble with intermediate quantities.}
+\item{tidy}{Logical scalar. If \code{FALSE}, returns a numeric factor. If
+\code{TRUE}, returns a tibble with intermediate quantities.}
 }
 \value{
-If \code{output = "value"}, a numeric vector.
+If \code{tidy = FALSE}, a numeric vector.
 
-If \code{output = "table"}, a tibble with input values, equivalent rates,
-period quantities, and both present and accumulated value factors.
+If \code{tidy = TRUE}, a tibble with input values, equivalent rates, period
+quantities, and both present and accumulated value factors.
 }
 \description{
-Computes the present value or accumulated value factor for a geometric
-annuity.
+Computes the actuarial present value or accumulated value factor for a
+geometric annuity, using compact actuarial notation.
 }
 \details{
-This function replaces the more specific geometric present value and
-accumulated value functions.
+This function covers finite geometric annuities and geometric perpetuities.
 
 Supported timing conventions:
 \itemize{
 \item \code{"immediate"}: payments at the end of each period.
 \item \code{"due"}: payments at the beginning of each period.
 }
+
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{n} is the term, \code{k} is the payment
+frequency, \code{i} is the interest-rate input, \code{i_type} is the
+interest-rate type, \code{m} is the conversion frequency for nominal
+interest rates, \code{g} is the growth-rate input, \code{g_type} is the
+growth-rate type, \code{g_m} is the conversion frequency for nominal growth
+rates, \code{h} is the deferment period, and \code{P1} is the first payment.
 
 Let \eqn{i_p} be the effective interest rate per payment period,
 \eqn{g_p} the effective growth rate per payment period, and
@@ -100,7 +104,7 @@ ga_N = \sum_{r=1}^{N}\frac{(1+g_p)^{r-1}}{(1+i_p)^r}
 
 If \eqn{i_p \neq g_p}, then
 \deqn{
-ga_N = \frac{1-\left(\frac{1+g_p}{1+i_p}\right)^N}{i_p-g_p}
+ga_N = \frac{1-\left(\frac{1+g_p}{1+i_p}\right)^N}{i_p-g_p}.
 }
 
 The accumulated value factor is computed at the standard terminal horizon:
@@ -114,26 +118,38 @@ For annuities-due, the corresponding immediate factor is multiplied by
 \examples{
 # Present value of a geometric annuity
 annuity_geom(
-  n_years = 10,
-  rate = 0.05,
-  growth_rate = 0.02,
+  n = 10,
+  i = 0.05,
+  g = 0.02,
   valuation = "present"
 )
 
 # Accumulated value of a geometric annuity
 annuity_geom(
-  n_years = 10,
-  rate = 0.05,
-  growth_rate = 0.02,
+  n = 10,
+  i = 0.05,
+  g = 0.02,
   valuation = "accumulated"
+)
+
+# Nominal interest and nominal growth
+annuity_geom(
+  n = 10,
+  k = 12,
+  i = 0.06,
+  i_type = "nominal_interest",
+  m = 12,
+  g = 0.024,
+  g_type = "nominal_interest",
+  g_m = 12
 )
 
 # Tibble output
 annuity_geom(
-  n_years = 10,
-  rate = 0.05,
-  growth_rate = 0.02,
-  output = "table"
+  n = 10,
+  i = 0.05,
+  g = 0.02,
+  tidy = TRUE
 )
 
 }

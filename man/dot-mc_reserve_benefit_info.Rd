@@ -4,15 +4,7 @@
 \alias{.mc_reserve_benefit_info}
 \title{Internal helper: benefit payment information for reserve calculations}
 \usage{
-.mc_reserve_benefit_info(
-  Kx,
-  Tx,
-  death_time,
-  insurance,
-  term,
-  deferral_years,
-  payment_timing
-)
+.mc_reserve_benefit_info(Kx, Tx, death_time, type, n, h, timing)
 }
 \arguments{
 \item{Kx}{Numeric vector of simulated curtate future lifetimes.}
@@ -21,13 +13,13 @@
 
 \item{death_time}{Numeric vector of death benefit payment times.}
 
-\item{insurance}{Character string specifying the insurance type.}
+\item{type}{Character string specifying the insurance type.}
 
-\item{term}{Numeric scalar or \code{NULL}.}
+\item{n}{Numeric scalar or \code{NULL}.}
 
-\item{deferral_years}{Numeric scalar.}
+\item{h}{Numeric scalar.}
 
-\item{payment_timing}{Character string. Either \code{"end_of_year"} or
+\item{timing}{Character string. Either \code{"end_of_year"} or
 \code{"moment_of_death"}.}
 }
 \value{

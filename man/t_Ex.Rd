@@ -4,7 +4,18 @@
 \alias{t_Ex}
 \title{Pure endowment (discounted survival): \eqn{{}_tE_x}}
 \usage{
-t_Ex(lt, x, t, i, frac, tidy = FALSE, check = TRUE, tol = 1e-10)
+t_Ex(
+  lt,
+  x,
+  t,
+  i,
+  i_type = "effective",
+  m = 1L,
+  frac,
+  tidy = FALSE,
+  check = TRUE,
+  tol = 1e-10
+)
 }
 \arguments{
 \item{lt}{A lifetable object as produced by \code{\link{lifetable}}.
@@ -12,9 +23,17 @@ Must contain columns \code{x} and \code{lx}.}
 
 \item{x}{Integer age(s) at which the endowment starts.}
 
-\item{t}{Nonnegative numeric duration(s) in years (can be fractional).}
+\item{t}{Nonnegative numeric duration(s) in years. Fractional durations are
+allowed and are handled through \code{\link{t_px}}.}
 
-\item{i}{Annual effective interest rate(s). Must satisfy \code{i > -1}.}
+\item{i}{Annual interest-rate input(s).}
+
+\item{i_type}{Character vector indicating the interest-rate type. Allowed
+values are \code{"effective"}, \code{"nominal_interest"},
+\code{"nominal_discount"}, and \code{"force"}.}
+
+\item{m}{Positive integer vector giving the conversion frequency for nominal
+rates. Ignored for \code{"effective"} and \code{"force"}.}
 
 \item{frac}{Fractional-age assumption passed to \code{\link{t_px}}:
 \code{"UDD"}, \code{"CF"}, \code{"CML"} (alias of CF), or
@@ -22,7 +41,8 @@ Must contain columns \code{x} and \code{lx}.}
 attribute, that value is used.}
 
 \item{tidy}{Logical. If \code{TRUE}, returns a tibble with columns
-\code{x}, \code{t}, \code{i}, \code{frac}, \code{nEx}.}
+\code{x}, \code{t}, \code{i}, \code{i_type}, \code{m}, \code{i_effective},
+\code{frac}, and \code{nEx}.}
 
 \item{check}{Logical. If \code{TRUE}, performs validity checks.}
 
@@ -33,40 +53,44 @@ Numeric vector of \eqn{{}_tE_x}, or a tibble if
 \code{tidy = TRUE}.
 }
 \description{
-Computes the actuarial present value of a pure endowment, i.e., the
-expected present value of a payment of 1 made at time \eqn{t} if and only
-if a life aged \eqn{x} survives to age \eqn{x + t}:
-\deqn{{}_tE_x = v^t \cdot {}_tp_x = (1 + i)^{-t} \cdot
-  \frac{\ell_{x+t}}{\ell_x}.}
+Computes the actuarial present value of a pure endowment, i.e., the expected
+present value of a payment of 1 made at time \eqn{t} if and only if a life
+aged \eqn{x} survives to age \eqn{x + t}:
+\deqn{{}_tE_x = v^t \cdot {}_tp_x.}
 }
 \details{
+This function follows the compact actuarial notation used throughout
+\code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age,
+\code{t} is the duration, \code{i} is the interest-rate input,
+\code{i_type} is the interest-rate type, and \code{m} is the conversion
+frequency for nominal rates.
+
 The pure endowment is a fundamental building block in life contingency
-mathematics (Finan, Section 26.3.1). It serves as the actuarial discount
-factor, combining financial discounting with mortality:
-\deqn{{}_nE_x = v^n \cdot {}_np_x.}
+mathematics. It serves as the actuarial discount factor, combining financial
+discounting with mortality:
+\deqn{{}_tE_x = v^t \cdot {}_tp_x.}
+
+The interest-rate input is converted to an annual effective rate before
+applying the discount factor:
+\deqn{v = (1+i_e)^{-1}.}
 
 Key identities involving \eqn{{}_nE_x}:
 \itemize{
 \item Actuarial accumulated value:
 \eqn{\ddot{s}_{x:\overline{n}|} = \ddot{a}_{x:\overline{n}|} /
-    {}_nE_x} (Finan, Sec. 34).
+    {}_nE_x}.
 \item Endowment insurance decomposition:
-\eqn{A_{x:\overline{n}|} = A^1_{x:\overline{n}|} + {}_nE_x}
-(Finan, Sec. 26.3.2).
+\eqn{A_{x:\overline{n}|} = A^1_{x:\overline{n}|} + {}_nE_x}.
 \item Deferred annuity:
-\eqn{{}_{n|}\ddot{a}_x = {}_nE_x \cdot \ddot{a}_{x+n}}
-(Finan, Sec. 35).
+\eqn{{}_{n|}\ddot{a}_x = {}_nE_x \cdot \ddot{a}_{x+n}}.
 }
 
 For a constant force of mortality \eqn{\mu} and force of interest
 \eqn{\delta}:
-\deqn{{}_nE_x = e^{-n(\mu + \delta)}}
-(Finan, Example 26.14).
+\deqn{{}_nE_x = e^{-n(\mu + \delta)}.}
 
-The variance of the pure endowment random variable is
-(Finan, Sec. 26.3.1):
-\deqn{\mathrm{Var}(\bar{Z}^{\phantom{1}}_{\phantom{1}x:\overline{n}|})
-  = v^{2n} \cdot {}_np_x \cdot {}_nq_x.}
+The variance of the pure endowment random variable is:
+\deqn{\mathrm{Var}(Z) = v^{2n} \cdot {}_np_x \cdot {}_nq_x.}
 }
 \examples{
 x  <- 0:5
@@ -75,37 +99,43 @@ lt <- lifetable(x = x, lx = lx, omega = 5, close = TRUE)
 
 # Basic pure endowment: 3_E_0 = v^3 * 3_p_0
 t_Ex(lt, x = 0, t = 3, i = 0.06)
+
 # Verify manually:
 (1.06)^(-3) * t_px(lt, x = 0, t = 3)
 
-# Finan Example 26.14 style: constant force mu, delta
-# For exponential survival with mu = 0.05, delta = 0.10:
-# 10_E_30 = exp(-10*(0.05 + 0.10)) = exp(-1.5)
+# Constant force of interest
 lt_exp <- lifetable(x = 0:50, lx = 100000 * exp(-0.05 * (0:50)))
-t_Ex(lt_exp, x = 30, t = 10, i = exp(0.10) - 1)
-exp(-1.5)  # theoretical value
-
-# Finan Problem 26.16: 5-year pure endowment for (30), i = 6\%
-lt_ilt <- lifetable(
-  x  = 30:35,
-  lx = c(9501381, 9486854, 9471591, 9455522, 9438571, 9420657)
+t_Ex(
+  lt_exp,
+  x = 30,
+  t = 10,
+  i = 0.10,
+  i_type = "force"
 )
-t_Ex(lt_ilt, x = 30, t = 5, i = 0.06)
-# = v^5 * l_35 / l_30 = (1.06)^(-5) * 9420657/9501381
+exp(-1.5)
+
+# Nominal annual interest rate convertible monthly
+t_Ex(
+  lt,
+  x = 0,
+  t = 3,
+  i = 0.06,
+  i_type = "nominal_interest",
+  m = 12
+)
 
 # Vectorized: multiple ages at once
 t_Ex(lt, x = c(0, 1, 2), t = 3, i = 0.05, tidy = TRUE)
 
 # Use in a tidy pipeline
 if (requireNamespace("dplyr", quietly = TRUE)) {
-  tibble::tibble(age = 0:4, term = c(5, 4, 3, 2, 1)) |>
-    dplyr::mutate(pure_endow = t_Ex(lt, x = age, t = term, i = 0.06))
+  tibble::tibble(x = 0:4, t = c(5, 4, 3, 2, 1)) |>
+    dplyr::mutate(pure_endow = t_Ex(lt, x = x, t = t, i = 0.06))
 }
 
 }
 \seealso{
-\code{\link{t_px}} for survival probabilities (without
-discounting), \code{\link{insurance_x}} for term, whole life, and
-endowment insurance APVs, \code{\link{annuity_x}} for life annuity
-APVs that use \eqn{{}_nE_x} internally.
+\code{\link{t_px}} for survival probabilities without discounting,
+\code{\link{insurance_x}} for insurance APVs, \code{\link{annuity_x}} for
+life annuity APVs.
 }

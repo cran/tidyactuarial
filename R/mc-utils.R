@@ -131,99 +131,156 @@
 }
 
 
+#' Internal helper: normalize Monte Carlo interest-rate type
+#'
+#' Converts legacy Monte Carlo labels to the package-wide actuarial labels.
+#'
+#' @param i_type Character scalar. Interest-rate type.
+#'
+#' @return Character scalar.
+#'
+#' @keywords internal
+.mc_normalize_i_type <- function(i_type) {
+  .mc_assert_character_scalar(i_type, "i_type")
+
+  i_type <- tolower(i_type)
+
+  if (identical(i_type, "nominal")) {
+    i_type <- "nominal_interest"
+  }
+
+  valid_i_type <- c(
+    "effective",
+    "nominal_interest",
+    "nominal_discount",
+    "force"
+  )
+
+  if (!i_type %in% valid_i_type) {
+    stop(
+      "`i_type` must be one of: ",
+      paste(sprintf("'%s'", valid_i_type), collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+
+  i_type
+}
+
+
 #' Internal helper: convert interest rate to annual effective rate
 #'
-#' Converts an interest rate supplied under a standard actuarial convention
-#' into an equivalent annual effective interest rate.
+#' Converts an interest rate supplied under a standard actuarial convention into
+#' an equivalent annual effective interest rate.
 #'
-#' @param rate Numeric scalar. Interest rate.
-#' @param interest_type Character string. Interest rate convention. One of
-#'   `"effective"`, `"nominal"`, or `"force"`.
-#' @param m Numeric scalar. Number of interest conversion periods per year when
-#'   `interest_type = "nominal"`. Default is `1`.
+#' @param i Numeric scalar. Interest-rate input.
+#' @param i_type Character string. Interest-rate convention. One of
+#'   `"effective"`, `"nominal_interest"`, `"nominal_discount"`, or `"force"`.
+#'   The legacy value `"nominal"` is accepted internally and treated as
+#'   `"nominal_interest"`.
+#' @param m Numeric scalar. Number of interest conversion periods per year for
+#'   nominal annual rates. Default is `1`.
+#' @param rate Deprecated internal alias for `i`.
+#' @param interest_type Deprecated internal alias for `i_type`.
 #'
 #' @details
-#' This helper separates the financial interest-rate convention from the
-#' actuarial cash-flow structure. The argument `m` is used only to convert a
-#' nominal annual rate into an equivalent annual effective rate. It does not
-#' represent annuity payment frequency.
+#' This helper follows the compact actuarial notation used throughout
+#' `tidyactuarial`: `i` is the interest-rate input, `i_type` is the
+#' interest-rate type, and `m` is the conversion frequency for nominal rates.
 #'
-#' The conversion rules are:
+#' The argument `m` is used only to convert nominal annual rates into equivalent
+#' annual effective rates. It does not represent annuity payment frequency.
 #'
-#' * Effective annual rate:
-#'
-#' \deqn{
-#'   i_{\mathrm{eff}} = i.
-#' }
-#'
-#' * Nominal annual rate convertible `m` times per year:
-#'
-#' \deqn{
-#'   i_{\mathrm{eff}} = \left(1 + \frac{i^{(m)}}{m}\right)^m - 1.
-#' }
-#'
-#' * Constant force of interest:
-#'
-#' \deqn{
-#'   i_{\mathrm{eff}} = e^\delta - 1.
-#' }
+#' Transitional compatibility is intentionally retained for older internal Monte
+#' Carlo calls using `rate =` and `interest_type =`.
 #'
 #' @return Numeric scalar with the equivalent annual effective interest rate.
 #'
 #' @keywords internal
-.mc_effective_rate <- function(rate,
-                               interest_type = c("effective", "nominal", "force"),
-                               m = 1) {
-  interest_type <- match.arg(interest_type)
+.mc_effective_rate <- function(i,
+                               i_type = c(
+                                 "effective",
+                                 "nominal_interest",
+                                 "nominal_discount",
+                                 "force"
+                               ),
+                               m = 1,
+                               rate = NULL,
+                               interest_type = NULL) {
+  # Transitional internal compatibility.
+  if (missing(i) && !is.null(rate)) {
+    i <- rate
+  } else if (!missing(i) && !is.null(rate)) {
+    stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
+  }
 
-  .mc_assert_numeric_scalar(rate, "rate")
+  if (!is.null(interest_type)) {
+    i_type <- interest_type
+  }
+
+  if (missing(i)) {
+    stop("`i` must be provided.", call. = FALSE)
+  }
+
+  # `match.arg()` cannot handle the legacy value "nominal", so normalize first
+  # whenever the user/internal caller supplies a scalar explicitly.
+  if (length(i_type) != 1L) {
+    i_type <- match.arg(i_type)
+  } else {
+    i_type <- .mc_normalize_i_type(i_type)
+  }
+
+  .mc_assert_numeric_scalar(i, "i")
   .mc_assert_numeric_scalar(m, "m", min = 0, strict_min = TRUE)
 
-  if (interest_type == "effective" && rate <= -1) {
-    stop(
-      "`rate` must be greater than -1 when `interest_type = 'effective'`.",
-      call. = FALSE
-    )
+  if (abs(m - round(m)) > sqrt(.Machine$double.eps)) {
+    stop("`m` must be a positive integer.", call. = FALSE)
   }
 
-  if (interest_type == "nominal" && (1 + rate / m) <= 0) {
-    stop(
-      "`1 + rate / m` must be positive when `interest_type = 'nominal'`.",
-      call. = FALSE
-    )
-  }
+  m <- as.integer(round(m))
 
-  switch(
-    interest_type,
-    effective = rate,
-    nominal = (1 + rate / m)^m - 1,
-    force = exp(rate) - 1
+  standardize_interest(
+    i_type = i_type,
+    i = i,
+    m = m
   )
 }
 
 
 #' Internal helper: compute annual discount factor
 #'
-#' Computes the annual discount factor from an interest rate convention.
+#' Computes the annual discount factor from an interest-rate convention.
 #'
-#' @param rate Numeric scalar. Interest rate.
-#' @param interest_type Character string. Interest rate convention. One of
-#'   `"effective"`, `"nominal"`, or `"force"`.
-#' @param m Numeric scalar. Number of interest conversion periods per year when
-#'   `interest_type = "nominal"`. Default is `1`.
+#' @param i Numeric scalar. Interest-rate input.
+#' @param i_type Character string. Interest-rate convention. One of
+#'   `"effective"`, `"nominal_interest"`, `"nominal_discount"`, or `"force"`.
+#'   The legacy value `"nominal"` is accepted internally and treated as
+#'   `"nominal_interest"`.
+#' @param m Numeric scalar. Number of interest conversion periods per year for
+#'   nominal annual rates. Default is `1`.
+#' @param rate Deprecated internal alias for `i`.
+#' @param interest_type Deprecated internal alias for `i_type`.
 #'
 #' @return Numeric scalar with the annual discount factor.
 #'
 #' @keywords internal
-.mc_discount_factor <- function(rate,
-                                interest_type = c("effective", "nominal", "force"),
-                                m = 1) {
-  interest_type <- match.arg(interest_type)
-
+.mc_discount_factor <- function(i,
+                                i_type = c(
+                                  "effective",
+                                  "nominal_interest",
+                                  "nominal_discount",
+                                  "force"
+                                ),
+                                m = 1,
+                                rate = NULL,
+                                interest_type = NULL) {
   effective_rate <- .mc_effective_rate(
+    i = if (missing(i)) NULL else i,
+    i_type = i_type,
+    m = m,
     rate = rate,
-    interest_type = interest_type,
-    m = m
+    interest_type = interest_type
   )
 
   1 / (1 + effective_rate)

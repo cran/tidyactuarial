@@ -7,7 +7,7 @@
 \format{
 A tibble with 7 rows and 6 variables:
 \describe{
-\item{x}{Integer age.}
+\item{x}{Integer actuarial age.}
 \item{q_death}{One-year death decrement probability.}
 \item{q_disability}{One-year disability decrement probability.}
 \item{q_withdrawal}{One-year withdrawal decrement probability.}
@@ -17,7 +17,7 @@ A tibble with 7 rows and 6 variables:
 
 A tibble with 7 rows and 6 variables:
 \describe{
-\item{x}{Integer age.}
+\item{x}{Integer actuarial age.}
 \item{q_death}{One-year death decrement probability.}
 \item{q_disability}{One-year disability decrement probability.}
 \item{q_withdrawal}{One-year withdrawal decrement probability.}
@@ -46,28 +46,23 @@ death, disability, and withdrawal. It is intended for examples involving
 multiple decrement tables, total-decrement life tables, cause-specific
 decrement probabilities, and cause-specific insurance benefits.
 }
+\details{
+This dataset already follows the compact actuarial convention \code{x} for
+age and \code{q} for decrement probabilities.
+
+This dataset already follows the compact actuarial convention \code{x} for
+age and \code{q} for decrement probabilities.
+}
 \examples{
 data(multiple_decrement_sample)
 
-md <- md_table(
-  qx_df = multiple_decrement_sample |>
-    dplyr::select(x, q_death, q_disability, q_withdrawal),
-  radix = 100000,
-  close = FALSE
-)
-
-md
+multiple_decrement_sample |>
+  dplyr::select(x, q_death, q_disability, q_withdrawal, q_total, p_total)
 
 data(multiple_decrement_sample)
 
-md <- md_table(
-  qx_df = multiple_decrement_sample |>
-    dplyr::select(x, q_death, q_disability, q_withdrawal),
-  radix = 100000,
-  close = FALSE
-)
-
-md
+multiple_decrement_sample |>
+  dplyr::select(x, q_death, q_disability, q_withdrawal, q_total, p_total)
 
 }
 \keyword{datasets}

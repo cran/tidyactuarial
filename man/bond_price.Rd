@@ -6,39 +6,40 @@
 \usage{
 bond_price(
   face,
-  coupon_rate,
-  years_to_maturity,
-  coupons_per_year = 1L,
+  c,
+  n,
+  k = 1L,
   y_effective_per_period = NULL,
-  y_rate = NULL,
+  y = NULL,
   y_type = "effective",
   y_m = 1L,
-  redemption = NULL,
+  R = NULL,
   tol = 1e-10,
   check = TRUE
 )
 }
 \arguments{
-\item{face}{Numeric scalar. Face (par) value of the bond.}
+\item{face}{Numeric scalar. Face value of the bond.}
 
-\item{coupon_rate}{Numeric scalar. Annual coupon rate as a proportion.}
+\item{c}{Numeric scalar. Annual coupon rate as a proportion.}
 
-\item{years_to_maturity}{Numeric scalar. Time to maturity in years.}
+\item{n}{Numeric scalar. Time to maturity in years.}
 
-\item{coupons_per_year}{Positive integer. Number of coupon payments per year.}
+\item{k}{Positive integer. Number of coupon payments per year.}
 
 \item{y_effective_per_period}{Optional numeric scalar. Effective yield per
 coupon period. If supplied, it is used directly.}
 
-\item{y_rate}{Optional numeric scalar. Annual yield rate value.}
+\item{y}{Optional numeric scalar. Annual yield rate value.}
 
 \item{y_type}{Character string indicating the annual yield type:
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.}
+\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"},
+or \code{"force"}.}
 
-\item{y_m}{Positive integer. Compounding frequency for nominal annual yields.}
+\item{y_m}{Positive integer. Conversion frequency for nominal annual yields.}
 
-\item{redemption}{Numeric scalar. Redemption value at maturity.
-If \code{NULL}, defaults to \code{face}.}
+\item{R}{Numeric scalar. Redemption value at maturity. If \code{NULL},
+defaults to \code{face}.}
 
 \item{tol}{Numeric scalar. Tolerance used when checking alignment of maturity
 with coupon periods.}
@@ -49,13 +50,14 @@ with coupon periods.}
 Numeric scalar: dirty price of the bond at time 0.
 }
 \description{
-Computes the dirty price of a level coupon bond at time 0 from its yield.
+Computes the dirty price of a level coupon bond at time 0 from its yield,
+using compact actuarial notation.
 }
 \details{
 Assumptions:
 \itemize{
 \item Coupons are paid in arrears at regular intervals.
-\item \code{years_to_maturity * coupons_per_year} must be an integer.
+\item \code{n * k} must be an integer.
 \item Stub periods are not supported.
 \item No accrued interest is considered; the price is evaluated at a coupon date.
 }
@@ -64,56 +66,64 @@ The yield may be supplied in either of two ways:
 \itemize{
 \item directly as an effective yield per coupon period through
 \code{y_effective_per_period}, or
-\item as an annual rate specification through \code{y_rate}, \code{y_type}, and \code{y_m}.
+\item as an annual rate specification through \code{y}, \code{y_type}, and
+\code{y_m}.
 }
 
 If an annual rate specification is supplied, it is first converted to the
-equivalent annual effective yield and then to the effective yield per
-coupon period.
+equivalent annual effective yield and then to the effective yield per coupon
+period.
 
-Let \eqn{j} be the effective yield per coupon period, \eqn{m} the number of
-coupon payments per year, and \eqn{N = T \times m} the total number of
-periods. With coupon per period \eqn{C = F r / m} and discount factor
+This function follows the compact bond notation used in
+\code{tidyactuarial}: \code{face} is the face value, \code{c} is the annual
+coupon rate, \code{n} is the time to maturity, \code{k} is the coupon
+frequency, \code{y} is the annual yield input, and \code{R} is the redemption
+value.
+
+Let \eqn{j} be the effective yield per coupon period, \eqn{k} the number of
+coupon payments per year, and let \eqn{N = nk} be the total number of coupon
+periods. With coupon per period \eqn{C = face \cdot c/k} and discount factor
 \eqn{v = 1/(1+j)}, the price is:
-\deqn{P = C \cdot a_{\overline{N|}|j} + R \cdot v^N = \sum_{k=1}^{N} C_k \, v^k}{P = C * a_N||j + R * v^N = sum_(k=1)^(N) C_k v^k}
-where the sum runs over all cash flows (coupons and redemption) indexed by
-coupon period \eqn{k}.
+\deqn{P = \sum_{r=1}^{N} C_r v^r,}
+where the sum runs over all coupon and redemption cash flows indexed by
+coupon period \eqn{r}.
 }
 \examples{
 # 5-year annual coupon bond, yield given as annual effective
 bond_price(
   face = 100,
-  coupon_rate = 0.08,
-  years_to_maturity = 5,
-  coupons_per_year = 1,
-  y_rate = 0.06,
+  c = 0.08,
+  n = 5,
+  k = 1,
+  y = 0.06,
   y_type = "effective"
 )
 
 # 10-year semiannual bond, yield given directly per coupon period
 bond_price(
   face = 1000,
-  coupon_rate = 0.05,
-  years_to_maturity = 10,
-  coupons_per_year = 2,
+  c = 0.05,
+  n = 10,
+  k = 2,
   y_effective_per_period = 0.03
 )
 
 # Semiannual coupons, nominal annual yield convertible quarterly
 bond_price(
   face = 100,
-  coupon_rate = 0.08,
-  years_to_maturity = 5,
-  coupons_per_year = 2,
-  y_rate = 0.06,
+  c = 0.08,
+  n = 5,
+  k = 2,
+  y = 0.06,
   y_type = "nominal_interest",
   y_m = 4
 )
 
 }
 \seealso{
-\code{\link{bond_ytm}}, \code{\link{bond_cash_flows}}, \code{\link{bond_duration}},
-\code{\link{bond_convexity}}, \code{\link{bond_book_value}}, \code{\link{bond_callable_price}}
+\code{\link{bond_ytm}}, \code{\link{bond_cash_flows}},
+\code{\link{bond_duration}}, \code{\link{bond_convexity}},
+\code{\link{bond_book_value}}, \code{\link{bond_callable_price}}
 
 Other bonds: 
 \code{\link{bond_book_value}()},

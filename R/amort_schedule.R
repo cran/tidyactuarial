@@ -1,11 +1,11 @@
 #' Amortization schedule with optional prepayment adjustment
 #'
 #' Builds an amortization schedule under a fixed annual interest-rate
-#' specification, allowing extra principal payments and optional adjustment
-#' of either the remaining term or the remaining payment amount.
+#' specification, allowing extra principal payments and optional adjustment of
+#' either the remaining term or the remaining payment amount.
 #'
 #' The annual rate is converted internally to an effective rate per schedule
-#' period using \code{periods_per_year}.
+#' period using \code{k}.
 #'
 #' Adjustment policies after extra principal payments:
 #' \itemize{
@@ -20,20 +20,24 @@
 #'
 #' @param principal Numeric scalar. Initial outstanding balance.
 #' @param n Positive integer. Number of contractual periods.
-#' @param rate Numeric scalar. Annual rate value.
-#' @param rate_type Character string indicating the annual rate type:
-#'   \code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.
-#' @param m Positive integer. Compounding frequency for nominal annual rates.
-#' @param periods_per_year Positive integer. Number of schedule periods per year.
+#' @param i Numeric scalar. Annual interest-rate input.
+#' @param i_type Character string indicating the annual interest-rate type:
+#'   \code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"},
+#'   or \code{"force"}.
+#' @param m Positive integer. Conversion frequency for nominal annual rates.
+#' @param k Positive integer. Number of amortization periods per year.
 #' @param timing Character string. One of \code{"immediate"} or \code{"due"}.
 #' @param payment Optional numeric scalar. Initial regular payment per period.
 #'   If \code{NULL}, it is computed from the loan data.
 #' @param extra_principal Optional extra principal payments. Can be:
-#'   - \code{NULL},
-#'   - a scalar,
-#'   - an unnamed numeric vector of length \code{n},
-#'   - a named numeric vector with names interpreted as period numbers.
-#' @param adjust Character string. One of \code{"none"}, \code{"term"}, or \code{"payment"}.
+#'   \itemize{
+#'     \item \code{NULL},
+#'     \item a scalar,
+#'     \item an unnamed numeric vector of length \code{n},
+#'     \item a named numeric vector with names interpreted as period numbers.
+#'   }
+#' @param adjust Character string. One of \code{"none"}, \code{"term"}, or
+#'   \code{"payment"}.
 #' @param tol Numeric tolerance for zero-balance detection.
 #'
 #' @return A tibble with one row per realized period and columns:
@@ -49,12 +53,17 @@
 #'   \item{ob_end}{Outstanding balance at the end of the period.}
 #'   \item{i_effective_annual}{Equivalent annual effective rate.}
 #'   \item{i_effective_period}{Equivalent effective rate per schedule period.}
-#'   \item{periods_per_year}{Schedule frequency.}
+#'   \item{k}{Schedule frequency.}
 #'   \item{timing}{Payment timing convention.}
 #'   \item{adjust}{Adjustment rule used.}
 #' }
 #'
 #' @details
+#' This function follows the compact actuarial notation used throughout
+#' \code{tidyactuarial}: \code{i} is the interest rate, \code{i_type} is the
+#' interest-rate type, \code{m} is the conversion frequency for nominal annual
+#' rates, and \code{k} is the number of amortization periods per year.
+#'
 #' For \code{timing = "immediate"} (annuity-immediate), interest accrues on the
 #' outstanding balance during the period, and the payment is made at the end.
 #' For \code{timing = "due"} (annuity-due), the payment is made at the start of
@@ -64,7 +73,8 @@
 #' periodic interest, principal repayment will be negative (negative
 #' amortization). This is permitted but the user should be aware.
 #'
-#' @seealso \code{\link{a_angle}}, \code{\link{present_value}}, \code{\link{pv_flow}}, \code{\link{standardize_interest}}
+#' @seealso \code{\link{a_angle}}, \code{\link{present_value}},
+#'   \code{\link{pv_flow}}, \code{\link{standardize_interest}}
 #'
 #' @family amortization
 #'
@@ -72,19 +82,19 @@
 #' amort_schedule(
 #'   principal = 100000,
 #'   n = 12,
-#'   rate = 0.12,
-#'   rate_type = "nominal_interest",
+#'   i = 0.12,
+#'   i_type = "nominal_interest",
 #'   m = 12,
-#'   periods_per_year = 12
+#'   k = 12
 #' )
 #'
 #' amort_schedule(
 #'   principal = 100000,
 #'   n = 24,
-#'   rate = 0.12,
-#'   rate_type = "nominal_interest",
+#'   i = 0.12,
+#'   i_type = "nominal_interest",
 #'   m = 12,
-#'   periods_per_year = 12,
+#'   k = 12,
 #'   extra_principal = c("6" = 5000, "12" = 3000),
 #'   adjust = "term"
 #' )
@@ -92,10 +102,10 @@
 #' amort_schedule(
 #'   principal = 100000,
 #'   n = 24,
-#'   rate = 0.12,
-#'   rate_type = "nominal_interest",
+#'   i = 0.12,
+#'   i_type = "nominal_interest",
 #'   m = 12,
-#'   periods_per_year = 12,
+#'   k = 12,
 #'   extra_principal = c("6" = 5000, "12" = 3000),
 #'   adjust = "payment"
 #' )
@@ -104,10 +114,10 @@
 amort_schedule <- function(
     principal,
     n,
-    rate,
-    rate_type = "effective",
+    i,
+    i_type = "effective",
     m = 1L,
-    periods_per_year = 1L,
+    k = 1L,
     timing = c("immediate", "due"),
     payment = NULL,
     extra_principal = NULL,
@@ -129,12 +139,12 @@ amort_schedule <- function(
   }
   n <- as.integer(n)
 
-  if (!is.numeric(rate) || length(rate) != 1L || is.na(rate) || !is.finite(rate)) {
-    stop("`rate` must be a single finite numeric value.", call. = FALSE)
+  if (missing(i) || !is.numeric(i) || length(i) != 1L || is.na(i) || !is.finite(i)) {
+    stop("`i` must be a single finite numeric value.", call. = FALSE)
   }
 
-  if (!is.character(rate_type) || length(rate_type) != 1L || is.na(rate_type)) {
-    stop("`rate_type` must be a single character string.", call. = FALSE)
+  if (!is.character(i_type) || length(i_type) != 1L || is.na(i_type)) {
+    stop("`i_type` must be a single character string.", call. = FALSE)
   }
 
   if (!is.numeric(m) || length(m) != 1L || is.na(m) || !is.finite(m) ||
@@ -143,12 +153,12 @@ amort_schedule <- function(
   }
   m <- as.integer(m)
 
-  if (!is.numeric(periods_per_year) || length(periods_per_year) != 1L ||
-      is.na(periods_per_year) || !is.finite(periods_per_year) ||
-      periods_per_year <= 0 || periods_per_year != floor(periods_per_year)) {
-    stop("`periods_per_year` must be a single positive integer.", call. = FALSE)
+  if (!is.numeric(k) || length(k) != 1L ||
+      is.na(k) || !is.finite(k) ||
+      k <= 0 || k != floor(k)) {
+    stop("`k` must be a single positive integer.", call. = FALSE)
   }
-  periods_per_year <- as.integer(periods_per_year)
+  k <- as.integer(k)
 
   if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || tol <= 0) {
     stop("`tol` must be a single positive numeric value.", call. = FALSE)
@@ -156,12 +166,12 @@ amort_schedule <- function(
 
   # --- Rate conversion ---
   i_effective_annual <- standardize_interest(
-    type = rate_type,
-    rate = rate,
+    type = i_type,
+    rate = i,
     m = m
   )
 
-  i_effective_period <- (1 + i_effective_annual)^(1 / periods_per_year) - 1
+  i_effective_period <- (1 + i_effective_annual)^(1 / k) - 1
 
   if (!is.finite(i_effective_period) || i_effective_period <= -1) {
     stop(
@@ -253,67 +263,67 @@ amort_schedule <- function(
   ob <- principal
   n_realized <- 0L
 
-  for (k in seq_len(n)) {
+  for (period_idx in seq_len(n)) {
     if (ob <= tol) break
 
     n_realized <- n_realized + 1L
-    extra_req <- extra_vec[k]
-    payment_k <- current_payment
+    extra_req <- extra_vec[period_idx]
+    payment_period <- current_payment
 
     if (timing == "immediate") {
       # Interest accrues on opening balance; payment at end of period
-      interest_k <- ob * i_effective_period
-      principal_reg_k <- payment_k - interest_k
-      total_principal_k <- principal_reg_k + extra_req
-      cashflow_k <- payment_k + extra_req
-      ob_new <- ob + interest_k - cashflow_k
+      interest_period <- ob * i_effective_period
+      principal_reg_period <- payment_period - interest_period
+      total_principal_period <- principal_reg_period + extra_req
+      cashflow_period <- payment_period + extra_req
+      ob_new <- ob + interest_period - cashflow_period
 
       # Cap at zero if overpaid
       if (ob_new <= tol) {
-        total_needed <- ob + interest_k
+        total_needed <- ob + interest_period
         extra_used <- min(extra_req, total_needed)
-        payment_k <- total_needed - extra_used
-        principal_reg_k <- payment_k - interest_k
-        total_principal_k <- principal_reg_k + extra_used
-        cashflow_k <- payment_k + extra_used
+        payment_period <- total_needed - extra_used
+        principal_reg_period <- payment_period - interest_period
+        total_principal_period <- principal_reg_period + extra_used
+        cashflow_period <- payment_period + extra_used
         ob_new <- 0
         extra_req <- extra_used
       }
 
     } else {
       # Annuity-due: payment at start of period; interest on balance after payment
-      cashflow_req <- payment_k + extra_req
+      cashflow_req <- payment_period + extra_req
       ob_after_pay <- ob - cashflow_req
 
       if (ob_after_pay <= tol) {
         # Full liquidation at start of period - no interest accrues
         total_needed_now <- ob
         extra_used <- min(extra_req, total_needed_now)
-        payment_k <- total_needed_now - extra_used
-        interest_k <- 0
-        principal_reg_k <- payment_k
-        total_principal_k <- principal_reg_k + extra_used
-        cashflow_k <- payment_k + extra_used
+        payment_period <- total_needed_now - extra_used
+        interest_period <- 0
+        principal_reg_period <- payment_period
+        total_principal_period <- principal_reg_period + extra_used
+        cashflow_period <- payment_period + extra_used
         ob_new <- 0
         extra_req <- extra_used
       } else {
-        interest_k <- ob_after_pay * i_effective_period
-        principal_reg_k <- payment_k
-        total_principal_k <- principal_reg_k + extra_req
-        cashflow_k <- payment_k + extra_req
-        ob_new <- ob_after_pay + interest_k
+        interest_period <- ob_after_pay * i_effective_period
+        principal_reg_period <- payment_period
+        total_principal_period <- principal_reg_period + extra_req
+        cashflow_period <- payment_period + extra_req
+        ob_new <- ob_after_pay + interest_period
       }
     }
 
-    out_period[k]     <- k
-    out_ob_start[k]   <- ob
-    out_interest[k]   <- interest_k
-    out_payment[k]    <- payment_k
-    out_extra[k]      <- extra_req
-    out_principal[k]  <- principal_reg_k
-    out_total_prin[k] <- total_principal_k
-    out_cashflow[k]   <- cashflow_k
-    out_ob_end[k]     <- ob_new
+    out_period[period_idx]     <- period_idx
+    out_ob_start[period_idx]   <- ob
+    out_interest[period_idx]   <- interest_period
+    out_payment[period_idx]    <- payment_period
+    out_extra[period_idx]      <- extra_req
+    out_principal[period_idx]  <- principal_reg_period
+    out_total_prin[period_idx] <- total_principal_period
+    out_cashflow[period_idx]   <- cashflow_period
+    out_ob_end[period_idx]     <- ob_new
 
     ob <- ob_new
 
@@ -323,7 +333,7 @@ amort_schedule <- function(
     # For "term" adjustment: no recalculation needed - the loop exits naturally
     # once the balance reaches zero, effectively shortening the term.
     if (adjust == "payment") {
-      remaining_periods <- n - k
+      remaining_periods <- n - period_idx
       current_payment <- level_payment(
         balance = ob,
         n_remaining = remaining_periods,
@@ -348,7 +358,7 @@ amort_schedule <- function(
       ob_end = numeric(0),
       i_effective_annual = numeric(0),
       i_effective_period = numeric(0),
-      periods_per_year = integer(0),
+      k = integer(0),
       timing = character(0),
       adjust = character(0)
     )
@@ -366,7 +376,7 @@ amort_schedule <- function(
       ob_end          = out_ob_end[idx],
       i_effective_annual = i_effective_annual,
       i_effective_period = i_effective_period,
-      periods_per_year   = periods_per_year,
+      k = k,
       timing = timing,
       adjust = adjust
     )
