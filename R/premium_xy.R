@@ -1,100 +1,120 @@
 #' Net premium for two-life insurance by the equivalence principle
 #'
-#' Computes the net benefit premium for a two-life insurance contract using the
-#' equivalence principle and compact actuarial notation.
+#' Computes the net benefit premium for a joint-life or last-survivor
+#' insurance contract.
 #'
-#' The premium returned corresponds to one premium payment. For example, if
-#' \code{k = 1}, it is an annual premium; if \code{k = 12}, it is a monthly
-#' premium.
+#' For premiums payable \eqn{k} times per year, the function distinguishes
+#' between the annualized premium \eqn{P^{(k)}} and the amount paid at each
+#' installment, \eqn{P^{(k)} / k}.
 #'
-#' The function separates:
-#' \itemize{
-#'   \item the insurance coverage period, controlled by \code{type},
-#'   \code{n}, and \code{h};
-#'   \item the premium-paying period, controlled by \code{n_prem},
-#'   \code{premium_start}, \code{timing}, and \code{k}.
-#' }
-#'
-#' @param lt Either a single life table used for both lives, a list of two life
-#'   tables \code{list(lt_x, lt_y)}, or a \code{tidyact_life_contract} object
-#'   created by \code{\link{life_contract}}. Each table must contain column
-#'   \code{x} and at least one of \code{lx}, \code{px}, or \code{qx}.
-#' @param x Integer actuarial age for the first life.
-#' @param y Integer actuarial age for the second life.
-#' @param i Numeric scalar. Annual interest-rate input.
-#' @param i_type Character string indicating the interest-rate type. Allowed
-#'   values are \code{"effective"}, \code{"nominal_interest"},
-#'   \code{"nominal_discount"}, and \code{"force"}.
-#' @param m Positive integer. Conversion frequency for nominal rates. Ignored
-#'   for \code{i_type = "effective"} and \code{i_type = "force"}.
-#' @param type Type of insurance: \code{"whole"}, \code{"term"},
+#' @param lt A life table, a list of two life tables
+#'   \code{list(lt_x, lt_y)}, or a two-life contract created with
+#'   \code{\link{life_contract}}.
+#' @param x Integer actuarial age for the first life. Optional for a
+#'   \code{life_contract}.
+#' @param y Integer actuarial age for the second life. Optional for a
+#'   \code{life_contract}.
+#' @param i Numeric scalar. Annual interest-rate input. Optional for a
+#'   \code{life_contract}.
+#' @param i_type Interest-rate type: \code{"effective"},
+#'   \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.
+#' @param m Positive integer. Conversion frequency for nominal rates.
+#' @param type Insurance type: \code{"whole"}, \code{"term"},
 #'   \code{"endowment"}, or \code{"pure_endowment"}.
-#' @param benefit Benefit amount. Must be a single nonnegative number.
-#' @param n Insurance term in years after deferment. Required as finite for
-#'   \code{"term"}, \code{"endowment"}, and \code{"pure_endowment"}.
+#' @param benefit Nonnegative insurance benefit.
+#' @param n Insurance term in years after deferment. Use \code{Inf} for
+#'   whole-life insurance.
 #' @param h Nonnegative integer deferment period in years.
 #' @param k Positive integer. Number of premium payments per year.
-#' @param frac Fractional-age assumption used for fractional premium payment
-#'   times: \code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}.
-#' @param timing Timing of premium payments: \code{"due"} for payments in
-#'   advance or \code{"immediate"} for payments in arrears.
-#' @param premium_start Start of premium payments: \code{"issue"} for time 0 or
-#'   \code{"deferred"} for time \code{h}.
-#' @param n_prem Optional premium-paying term in years, counted from
-#'   \code{premium_start}. If \code{NULL}, defaults to the available status
-#'   horizon for whole-life products and to \code{n} for finite products.
-#' @param status Two-life status definition: \code{"joint"} for the joint-life
-#'   status or \code{"last"} for the last-survivor status.
-#' @param tidy Logical scalar. If \code{FALSE}, returns a numeric premium. If
-#'   \code{TRUE}, returns a one-row tibble with details.
-#' @param check Logical. If \code{TRUE}, performs input validation.
-#' @param tol Numeric tolerance for integer checks.
+#' @param frac Fractional-age assumption: \code{"UDD"}, \code{"CF"},
+#'   \code{"CML"}, or \code{"Balducci"}.
+#' @param timing Premium timing: \code{"due"} or \code{"immediate"}.
+#' @param premium_start Start of premiums: \code{"issue"} or
+#'   \code{"deferred"}.
+#' @param n_prem Premium-paying term in years. A fractional value is permitted
+#'   when \code{n_prem * k} is an integer.
+#' @param status Two-life status: \code{"joint"} or \code{"last"}. For a
+#'   \code{life_contract}, the value is inferred from \code{lives} unless
+#'   supplied explicitly.
+#' @param woolhouse Woolhouse approximation order for the premium annuity:
+#'   \code{"none"}, \code{"first"}, or \code{"second"}.
+#' @param output Output level. \code{"value"} returns the annualized premium;
+#'   \code{"summary"} returns a compact one-row result; \code{"audit"} returns
+#'   the equivalence components in long format. \code{"table"} is accepted as
+#'   a deprecated alias for \code{"summary"}.
+#' @param tidy Deprecated compatibility argument. \code{TRUE} maps to
+#'   \code{output = "summary"} and \code{FALSE} to
+#'   \code{output = "value"}.
+#' @param check Logical scalar. If \code{TRUE}, validates inputs.
+#' @param tol Numeric tolerance for integer-grid checks.
 #' @param ... Transitional compatibility for older calls using
 #'   \code{mortality_table}, \code{age_x}, \code{age_y}, \code{rate},
 #'   \code{rate_type}, \code{insurance_type}, \code{term_years},
 #'   \code{deferment_years}, \code{payments_per_year},
-#'   \code{premium_timing}, \code{premium_term_years}, \code{cohort}, and
-#'   \code{output}.
+#'   \code{premium_timing}, \code{premium_term_years}, and \code{cohort}.
 #'
 #' @return
-#' If \code{tidy = FALSE}, a numeric net premium per payment.
+#' For \code{output = "value"}, a numeric scalar containing the annualized
+#' premium \eqn{P^{(k)}}.
 #'
-#' If \code{tidy = TRUE}, a one-row tibble with premium details.
+#' For \code{output = "summary"}, a one-row tibble with six columns:
+#' annualized premium, premium per payment, payment frequency, APV of
+#' benefits, APV of the premium annuity, and equivalence residual.
+#'
+#' For \code{output = "audit"}, a long-format tibble.
 #'
 #' @details
-#' This function follows the compact actuarial notation used throughout
-#' \code{tidyactuarial}: \code{lt} is the life table input, \code{x} and
-#' \code{y} are the two actuarial ages, \code{i} is the interest-rate input,
-#' \code{i_type} is the interest-rate type, \code{m} is the conversion
-#' frequency for nominal rates, \code{n} is the insurance term, \code{h} is the
-#' deferment period, and \code{k} is the premium payment frequency.
-#'
-#' The function assumes independent future lifetimes.
-#'
-#' Let \eqn{S(t)} denote the probability that the selected two-life status
-#' survives \eqn{t} years from issue. For integer death benefits paid at the end
-#' of the year of status failure, the benefit APV for a term insurance deferred
-#' \eqn{h} years and lasting \eqn{n} years is
+#' Let \eqn{Z} denote the present-value random variable of the two-life
+#' insurance benefit and let \eqn{Y^{(k)}} denote the present value of the
+#' contingent premium annuity normalized to an annual payment rate of 1.
+#' The loss at issue is
 #' \deqn{
-#' B \sum_{r=h}^{h+n-1} v^{r+1}\{S(r)-S(r+1)\}.
+#' L_0 = Z - P^{(k)}Y^{(k)}.
 #' }
 #'
-#' For an endowment insurance, the pure endowment benefit
-#' \eqn{B v^{h+n} S(h+n)} is added.
+#' The equivalence principle gives
+#' \deqn{
+#' P^{(k)}
+#' =
+#' \frac{\operatorname{APV}(\text{benefits})}
+#'      {\operatorname{APV}(\text{premium annuity})}.
+#' }
 #'
-#' Premiums are contingent on the selected two-life status being in force at the
-#' premium payment time.
+#' Since \code{\link{annuity_xy}} assigns amount \eqn{1/k} to each k-thly
+#' payment, this quotient is the annualized premium. The installment is
+#' \deqn{
+#' P_{\text{per payment}} = \frac{P^{(k)}}{k}.
+#' }
+#'
+#' Standard whole-life, term, and endowment benefits are valued through
+#' \code{\link{insurance_xy}}. A pure endowment is obtained as the difference
+#' between the corresponding endowment and term insurance values.
+#'
+#' A contract assembled with pipes may be valued directly:
+#'
+#' \preformatted{
+#' life_contract(...) |>
+#'   add_insurance(...) |>
+#'   add_premium_schedule(...) |>
+#'   premium_xy(output = "summary")
+#' }
+#'
+#' Explicit arguments supplied to \code{premium_xy()} override values stored
+#' in the contract components.
 #'
 #' @seealso \code{\link{premium_x}}, \code{\link{insurance_xy}},
-#'   \code{\link{annuity_xy}}, \code{\link{reserve_xy}}
+#'   \code{\link{annuity_xy}}, \code{\link{reserve_xy}},
+#'   \code{\link{life_contract}}, \code{\link{add_insurance}},
+#'   \code{\link{add_premium_schedule}}
 #'
 #' @family life-contingencies
 #'
 #' @examples
 #' lt <- data.frame(
-#'   x = 60:110,
-#'   lx = seq(100000, 0, length.out = 51)
+#'   x = 40:100,
+#'   lx = round(100000 * exp(-0.012 * (0:60)^1.35))
 #' )
+#' lt$lx[nrow(lt)] <- 0
 #'
 #' premium_xy(
 #'   lt = lt,
@@ -102,31 +122,40 @@
 #'   y = 62,
 #'   i = 0.05,
 #'   type = "term",
-#'   n = 5,
-#'   n_prem = 3,
-#'   k = 12,
-#'   status = "last",
+#'   status = "joint",
 #'   benefit = 100000,
-#'   tidy = TRUE
+#'   n = 20,
+#'   k = 12,
+#'   n_prem = 10,
+#'   output = "summary"
 #' )
 #'
-#' lt |>
-#'  life_contract(lives = "joint", x = 60, y = 62, i = 0.05) |>
-#'   premium_xy(
-#'    type = "term",
-#'    n = 5,
-#'    n_prem = 3,
-#'    k = 12,
-#'    status = "joint",
-#'    benefit = 100000)
+#' life_contract(
+#'   lt = lt,
+#'   lives = "joint",
+#'   x = 60,
+#'   y = 62,
+#'   i = 0.05
+#' ) |>
+#'   add_insurance(
+#'     type = "term",
+#'     benefit = 100000,
+#'     n = 20
+#'   ) |>
+#'   add_premium_schedule(
+#'     k = 12,
+#'     n_prem = 10
+#'   ) |>
+#'   premium_xy(output = "summary")
+#'
 #' @export
 premium_xy <- function(
     lt,
     x = NULL,
     y = NULL,
     i = NULL,
-    i_type = NULL,
-    m = NULL,
+    i_type = "effective",
+    m = 1L,
     type = c("whole", "term", "endowment", "pure_endowment"),
     benefit = 1,
     n = Inf,
@@ -137,17 +166,33 @@ premium_xy <- function(
     premium_start = c("issue", "deferred"),
     n_prem = NULL,
     status = c("joint", "last"),
-    tidy = FALSE,
+    woolhouse = c("none", "first", "second"),
+    output = c("value", "summary", "audit", "table"),
+    tidy = NULL,
     check = TRUE,
     tol = 1e-10,
     ...
 ) {
-  dots <- list(...)
+  lt_missing <- missing(lt)
+  x_missing <- missing(x)
+  y_missing <- missing(y)
+  i_missing <- missing(i)
+  i_type_missing <- missing(i_type)
+  m_missing <- missing(m)
+  type_missing <- missing(type)
+  benefit_missing <- missing(benefit)
+  n_missing <- missing(n)
+  h_missing <- missing(h)
+  k_missing <- missing(k)
+  frac_missing <- missing(frac)
+  timing_missing <- missing(timing)
+  premium_start_missing <- missing(premium_start)
+  n_prem_missing <- missing(n_prem)
   status_missing <- missing(status)
+  woolhouse_missing <- missing(woolhouse)
+  output_missing <- missing(output)
 
-  # -------------------------------------------------------------------------
-  # Transitional compatibility with the previous public API
-  # -------------------------------------------------------------------------
+  dots <- list(...)
 
   allowed_old <- c(
     "mortality_table",
@@ -161,8 +206,7 @@ premium_xy <- function(
     "payments_per_year",
     "premium_timing",
     "premium_term_years",
-    "cohort",
-    "output"
+    "cohort"
   )
 
   bad_dots <- setdiff(names(dots), allowed_old)
@@ -176,127 +220,175 @@ premium_xy <- function(
     )
   }
 
-  if (!is.null(dots$mortality_table)) {
-    if (!missing(lt)) {
-      stop("Provide only one of `lt` or deprecated `mortality_table`.", call. = FALSE)
+  if ("mortality_table" %in% names(dots)) {
+    if (!lt_missing) {
+      stop(
+        "Provide only one of `lt` or deprecated `mortality_table`.",
+        call. = FALSE
+      )
     }
 
-    lt <- dots$mortality_table
+    lt <- dots[["mortality_table"]]
+    lt_missing <- FALSE
   }
 
-  if (!is.null(dots$age_x)) {
-    if (!is.null(x)) {
+  if ("age_x" %in% names(dots)) {
+    if (!x_missing && !is.null(x)) {
       stop("Provide only one of `x` or deprecated `age_x`.", call. = FALSE)
     }
 
-    x <- dots$age_x
+    x <- dots[["age_x"]]
+    x_missing <- FALSE
   }
 
-  if (!is.null(dots$age_y)) {
-    if (!is.null(y)) {
+  if ("age_y" %in% names(dots)) {
+    if (!y_missing && !is.null(y)) {
       stop("Provide only one of `y` or deprecated `age_y`.", call. = FALSE)
     }
 
-    y <- dots$age_y
+    y <- dots[["age_y"]]
+    y_missing <- FALSE
   }
 
-  if (!is.null(dots$rate)) {
-    if (!is.null(i)) {
+  if ("rate" %in% names(dots)) {
+    if (!i_missing && !is.null(i)) {
       stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
     }
 
-    i <- dots$rate
+    i <- dots[["rate"]]
+    i_missing <- FALSE
   }
 
-  if (!is.null(dots$rate_type)) {
-    if (!is.null(i_type)) {
-      stop("Provide only one of `i_type` or deprecated `rate_type`.", call. = FALSE)
+  if ("rate_type" %in% names(dots)) {
+    if (!i_type_missing) {
+      stop(
+        "Provide only one of `i_type` or deprecated `rate_type`.",
+        call. = FALSE
+      )
     }
 
-    i_type <- dots$rate_type
+    i_type <- dots[["rate_type"]]
+    i_type_missing <- FALSE
   }
 
-  if (!is.null(dots$insurance_type)) {
-    type <- dots$insurance_type
+  if ("insurance_type" %in% names(dots)) {
+    if (!type_missing) {
+      stop(
+        "Provide only one of `type` or deprecated `insurance_type`.",
+        call. = FALSE
+      )
+    }
+
+    type <- dots[["insurance_type"]]
+    type_missing <- FALSE
   }
 
-  if (!is.null(dots$term_years)) {
-    if (!is.infinite(n)) {
+  if ("term_years" %in% names(dots)) {
+    if (!n_missing) {
       stop("Provide only one of `n` or deprecated `term_years`.", call. = FALSE)
     }
 
-    n <- dots$term_years
+    n <- dots[["term_years"]]
+    n_missing <- FALSE
   }
 
-  if (!is.null(dots$deferment_years)) {
-    if (!identical(h, 0L) && !identical(h, 0)) {
-      stop("Provide only one of `h` or deprecated `deferment_years`.", call. = FALSE)
+  if ("deferment_years" %in% names(dots)) {
+    if (!h_missing) {
+      stop(
+        "Provide only one of `h` or deprecated `deferment_years`.",
+        call. = FALSE
+      )
     }
 
-    h <- dots$deferment_years
+    h <- dots[["deferment_years"]]
+    h_missing <- FALSE
   }
 
-  if (!is.null(dots$payments_per_year)) {
-    if (!identical(k, 1L) && !identical(k, 1)) {
-      stop("Provide only one of `k` or deprecated `payments_per_year`.", call. = FALSE)
+  if ("payments_per_year" %in% names(dots)) {
+    if (!k_missing) {
+      stop(
+        "Provide only one of `k` or deprecated `payments_per_year`.",
+        call. = FALSE
+      )
     }
 
-    k <- dots$payments_per_year
+    k <- dots[["payments_per_year"]]
+    k_missing <- FALSE
   }
 
-  if (!is.null(dots$premium_timing)) {
-    timing <- dots$premium_timing
-  }
-
-  if (!is.null(dots$premium_term_years)) {
-    if (!is.null(n_prem)) {
-      stop("Provide only one of `n_prem` or deprecated `premium_term_years`.", call. = FALSE)
+  if ("premium_timing" %in% names(dots)) {
+    if (!timing_missing) {
+      stop(
+        "Provide only one of `timing` or deprecated `premium_timing`.",
+        call. = FALSE
+      )
     }
 
-    n_prem <- dots$premium_term_years
+    timing <- dots[["premium_timing"]]
+    timing_missing <- FALSE
   }
 
-  if (!is.null(dots$cohort)) {
+  if ("premium_term_years" %in% names(dots)) {
+    if (!n_prem_missing) {
+      stop(
+        "Provide only one of `n_prem` or deprecated `premium_term_years`.",
+        call. = FALSE
+      )
+    }
+
+    n_prem <- dots[["premium_term_years"]]
+    n_prem_missing <- FALSE
+  }
+
+  if ("cohort" %in% names(dots)) {
     if (!status_missing) {
-      stop("Provide only one of `status` or deprecated `cohort`.", call. = FALSE)
+      stop(
+        "Provide only one of `status` or deprecated `cohort`.",
+        call. = FALSE
+      )
     }
 
-    old_cohort <- match.arg(dots$cohort, c("first", "last"))
-    status <- if (old_cohort == "first") "joint" else "last"
+    old_cohort <- match.arg(dots[["cohort"]], c("first", "last"))
+    status <- if (identical(old_cohort, "first")) "joint" else "last"
+    status_missing <- FALSE
   }
 
-  if (!is.null(dots$output)) {
-    if (!identical(tidy, FALSE)) {
-      stop("Provide only one of `tidy` or deprecated `output`.", call. = FALSE)
+  if (!is.null(tidy)) {
+    if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
+      stop("`tidy` must be `NULL` or a logical scalar.", call. = FALSE)
     }
 
-    output <- match.arg(dots$output, c("value", "table"))
-    tidy <- identical(output, "table")
+    if (!output_missing) {
+      stop("Provide only one of `output` or deprecated `tidy`.", call. = FALSE)
+    }
+
+    output <- if (isTRUE(tidy)) "summary" else "value"
   }
 
-  type <- match.arg(type)
-  frac <- match.arg(frac)
-  timing <- match.arg(timing)
-  premium_start <- match.arg(premium_start)
-  status <- match.arg(status)
+  output <- match.arg(output)
 
-  if (frac == "CML") {
-    frac <- "CF"
+  if (identical(output, "table")) {
+    output <- "summary"
   }
 
-  if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
-    stop("`tidy` must be a logical scalar.", call. = FALSE)
+  if (!is.logical(check) || length(check) != 1L || is.na(check)) {
+    stop("`check` must be a logical scalar.", call. = FALSE)
   }
 
-  `%||%` <- function(a, b) {
-    if (!is.null(a)) a else b
+  if (!is.numeric(tol) ||
+      length(tol) != 1L ||
+      is.na(tol) ||
+      !is.finite(tol) ||
+      tol < 0) {
+    stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
   }
 
-  # -------------------------------------------------------------------------
-  # Resolve life_contract input
-  # -------------------------------------------------------------------------
+  insurance_spec <- NULL
+  premium_spec <- NULL
 
-  if (!missing(lt) && inherits(lt, "tidyact_life_contract")) {
+  if (!lt_missing &&
+      exists(".as_life_contract", mode = "function") &&
+      .as_life_contract(lt)) {
     contract <- lt
 
     if (!contract$lives %in% c("joint", "last_survivor")) {
@@ -306,139 +398,273 @@ premium_xy <- function(
       )
     }
 
-    lt <- contract$mortality_table
+    lt <- contract$lt
+    insurance_spec <- contract$insurance
+    premium_spec <- contract$premium_schedule
 
-    if (is.null(x)) {
-      x <- contract$x %||% contract$age_x
+    if (x_missing || is.null(x)) {
+      x <- contract$x
+      x_missing <- FALSE
     }
 
-    if (is.null(y)) {
-      y <- contract$y %||% contract$age_y
+    if (y_missing || is.null(y)) {
+      y <- contract$y
+      y_missing <- FALSE
     }
 
-    if (is.null(i)) {
-      i <- contract$i %||% contract$rate
+    if (i_missing || is.null(i)) {
+      i <- contract$i
+      i_missing <- FALSE
     }
 
-    if (is.null(i_type)) {
-      i_type <- contract$i_type %||% contract$rate_type
+    if (i_type_missing || is.null(i_type)) {
+      i_type <- contract$i_type
+      i_type_missing <- FALSE
     }
 
-    if (is.null(m)) {
+    if (m_missing || is.null(m)) {
       m <- contract$m
+      m_missing <- FALSE
     }
 
-    if (contract$lives == "last_survivor" && status_missing) {
-      status <- "last"
+    if (status_missing) {
+      status <- if (identical(contract$lives, "joint")) {
+        "joint"
+      } else {
+        "last"
+      }
+      status_missing <- FALSE
+    }
+
+    if (!is.null(insurance_spec)) {
+      if (identical(insurance_spec$type, "variable_k")) {
+        stop(
+          "`premium_xy()` does not support `type = 'variable_k'`.",
+          call. = FALSE
+        )
+      }
+
+      if (type_missing) {
+        type <- insurance_spec$type
+        type_missing <- FALSE
+      }
+
+      if (benefit_missing) {
+        benefit <- insurance_spec$benefit
+        benefit_missing <- FALSE
+      }
+
+      if (n_missing) {
+        n <- insurance_spec$n
+        n_missing <- FALSE
+      }
+
+      if (h_missing) {
+        h <- insurance_spec$h
+        h_missing <- FALSE
+      }
+
+      if (status_missing && !is.null(insurance_spec$status)) {
+        status <- insurance_spec$status
+        status_missing <- FALSE
+      }
+    }
+
+    if (!is.null(premium_spec)) {
+      if (k_missing) {
+        k <- premium_spec$k
+        k_missing <- FALSE
+      }
+
+      if (timing_missing) {
+        timing <- premium_spec$timing
+        timing_missing <- FALSE
+      }
+
+      if (premium_start_missing) {
+        premium_start <- premium_spec$premium_start
+        premium_start_missing <- FALSE
+      }
+
+      if (n_prem_missing) {
+        n_prem <- premium_spec$n_prem
+        n_prem_missing <- FALSE
+      }
+
+      if (woolhouse_missing) {
+        woolhouse <- premium_spec$woolhouse
+        woolhouse_missing <- FALSE
+      }
     }
   }
 
-  if (is.null(i_type)) {
-    i_type <- "effective"
+  type <- match.arg(type)
+  timing <- match.arg(timing)
+  premium_start <- match.arg(premium_start)
+  status <- match.arg(status)
+  woolhouse <- match.arg(woolhouse)
+
+  if (frac_missing) {
+    frac_benefit <- if (!is.null(insurance_spec$frac)) {
+      insurance_spec$frac
+    } else if (!is.null(premium_spec$frac)) {
+      premium_spec$frac
+    } else {
+      "UDD"
+    }
+
+    frac_premium <- if (!is.null(premium_spec$frac)) {
+      premium_spec$frac
+    } else {
+      frac_benefit
+    }
+  } else {
+    frac_common <- match.arg(frac)
+    frac_benefit <- frac_common
+    frac_premium <- frac_common
   }
 
-  if (is.null(m)) {
-    m <- 1L
+  valid_frac <- c("UDD", "CF", "CML", "Balducci")
+
+  frac_benefit <- match.arg(frac_benefit, valid_frac)
+  frac_premium <- match.arg(frac_premium, valid_frac)
+
+  if (identical(frac_benefit, "CML")) {
+    frac_benefit <- "CF"
   }
 
-  # -------------------------------------------------------------------------
-  # Validation
-  # -------------------------------------------------------------------------
-
-  if (!is.logical(check) || length(check) != 1L || is.na(check)) {
-    stop("`check` must be TRUE or FALSE.", call. = FALSE)
+  if (identical(frac_premium, "CML")) {
+    frac_premium <- "CF"
   }
 
-  if (!is.numeric(tol) ||
-      length(tol) != 1L ||
-      !is.finite(tol) ||
-      tol < 0) {
-    stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
-  }
+  if (isTRUE(check)) {
+    if (lt_missing) {
+      stop("`lt` must be provided.", call. = FALSE)
+    }
 
-  if (is.null(i) ||
-      !is.numeric(i) ||
-      length(i) != 1L ||
-      !is.finite(i)) {
-    stop("`i` must be a single finite numeric value.", call. = FALSE)
-  }
+    if (x_missing || is.null(x)) {
+      stop("`x` must be provided.", call. = FALSE)
+    }
 
-  if (!is.character(i_type) ||
-      length(i_type) != 1L ||
-      is.na(i_type)) {
-    stop("`i_type` must be a single character string.", call. = FALSE)
-  }
+    if (y_missing || is.null(y)) {
+      stop("`y` must be provided.", call. = FALSE)
+    }
 
-  valid_i_type <- c(
-    "effective",
-    "nominal_interest",
-    "nominal_discount",
-    "force"
-  )
+    if (i_missing || is.null(i)) {
+      stop("`i` must be provided.", call. = FALSE)
+    }
 
-  if (!i_type %in% valid_i_type) {
-    stop(
-      "`i_type` must be one of: ",
-      paste(sprintf("'%s'", valid_i_type), collapse = ", "),
-      ".",
-      call. = FALSE
+    if (!is.numeric(x) ||
+        length(x) != 1L ||
+        is.na(x) ||
+        !is.finite(x) ||
+        abs(x - round(x)) > tol) {
+      stop("`x` must be a single integer age.", call. = FALSE)
+    }
+
+    if (!is.numeric(y) ||
+        length(y) != 1L ||
+        is.na(y) ||
+        !is.finite(y) ||
+        abs(y - round(y)) > tol) {
+      stop("`y` must be a single integer age.", call. = FALSE)
+    }
+
+    if (!is.numeric(i) ||
+        length(i) != 1L ||
+        is.na(i) ||
+        !is.finite(i)) {
+      stop("`i` must be a single finite numeric value.", call. = FALSE)
+    }
+
+    valid_i_type <- c(
+      "effective",
+      "nominal_interest",
+      "nominal_discount",
+      "force"
     )
-  }
 
-  if (is.null(x) ||
-      !is.numeric(x) ||
-      length(x) != 1L ||
-      !is.finite(x) ||
-      abs(x - round(x)) > tol) {
-    stop("`x` must be a single integer-valued age.", call. = FALSE)
-  }
+    if (!is.character(i_type) ||
+        length(i_type) != 1L ||
+        is.na(i_type) ||
+        !i_type %in% valid_i_type) {
+      stop(
+        "`i_type` must be one of: ",
+        paste(sprintf("'%s'", valid_i_type), collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
 
-  if (is.null(y) ||
-      !is.numeric(y) ||
-      length(y) != 1L ||
-      !is.finite(y) ||
-      abs(y - round(y)) > tol) {
-    stop("`y` must be a single integer-valued age.", call. = FALSE)
-  }
+    if (!is.numeric(m) ||
+        length(m) != 1L ||
+        is.na(m) ||
+        !is.finite(m) ||
+        m < 1 ||
+        abs(m - round(m)) > tol) {
+      stop("`m` must be a single positive integer.", call. = FALSE)
+    }
 
-  if (!is.numeric(m) ||
-      length(m) != 1L ||
-      !is.finite(m) ||
-      m <= 0 ||
-      abs(m - round(m)) > tol) {
-    stop("`m` must be a single positive integer.", call. = FALSE)
-  }
+    if (!is.numeric(benefit) ||
+        length(benefit) != 1L ||
+        is.na(benefit) ||
+        !is.finite(benefit) ||
+        benefit < 0) {
+      stop(
+        "`benefit` must be a single finite nonnegative number.",
+        call. = FALSE
+      )
+    }
 
-  if (!is.numeric(h) ||
-      length(h) != 1L ||
-      !is.finite(h) ||
-      h < 0 ||
-      abs(h - round(h)) > tol) {
-    stop("`h` must be a single nonnegative integer.", call. = FALSE)
-  }
+    if (!is.numeric(n) ||
+        length(n) != 1L ||
+        is.na(n) ||
+        n <= 0 ||
+        (!is.infinite(n) &&
+         (!is.finite(n) || abs(n - round(n)) > tol))) {
+      stop("`n` must be `Inf` or a single positive integer.", call. = FALSE)
+    }
 
-  if (!is.numeric(k) ||
-      length(k) != 1L ||
-      !is.finite(k) ||
-      k <= 0 ||
-      abs(k - round(k)) > tol) {
-    stop("`k` must be a single positive integer.", call. = FALSE)
-  }
+    if (type %in% c("term", "endowment", "pure_endowment") &&
+        is.infinite(n)) {
+      stop(
+        "`n` must be finite for term, endowment, and pure endowment insurance.",
+        call. = FALSE
+      )
+    }
 
-  if (!is.numeric(benefit) ||
-      length(benefit) != 1L ||
-      !is.finite(benefit) ||
-      benefit < 0) {
-    stop("`benefit` must be a single nonnegative finite number.", call. = FALSE)
-  }
+    if (!is.numeric(h) ||
+        length(h) != 1L ||
+        is.na(h) ||
+        !is.finite(h) ||
+        h < 0 ||
+        abs(h - round(h)) > tol) {
+      stop("`h` must be a single nonnegative integer.", call. = FALSE)
+    }
 
-  if (!is.numeric(n) ||
-      length(n) != 1L ||
-      is.na(n) ||
-      n < 0 ||
-      (!is.infinite(n) &&
-       (!is.finite(n) || abs(n - round(n)) > tol))) {
-    stop("`n` must be `Inf` or a single nonnegative integer.", call. = FALSE)
+    if (!is.numeric(k) ||
+        length(k) != 1L ||
+        is.na(k) ||
+        !is.finite(k) ||
+        k < 1 ||
+        abs(k - round(k)) > tol) {
+      stop("`k` must be a single positive integer.", call. = FALSE)
+    }
+
+    if (!is.null(n_prem) &&
+        (!is.numeric(n_prem) ||
+         length(n_prem) != 1L ||
+         is.na(n_prem) ||
+         n_prem <= 0 ||
+         (!is.infinite(n_prem) &&
+          (!is.finite(n_prem) ||
+           abs(n_prem * k - round(n_prem * k)) > tol)))) {
+      stop(
+        "`n_prem` must be NULL, Inf, or a positive value satisfying ",
+        "`n_prem * k` integer.",
+        call. = FALSE
+      )
+    }
   }
 
   x <- as.integer(round(x))
@@ -451,440 +677,143 @@ premium_xy <- function(
     n <- as.integer(round(n))
   }
 
-  if (type %in% c("term", "endowment", "pure_endowment") &&
-      is.infinite(n)) {
-    stop(
-      "`n` must be finite for term, endowment, and pure endowment insurance.",
-      call. = FALSE
-    )
-  }
-
-  if (!is.null(n_prem)) {
-    if (!is.numeric(n_prem) ||
-        length(n_prem) != 1L ||
-        !is.finite(n_prem) ||
-        n_prem < 0 ||
-        abs(n_prem * k - round(n_prem * k)) > tol) {
-      stop(
-        "`n_prem` must be NULL or a single nonnegative value satisfying `n_prem * k` integer.",
-        call. = FALSE
-      )
-    }
-
+  if (!is.null(n_prem) && !is.infinite(n_prem)) {
     n_prem <- round(n_prem * k) / k
   }
 
-  if (type %in% c("term", "endowment", "pure_endowment") &&
-      !is.null(n_prem) &&
-      n_prem > n) {
-    stop(
-      "`n_prem` must not exceed `n` for finite two-life products.",
-      call. = FALSE
-    )
-  }
-
-  # -------------------------------------------------------------------------
-  # Interest
-  # -------------------------------------------------------------------------
-
-  i_effective <- standardize_interest(
-    i_type = i_type,
-    i = i,
-    m = m
-  )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  v <- 1 / (1 + i_effective)
-
-  # -------------------------------------------------------------------------
-  # Life table preparation
-  # -------------------------------------------------------------------------
-
-  normalize_life_tables <- function(lt) {
-    if (is.data.frame(lt)) {
-      return(list(lt, lt))
-    }
-
-    if (!is.list(lt)) {
-      stop(
-        "`lt` must be a data.frame/tibble, a list of two life tables, ",
-        "or a `tidyact_life_contract` object.",
-        call. = FALSE
-      )
-    }
-
-    if (length(lt) == 1L) {
-      return(list(lt[[1L]], lt[[1L]]))
-    }
-
-    if (length(lt) != 2L) {
-      stop("When `lt` is a list, its length must be 1 or 2.", call. = FALSE)
-    }
-
-    lt
-  }
-
-  validate_life_table <- function(tab, idx) {
-    if (!is.data.frame(tab)) {
-      stop(
-        "Each element of `lt` must be a data.frame/tibble. ",
-        "Problem at life ", idx, ".",
-        call. = FALSE
-      )
-    }
-
-    if (!("x" %in% names(tab))) {
-      stop(
-        "Each life table must contain column `x`. Problem at life ",
-        idx, ".",
-        call. = FALSE
-      )
-    }
-
-    if (!any(c("lx", "px", "qx") %in% names(tab))) {
-      stop(
-        "Each life table must contain at least one of `lx`, `px`, or `qx`. ",
-        "Problem at life ", idx, ".",
-        call. = FALSE
-      )
-    }
-
-    if (!is.numeric(tab$x) || any(!is.finite(tab$x))) {
-      stop("Column `x` must be numeric and finite in every life table.", call. = FALSE)
-    }
-
-    invisible(TRUE)
-  }
-
-  prepare_life_table <- function(tab, idx) {
-    if (isTRUE(check)) {
-      validate_life_table(tab, idx)
-    }
-
-    tab <- tibble::as_tibble(tab)
-    tab <- tab[order(tab$x), , drop = FALSE]
-
-    if (anyDuplicated(tab$x)) {
-      stop("Life table ages must be unique. Problem at life ", idx, ".", call. = FALSE)
-    }
-
-    if (any(abs(tab$x - round(tab$x)) > tol)) {
-      stop("Life table ages must be integer-valued. Problem at life ", idx, ".", call. = FALSE)
-    }
-
-    tab$x <- as.integer(round(tab$x))
-
-    if (!("px" %in% names(tab))) {
-      if ("qx" %in% names(tab)) {
-        tab$px <- 1 - as.numeric(tab$qx)
-      } else if ("lx" %in% names(tab)) {
-        lx <- as.numeric(tab$lx)
-        px <- rep(NA_real_, length(lx))
-
-        if (length(lx) >= 2L) {
-          valid <- seq_len(length(lx) - 1L)
-          px[valid] <- ifelse(lx[valid] > 0, lx[valid + 1L] / lx[valid], 0)
-        }
-
-        px[length(px)] <- 0
-        tab$px <- px
-      }
-    }
-
-    if (!("qx" %in% names(tab))) {
-      tab$qx <- 1 - as.numeric(tab$px)
-    }
-
-    tab$px <- pmin(pmax(as.numeric(tab$px), 0), 1)
-    tab$qx <- pmin(pmax(as.numeric(tab$qx), 0), 1)
-
-    tab
-  }
-
-  table_list <- normalize_life_tables(lt)
-
-  table_list <- list(
-    prepare_life_table(table_list[[1L]], 1L),
-    prepare_life_table(table_list[[2L]], 2L)
-  )
-
-  ages <- c(x, y)
-
-  age_available <- vapply(seq_along(table_list), function(j) {
-    ages[[j]] %in% table_list[[j]]$x
-  }, logical(1L))
-
-  if (!all(age_available)) {
-    stop("Issue ages must be present in their corresponding life tables.", call. = FALSE)
-  }
-
-  max_age <- vapply(table_list, function(tab) max(tab$x, na.rm = TRUE), numeric(1L))
-  horizon_life <- floor(max_age - ages)
-
-  if (any(horizon_life < 0)) {
-    stop("Life table horizon is insufficient for the requested issue ages.", call. = FALSE)
-  }
-
-  status_horizon <- if (status == "joint") {
-    min(horizon_life)
-  } else {
-    max(horizon_life)
-  }
-
-  if (type %in% c("term", "endowment", "pure_endowment") &&
-      (h + n) > status_horizon) {
-    stop(
-      "`n + h` exceeds the available two-life status horizon.",
-      call. = FALSE
-    )
-  }
-
-  if (type == "whole" && h > status_horizon) {
-    stop(
-      "`h` exceeds the available two-life status horizon.",
-      call. = FALSE
-    )
-  }
-
-  # -------------------------------------------------------------------------
-  # Survival helpers
-  # -------------------------------------------------------------------------
-
-  single_life_survival <- function(tab, age0, tt, horizon) {
-    if (tt <= 0) return(1)
-    if (tt > horizon) return(0)
-
-    n_int <- floor(tt)
-    s <- tt - n_int
-
-    if (abs(s) <= tol) s <- 0
-
-    if (abs(s - 1) <= tol) {
-      n_int <- n_int + 1L
-      s <- 0
-    }
-
-    result <- 1
-
-    if (n_int > 0L) {
-      ages_int <- age0 + 0:(n_int - 1L)
-      px_vec <- tab$px[match(ages_int, tab$x)]
-
-      if (any(is.na(px_vec))) return(NA_real_)
-
-      result <- prod(px_vec)
-    }
-
-    if (s > tol) {
-      age_tail <- age0 + n_int
-      idx_tail <- match(age_tail, tab$x)
-
-      if (is.na(idx_tail)) return(NA_real_)
-
-      q_tail <- tab$qx[[idx_tail]]
-      p_tail <- tab$px[[idx_tail]]
-
-      frac_surv <- if (frac == "UDD") {
-        1 - s * q_tail
-      } else if (frac == "CF") {
-        p_tail^s
-      } else {
-        denominator <- 1 - (1 - s) * q_tail
-        if (denominator <= 0) 0 else p_tail / denominator
-      }
-
-      result <- result * frac_surv
-    }
-
-    pmin(pmax(result, 0), 1)
-  }
-
-  life_survival <- function(j, tt) {
-    single_life_survival(
-      tab = table_list[[j]],
-      age0 = ages[[j]],
-      tt = tt,
-      horizon = horizon_life[[j]]
-    )
-  }
-
-  status_survival <- function(tt) {
-    p <- vapply(1:2, life_survival, numeric(1L), tt = tt)
-
-    if (anyNA(p)) {
-      stop(
-        "Could not compute two-life status survival at time ",
-        tt,
-        ".",
-        call. = FALSE
-      )
-    }
-
-    if (status == "joint") {
-      prod(p)
-    } else {
-      1 - prod(1 - p)
-    }
-  }
-
-  status_decrement_probability <- function(r) {
-    pr <- status_survival(r)
-    pr1 <- status_survival(r + 1)
-    pmin(pmax(pr - pr1, 0), 1)
-  }
-
-  # -------------------------------------------------------------------------
-  # APV of benefits
-  # -------------------------------------------------------------------------
-
-  term_insurance_apv <- function(start, term) {
-    if (term <= 0L) return(0)
-
-    years <- start:(start + term - 1L)
-
-    sum(vapply(years, function(r) {
-      benefit * (v^(r + 1)) * status_decrement_probability(r)
-    }, numeric(1L)))
-  }
-
-  pure_endowment_apv <- function(time) {
-    benefit * (v^time) * status_survival(time)
-  }
-
-  apv_benefits <- switch(
-    type,
-    whole = {
-      if (h >= status_horizon) {
-        0
-      } else {
-        term_insurance_apv(
-          start = h,
-          term = status_horizon - h
-        )
-      }
-    },
-    term = term_insurance_apv(
-      start = h,
-      term = n
-    ),
-    pure_endowment = pure_endowment_apv(
-      time = h + n
-    ),
-    endowment = term_insurance_apv(
-      start = h,
-      term = n
-    ) +
-      pure_endowment_apv(
-        time = h + n
-      )
-  )
-
-  # -------------------------------------------------------------------------
-  # Premium-paying period
-  # -------------------------------------------------------------------------
-
   if (is.null(n_prem)) {
-    n_prem <- if (type == "whole") {
-      start_for_default <- if (premium_start == "issue") 0L else h
-      max(0L, status_horizon - start_for_default)
+    n_prem <- if (identical(type, "whole")) Inf else n
+  }
+
+  premium_start_time <- if (identical(premium_start, "issue")) 0 else h
+
+  if (!identical(type, "whole")) {
+    premium_end_time <- if (is.infinite(n_prem)) {
+      Inf
     } else {
-      n
+      premium_start_time + n_prem
+    }
+
+    coverage_end_time <- h + n
+
+    if (premium_end_time > coverage_end_time + tol) {
+      stop(
+        "Premium payments must not extend beyond the end of coverage. ",
+        "Premiums end at time ", premium_end_time,
+        ", while coverage ends at time ", coverage_end_time, ".",
+        call. = FALSE
+      )
     }
   }
 
-  premium_start_time <- if (premium_start == "issue") 0L else h
+  benefit_args <- list(
+    lt = lt,
+    x = x,
+    y = y,
+    i = i,
+    i_type = i_type,
+    m = m,
+    status = status,
+    n = n,
+    h = h,
+    benefit = benefit,
+    frac = frac_benefit,
+    tidy = FALSE
+  )
 
-  if (premium_start_time + n_prem > status_horizon) {
-    stop(
-      "Premium-paying period exceeds the available two-life status horizon.",
-      call. = FALSE
-    )
-  }
+  if (identical(type, "pure_endowment")) {
+    endowment_args <- benefit_args
+    endowment_args$type <- "endowment"
 
-  if (n_prem <= 0) {
-    stop("`n_prem` must define a positive premium annuity.", call. = FALSE)
-  }
+    term_args <- benefit_args
+    term_args$type <- "term"
 
-  if (type %in% c("term", "endowment", "pure_endowment") &&
-      n_prem > n) {
-    stop(
-      "`n_prem` must not exceed `n` for finite two-life products.",
-      call. = FALSE
-    )
-  }
+    apv_benefits <- do.call(insurance_xy, endowment_args) -
+      do.call(insurance_xy, term_args)
 
-  n_payments_raw <- n_prem * k
-  n_payments <- round(n_payments_raw)
-
-  if (abs(n_payments_raw - n_payments) > tol) {
-    stop("`n_prem * k` must be an integer.", call. = FALSE)
-  }
-
-  n_payments <- as.integer(n_payments)
-
-  payment_times <- if (timing == "due") {
-    premium_start_time + (0:(n_payments - 1L)) / k
+    if (apv_benefits < 0 && abs(apv_benefits) <= tol) {
+      apv_benefits <- 0
+    }
   } else {
-    premium_start_time + (1:n_payments) / k
+    benefit_args$type <- type
+    apv_benefits <- do.call(insurance_xy, benefit_args)
   }
 
-  a_premiums <- sum(vapply(payment_times, function(tt) {
-    (v^tt) * status_survival(tt)
-  }, numeric(1L)))
+  h_prem <- if (identical(premium_start, "issue")) 0 else h
 
-  if (!is.finite(a_premiums) || a_premiums <= 0) {
-    stop("APV of premium annuity is nonpositive or not finite.", call. = FALSE)
+  apv_premium_annuity <- annuity_xy(
+    lt = lt,
+    x = x,
+    y = y,
+    i = i,
+    i_type = i_type,
+    m = m,
+    status = status,
+    n = n_prem,
+    h = h_prem,
+    k = k,
+    timing = timing,
+    woolhouse = woolhouse,
+    frac = frac_premium,
+    tidy = FALSE
+  )
+
+  if (!is.finite(apv_premium_annuity) ||
+      apv_premium_annuity <= 0) {
+    stop(
+      "APV of the premium annuity is nonpositive or not finite.",
+      call. = FALSE
+    )
   }
 
-  P <- apv_benefits / a_premiums
+  premium_annualized <- apv_benefits / apv_premium_annuity
+  premium_per_payment <- premium_annualized / k
 
-  if (!tidy) {
-    return(P)
+  equivalence_residual <- premium_annualized *
+    apv_premium_annuity -
+    apv_benefits
+
+  if (identical(output, "value")) {
+    return(premium_annualized)
+  }
+
+  if (identical(output, "summary")) {
+    return(
+      tibble::tibble(
+        premium_annualized = premium_annualized,
+        premium_per_payment = premium_per_payment,
+        payments_per_year = k,
+        apv_benefits = apv_benefits,
+        apv_premium_annuity = apv_premium_annuity,
+        equivalence_residual = equivalence_residual
+      )
+    )
   }
 
   tibble::tibble(
-    x = x,
-    y = y,
-    age_x = x,
-    age_y = y,
-    i = i,
-    rate = i,
-    i_type = i_type,
-    rate_type = i_type,
-    m = m,
-    i_effective = i_effective,
-    h = h,
-    deferment_years = h,
-    n = n,
-    term_years = if (is.infinite(n)) NA_integer_ else n,
-    type = type,
-    insurance_type = type,
-    status = status,
-    cohort = if (status == "joint") "first" else "last",
-    benefit = benefit,
-    k = k,
-    payments_per_year = k,
-    frac = frac,
-    timing = timing,
-    premium_timing = timing,
-    premium_start = premium_start,
-    n_prem = n_prem,
-    premium_term_years = n_prem,
-    P = P,
-    premium = P,
-    P_annual = k * P,
-    premium_annual = k * P,
-    apv_benefits = apv_benefits,
-    a_premiums = a_premiums,
-    apv_premiums = a_premiums
+    component = c(
+      "apv_benefits",
+      "apv_premium_annuity",
+      "premium_annualized",
+      "premium_per_payment",
+      "payments_per_year",
+      "equivalence_residual"
+    ),
+    value = c(
+      apv_benefits,
+      apv_premium_annuity,
+      premium_annualized,
+      premium_per_payment,
+      k,
+      equivalence_residual
+    ),
+    unit = c(
+      "currency",
+      "annuity factor",
+      "currency per year",
+      "currency per payment",
+      "payments per year",
+      "currency"
+    )
   )
 }

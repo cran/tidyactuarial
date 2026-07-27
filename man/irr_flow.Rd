@@ -109,11 +109,14 @@ irr_flow(
 \code{\link{bond_ytm}}
 
 Other time-value: 
+\code{\link{accumulation_factor}()},
+\code{\link{discount_factor}()},
 \code{\link{future_value}()},
 \code{\link{fv_flow}()},
 \code{\link{irr_flow_multi}()},
 \code{\link{plot_cash_flow}()},
 \code{\link{present_value}()},
-\code{\link{pv_flow}()}
+\code{\link{pv_flow}()},
+\code{\link{solve_value}()}
 }
 \concept{time-value}

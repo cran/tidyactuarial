@@ -2,25 +2,28 @@
 % Please edit documentation in R/simulate_life_mc.R
 \name{.simulate_lifetime_inverse_lx}
 \alias{.simulate_lifetime_inverse_lx}
-\title{Internal helper: simulate curtate future lifetimes from lx}
+\title{Internal helper: simulate future lifetimes from lx}
 \usage{
-.simulate_lifetime_inverse_lx(lt, x, n, n_sim, seed = NULL)
+.simulate_lifetime_inverse_lx(lt, x, n, n_sim, seed = NULL, frac = NULL)
 }
 \arguments{
 \item{lt}{Life table with columns \code{x} and \code{lx}.}
 
 \item{x}{Integer age.}
 
-\item{n}{Term in years. Use \code{Inf} for whole life.}
+\item{n}{Positive integer horizon or \code{Inf}.}
 
-\item{n_sim}{Number of simulations.}
+\item{n_sim}{Positive integer number of simulations.}
 
 \item{seed}{Optional seed.}
+
+\item{frac}{Optional fractional-age assumption. If \code{NULL}, only the
+curtate lifetime is generated.}
 }
 \value{
-A tibble with simulated curtate lifetimes.
+A tibble with simulated curtate and complete future lifetimes.
 }
 \description{
-Internal helper: simulate curtate future lifetimes from lx
+Internal helper: simulate future lifetimes from lx
 }
 \keyword{internal}

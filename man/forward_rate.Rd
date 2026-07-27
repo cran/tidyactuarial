@@ -160,6 +160,8 @@ The Term Structure of Interest Rates.
 \code{\link{standardize_interest}}
 
 Other interest: 
+\code{\link{accumulation_factor}()},
+\code{\link{discount_factor}()},
 \code{\link{discount_factor_spot}()},
 \code{\link{interest_equivalents}()},
 \code{\link{standardize_interest}()},

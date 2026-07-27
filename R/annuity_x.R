@@ -27,11 +27,16 @@
 #'   Ignored for \code{i_type = "effective"} and \code{i_type = "force"}.
 #'   In \code{tidyactuarial}, \code{m} is reserved for interest conversion
 #'   frequency, not deferment.
-#' @param n Integer term in years. Use \code{NULL} or \code{Inf} for a
-#'   whole-life annuity.
+#' @param n Numeric term in years. Use \code{NULL} or \code{Inf} for a
+#'   whole-life annuity. For exact k-thly valuation
+#'   (\code{woolhouse = "none"}), fractional terms are allowed when
+#'   \code{n * k} is an integer. Woolhouse approximations require an
+#'   integer number of years.
 #' @param h Integer deferment period in years.
 #' @param k Positive integer. Number of annuity payments per year. For example,
-#'   use \code{k = 12} for monthly payments.
+#'   use \code{k = 12} for monthly payments. The annuity is normalized to
+#'   an annual payment rate of 1, so each individual payment has amount
+#'   \code{1 / k}.
 #' @param timing Character string. Either \code{"immediate"} for payments at
 #'   the end of each payment period or \code{"due"} for payments at the
 #'   beginning of each payment period.
@@ -82,7 +87,16 @@
 #' where \eqn{h} is the deferment period.
 #'
 #' For k-thly payments with \code{woolhouse = "none"}, fractional survival is
-#' computed under the selected fractional-age assumption.
+#' computed under the selected fractional-age assumption. The payment stream
+#' is normalized to an annual payment rate of 1:
+#' \deqn{\ddot{a}_{x:\overline{n}|}^{(k)} =
+#' \frac{1}{k}\sum_{j=0}^{kn-1}
+#' v^{j/k}\,{}_{j/k}p_x.}
+#' Consequently, each k-thly installment has amount \eqn{1/k}. This
+#' normalization is essential when the function is used as the premium
+#' annuity in the equivalence principle: the resulting premium is annualized,
+#' and the amount paid at each installment is the annualized premium divided
+#' by \eqn{k}.
 #'
 #' @seealso \code{\link{insurance_x}}, \code{\link{premium_x}},
 #'   \code{\link{reserve_x}}, \code{\link{t_px}}, \code{\link{t_Ex}}
@@ -281,9 +295,11 @@ annuity_x <- function(
        length(n) != 1L ||
        is.na(n) ||
        n < 0 ||
-       (!is.infinite(n) &&
-        (!is.finite(n) || abs(n - round(n)) > 1e-10)))) {
-    stop("`n` must be `NULL`, `Inf`, or a single nonnegative integer.", call. = FALSE)
+       (!is.infinite(n) && !is.finite(n)))) {
+    stop(
+      "`n` must be `NULL`, `Inf`, or a single nonnegative finite value.",
+      call. = FALSE
+    )
   }
 
   if (is.null(frac)) {
@@ -306,7 +322,28 @@ annuity_x <- function(
   k <- as.integer(round(k))
 
   if (!is.null(n) && !is.infinite(n)) {
-    n <- as.integer(round(n))
+    if (identical(woolhouse, "none")) {
+      n_payments_check <- n * k
+
+      if (abs(n_payments_check - round(n_payments_check)) > 1e-10) {
+        stop(
+          "For exact k-thly valuation, `n * k` must be an integer so that ",
+          "the term contains a whole number of payments.",
+          call. = FALSE
+        )
+      }
+
+      n <- round(n_payments_check) / k
+    } else {
+      if (abs(n - round(n)) > 1e-10) {
+        stop(
+          "Woolhouse approximations require `n` to be an integer number of years.",
+          call. = FALSE
+        )
+      }
+
+      n <- as.integer(round(n))
+    }
   }
 
   # -------------------------------------------------------------------------
@@ -507,7 +544,7 @@ annuity_x <- function(
   }
 
   pure_endowment_factor <- v_pow(n_used) *
-    t_p_int(start_age, n_used)
+    t_p_frac(start_age, n_used)
 
   if (is.na(pure_endowment_factor)) {
     pure_endowment_factor <- 0
@@ -541,10 +578,12 @@ annuity_x <- function(
   }
 
   kthly_exact <- function(current_age, nn, kk, tim) {
+    n_payments <- as.integer(round(kk * nn))
+
     if (tim == "due") {
-      j <- 0:(kk * nn - 1L)
+      j <- 0:(n_payments - 1L)
     } else {
-      j <- 1:(kk * nn)
+      j <- 1:n_payments
     }
 
     u <- j / kk

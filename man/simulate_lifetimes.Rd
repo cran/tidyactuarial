@@ -2,57 +2,111 @@
 % Please edit documentation in R/simulate_lifetimes.R
 \name{simulate_lifetimes}
 \alias{simulate_lifetimes}
-\title{Simulate future lifetimes from a life table}
+\title{Simulate future lifetimes for multiple lives}
 \usage{
-simulate_lifetimes(data, x, n_sim = 1000, frac = "udd", seed = NULL)
+simulate_lifetimes(
+  data,
+  x,
+  n_sim = 1000L,
+  frac = c("udd", "cml", "balducci", "constant", "cfm", "constant_force"),
+  method = c("inverse", "multinomial", "antithetic"),
+  seed = NULL,
+  truncation = c("conditional", "error"),
+  tol = 1e-10
+)
 }
 \arguments{
 \item{data}{A data frame or tibble containing a life table.}
 
-\item{x}{Numeric vector of initial ages.}
+\item{x}{Nonempty numeric vector of nonnegative integer initial ages. Each
+position represents one life; repeated ages are allowed.}
 
-\item{n_sim}{Number of simulations per life.}
+\item{n_sim}{Positive integer number of simulations per life.}
 
-\item{frac}{Fractional age assumption. One of \code{"udd"}, \code{"constant"},
-\code{"cfm"}, or \code{"balducci"}.}
+\item{frac}{Fractional-age assumption. Canonical values are \code{"udd"},
+\code{"cml"}, and \code{"balducci"}. The historical values
+\code{"constant"}, \code{"cfm"}, and \code{"constant_force"} are accepted
+as aliases for \code{"cml"}.}
 
-\item{seed}{Optional random seed.}
+\item{method}{Simulation method passed to \code{\link{simulate_lifetime}}:
+\code{"inverse"}, \code{"multinomial"}, or \code{"antithetic"}.}
+
+\item{seed}{Optional nonnegative integer seed. When supplied, one random
+stream is initialized for the complete multiple-life simulation and the
+caller's previous random-number state is restored afterward.}
+
+\item{truncation}{Treatment of a mortality table that does not exhaust the
+lifetime distribution: \code{"conditional"} retains the historical
+conditional simulation with one warning, while \code{"error"} stops.}
+
+\item{tol}{Nonnegative numeric tolerance used for age and mortality checks.}
 }
 \value{
-A tibble with simulated curtate and complete future lifetimes.
+A tibble with one row per simulation and life. Standard columns
+include \code{sim_id}, \code{simulation_id}, \code{life_id}, \code{x},
+\code{Kx}, \code{curtate_lifetime}, \code{Tx},
+\code{complete_lifetime}, \code{death_age}, \code{method}, and \code{frac}.
+Compatibility aliases \code{sim}, \code{life}, \code{K}, and \code{T} are
+retained.
 }
 \description{
-Simulates curtate and complete future lifetimes from a life table.
-
-This version is intentionally simple and defensive. It avoids using
-\code{findInterval()} on a cumulative distribution that may contain missing values,
-while preserving the column names expected by the Monte Carlo workflow:
-\code{sim_id}, \code{life_id}, \code{Kx}, and \code{Tx}.
+Simulates independent curtate and complete future lifetimes for several
+initial ages from one life table. The function uses
+\code{\link{simulate_lifetime}} as its single-life simulation engine so that
+age validation, truncation treatment, fractional-age assumptions, and
+random-number conventions remain consistent across the Monte Carlo module.
 }
 \details{
-The input life table must contain an age column named \code{x}, \code{age}, or \code{Age},
-and at least one mortality column among \code{qx}, \code{px}, or \code{lx}.
+The life table must contain an age column named \code{x}, \code{age}, or
+\code{Age}, and at least one mortality basis among \code{qx}, \code{px}, or
+\code{lx}. The precedence is \code{qx}, then \code{px}, then \code{lx}.
 
-If \code{qx} is not available, it is obtained from \code{px} as \code{1 - px}, or from
-consecutive \code{lx} values as \code{1 - lx[x + 1] / lx[x]}.
+Unlike the previous implementation, invalid mortality values are not silently
+replaced by zero and the last death probability is not forcibly overwritten.
+Such repairs can materially change the simulated lifetime distribution.
 
-Invalid mortality values are handled defensively. Non-finite values, negative
-values, and values greater than one are removed from the mortality basis.
-Missing values are then treated as zero, and the final available age is forced
-to have \code{qx = 1} so that the lifetime distribution is closed.
+If \code{lx} is supplied, one-year death probabilities are derived as
+\deqn{
+q_y = 1 - \frac{l_{y+1}}{l_y}
+}
+for ages with positive exposure. A terminal zero in \code{lx} therefore
+generates the appropriate terminal \code{qx = 1}. If the final available
+\code{lx} remains positive, the resulting distribution is recognized as
+truncated and handled according to \code{truncation}.
+
+Conditional on the supplied life table, the simulated lives are independent.
+A single seed is set once for the entire call; the seed is not reset for each
+life, which avoids introducing artificial perfect dependence between lives
+of the same age.
 }
 \examples{
 lt <- tibble::tibble(
-  x = 40:100,
-  qx = seq(0.002, 1, length.out = 61)
+  x = 40:43,
+  qx = c(0.10, 0.20, 0.30, 1)
 )
 
 simulate_lifetimes(
   data = lt,
-  x = c(60, 58),
+  x = c(40, 41),
   n_sim = 25,
   frac = "udd",
   seed = 123
 )
 
 }
+\seealso{
+\code{\link{simulate_lifetime}},
+\code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
+\code{\link{mc_annuity}}, \code{\link{mc_reserve}}
+
+Other monte-carlo: 
+\code{\link{mc_annuity}()},
+\code{\link{mc_insurance}()},
+\code{\link{mc_loss}()},
+\code{\link{mc_multilife_status}()},
+\code{\link{mc_premium}()},
+\code{\link{mc_reserve}()},
+\code{\link{simulate_lifetime}()},
+\code{\link{summary_mc}()}
+}
+\concept{monte-carlo}

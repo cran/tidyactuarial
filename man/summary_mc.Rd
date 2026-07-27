@@ -84,8 +84,10 @@ Other monte-carlo:
 \code{\link{mc_annuity}()},
 \code{\link{mc_insurance}()},
 \code{\link{mc_loss}()},
+\code{\link{mc_multilife_status}()},
 \code{\link{mc_premium}()},
 \code{\link{mc_reserve}()},
-\code{\link{simulate_lifetime}()}
+\code{\link{simulate_lifetime}()},
+\code{\link{simulate_lifetimes}()}
 }
 \concept{monte-carlo}

@@ -83,6 +83,8 @@ if (requireNamespace("dplyr", quietly = TRUE) &&
 \code{\link{discount_factor_spot}}
 
 Other interest: 
+\code{\link{accumulation_factor}()},
+\code{\link{discount_factor}()},
 \code{\link{discount_factor_spot}()},
 \code{\link{forward_rate}()},
 \code{\link{interest_equivalents}()},

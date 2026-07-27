@@ -1,77 +1,97 @@
 #' Compute Monte Carlo loss random variables for life contingencies
 #'
-#' Computes simulated actuarial loss random variables from Monte Carlo present
-#' values of benefits, premium annuities, and premiums, using compact actuarial
-#' notation.
-#'
-#' This function constructs the simulated loss random variable
-#'
-#' \deqn{
-#'   L = Z - P Y,
-#' }
-#'
-#' where \eqn{Z} is the present value random variable of insurance benefits,
-#' \eqn{Y} is the present value random variable of the premium annuity, and
-#' \eqn{P} is the premium per payment.
+#' Constructs simulated actuarial losses from present values of benefits and
+#' premium-payment annuities while keeping annualized premiums distinct from
+#' amounts paid at each premium date.
 #'
 #' @param .data A data frame or tibble containing simulated present values of
 #'   benefits and premium annuities.
-#' @param col_Z Character string. Name of the column containing the simulated
-#'   present value of benefits. Default is \code{"pv_benefit"}.
-#' @param col_Y Character string. Name of the column containing the simulated
-#'   present value of premium annuities. Default is \code{"pv_annuity"}.
-#' @param col_P Character string. Name of the column containing the premium.
-#'   Default is \code{"P"}. If this column is not found and \code{col_P = "P"},
-#'   the legacy column \code{"premium"} is used when available.
-#' @param col_L Character string. Name of the output column containing the
-#'   simulated loss random variable. Default is \code{"L"}.
-#' @param P Optional numeric scalar. If supplied, this value is used as the
-#'   premium instead of reading the premium from \code{col_P}.
+#' @param col_Z Character scalar naming the simulated present value of benefits.
+#'   Default is \code{"pv_benefit"}.
+#' @param col_Y Character scalar naming the simulated present value of the
+#'   premium annuity. Default is \code{"pv_annuity"}.
+#' @param col_P Character scalar naming the premium input column. When omitted,
+#'   the function searches, in order, for \code{premium_annualized},
+#'   \code{premium_per_payment}, \code{P}, and \code{premium}.
+#' @param col_L Character scalar naming the simulated loss output. Default is
+#'   \code{"L"}.
+#' @param P Optional nonnegative numeric scalar supplied directly instead of
+#'   reading a premium column.
+#' @param premium_unit Unit of \code{P} or the selected premium column:
+#'   \code{"annualized"}, \code{"per_payment"}, or
+#'   \code{"annuity_scale"}. The latter is the coefficient that directly
+#'   multiplies \code{col_Y}. With \code{"auto"}, explicit modern column names
+#'   determine the unit, while \code{P}, \code{premium}, and a direct
+#'   \code{P} argument retain their historical annuity-scale interpretation.
+#' @param k Optional positive integer number of premium payments per year.
+#'   By default it is inferred from \code{payments_per_year} or \code{k} in
+#'   \code{.data}; if neither exists, \code{k = 1} is used.
+#' @param annuity_payment Optional positive numeric scalar giving the payment
+#'   amount used to construct \code{col_Y}. It is normally inferred from
+#'   \code{payment_per_payment}, \code{payment}, or
+#'   \code{payment_annualized} in the output of \code{\link{mc_annuity}}.
+#' @param tol Nonnegative numeric tolerance for consistency checks.
 #' @param ... Transitional compatibility for older calls using \code{data},
 #'   \code{benefit_col}, \code{annuity_col}, \code{premium_col},
 #'   \code{loss_col}, and \code{premium}.
 #'
 #' @details
-#' This function follows the compact actuarial notation used throughout
-#' \code{tidyactuarial}: \code{Z} denotes the present value random variable of
-#' benefits, \code{Y} denotes the present value random variable of the premium
-#' annuity, \code{P} denotes the premium per payment, and \code{L} denotes the
-#' actuarial loss random variable at issue.
+#' Let \eqn{Z} be the present value random variable of benefits. Suppose
+#' \code{col_Y} contains
+#' \deqn{
+#' Y_c = c\sum_j v^{t_j},
+#' }
+#' where \eqn{c} is the amount used in \code{\link{mc_annuity}} at each of the
+#' \eqn{k} premium dates per year.
 #'
-#' The function does not estimate the premium. It only constructs the simulated
-#' loss random variable. The premium may come from a column previously created
-#' by \code{\link{mc_premium}}, or it may be supplied directly through the
-#' \code{P} argument.
+#' If \eqn{P^{(k)}} is the annualized premium, the actual installment is
+#' \eqn{P^{(k)}/k}, and the simulated present value of premiums is
+#' \deqn{
+#' \Pi =
+#' \frac{P^{(k)}}{k c}Y_c.
+#' }
+#' Hence the loss at issue is
+#' \deqn{
+#' L = Z - \Pi.
+#' }
 #'
-#' The interpretation of \code{P} depends on how the premium annuity present
-#' value was constructed. If \code{pv_annuity} was generated with annual
-#' payments, then \code{P} corresponds to that annual premium structure. If
-#' \code{pv_annuity} was generated using fractional payments in
-#' \code{\link{mc_annuity}}, such as \code{payment = 1 / 12} and
-#' \code{k = 12}, then \code{P} is applied to that same fractional payment
-#' pattern.
+#' The recommended normalized premium annuity uses
+#' \code{payment = 1 / k} in \code{\link{mc_annuity}}. Then \eqn{c=1/k},
+#' \eqn{Y_c=Y^{(k)}}, and the expression simplifies to
+#' \deqn{
+#' L = Z - P^{(k)}Y^{(k)}.
+#' }
 #'
-#' Thus, \code{mc_loss()} can be used without modification for annual premiums,
-#' monthly premiums, quarterly premiums, semiannual premiums, and multiple-life
-#' premium structures, provided that \code{col_Y} contains the appropriate
-#' simulated premium annuity present value.
+#' This convention agrees with \code{\link{premium_x}},
+#' \code{\link{premium_xy}}, \code{\link{reserve_x}}, and
+#' \code{\link{reserve_xy}}: the premium is annualized, while the amount
+#' collected at each date is the annualized premium divided by \code{k}.
 #'
-#' The resulting loss column can be used to estimate quantities such as expected
-#' loss, variance, standard deviation, probability of positive loss, loss
-#' quantiles, empirical value-at-risk measures, and sensitivities across
-#' actuarial assumptions.
+#' For backward compatibility, legacy columns \code{P} and \code{premium}
+#' are interpreted as coefficients that multiply the supplied annuity present
+#' value directly. If such a coefficient is \eqn{q}, then
+#' \deqn{
+#' P_{\mathrm{per\ payment}} = q c,
+#' \qquad
+#' P^{(k)} = k q c.
+#' }
 #'
-#' @return A tibble with the original columns and one additional column
-#' containing the simulated loss random variable. The name of this column is
-#' controlled by \code{col_L}. For transition, if \code{col_L != "loss"} and
-#' the input does not already contain a column named \code{loss}, a legacy
-#' column \code{loss} is also added with the same value.
+#' @return A tibble containing the original simulation and standardized columns:
+#' \describe{
+#'   \item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
+#'   \item{premium_per_payment}{Amount collected at each premium date.}
+#'   \item{payments_per_year}{Premium payment frequency \code{k}.}
+#'   \item{premium_annuity_scale}{Coefficient multiplying \code{col_Y}.}
+#'   \item{pv_premiums}{Simulated present value of premium income.}
+#'   \item{L}{Simulated loss, or the name supplied through \code{col_L}.}
+#' }
+#'
+#' A compatibility column \code{loss} is synchronized with \code{col_L}.
 #'
 #' @seealso
-#' \code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
-#' \code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
-#' \code{\link{mc_annuity}}, \code{\link{mc_premium}},
-#' \code{\link{mc_reserve}}, \code{\link{summary_mc}}
+#' \code{\link{mc_annuity}}, \code{\link{mc_insurance}},
+#' \code{\link{mc_premium}}, \code{\link{mc_reserve}},
+#' \code{\link{premium_x}}, \code{\link{premium_xy}}
 #'
 #' @references
 #' Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
@@ -81,132 +101,32 @@
 #' @family monte-carlo
 #'
 #' @examples
-#' # Example 1: direct use with simulated present values
-#' sim_values <- tibble::tibble(
-#'   sim_id = 1:5,
-#'   pv_benefit = c(0.80, 0.75, 0.95, 0.60, 0.70),
-#'   pv_annuity = c(8.0, 7.5, 9.0, 6.0, 7.0),
-#'   P = 0.10
+#' simulated <- tibble::tibble(
+#'   pv_benefit = c(900, 700, 1100),
+#'   pv_annuity = c(8, 7, 9),
+#'   payment_per_payment = 1 / 12,
+#'   payment_annualized = 1,
+#'   payments_per_year = 12,
+#'   premium_annualized = 120
 #' )
 #'
-#' sim_values |>
+#' simulated |>
 #'   mc_loss()
 #'
-#' # Example 2: using a premium supplied directly
-#' sim_values |>
-#'   mc_loss(P = 0.12)
-#'
-#' # Example 3: annual whole life loss
-#' lt <- tibble::tibble(
-#'   x = 40:100,
-#'   qx = seq(0.002, 1, length.out = 61)
-#' )
-#'
-#' lt |>
-#'   simulate_lifetime(
-#'     x = 40,
-#'     n_sim = 25,
-#'     seed = 123
-#'   ) |>
-#'   mc_insurance(
-#'     i = 0.05,
-#'     type = "whole",
-#'     benefit = 1
-#'   ) |>
-#'   mc_annuity(
-#'     i = 0.05,
-#'     type = "whole",
-#'     payment = 1,
-#'     k = 1,
-#'     timing = "due"
-#'   ) |>
-#'   mc_premium() |>
-#'   mc_loss()
-#'
-#' # Example 4: monthly whole life loss
-#' lt |>
-#'   simulate_lifetime(
-#'     x = 40,
-#'     n_sim = 25,
-#'     frac = "udd",
-#'     seed = 123
-#'   ) |>
-#'   mc_insurance(
-#'     i = 0.05,
-#'     type = "whole",
-#'     benefit = 1
-#'   ) |>
-#'   mc_annuity(
-#'     i = 0.05,
-#'     type = "whole",
-#'     payment = 1 / 12,
-#'     k = 12,
-#'     timing = "due"
-#'   ) |>
-#'   mc_premium() |>
-#'   mc_loss()
-#'
-#' # Example 5: summarising simulated losses
-#' lt |>
-#'   simulate_lifetime(
-#'     x = 45,
-#'     n_sim = 25,
-#'     frac = "udd",
-#'     seed = 123
-#'   ) |>
-#'   mc_insurance(
-#'     i = 0.04,
-#'     type = "term",
-#'     n = 20,
-#'     benefit = 100000
-#'   ) |>
-#'   mc_annuity(
-#'     i = 0.04,
-#'     type = "temporary",
-#'     n = 20,
-#'     payment = 1 / 12,
-#'     k = 12,
-#'     timing = "due"
-#'   ) |>
-#'   mc_premium() |>
-#'   mc_loss() |>
-#'   summary_mc(value_col = "L")
-#'
-#' # Example 6: joint-life annual loss
-#' lt |>
-#'   simulate_lifetimes(
-#'     x = c(60, 58),
-#'     n_sim = 25,
-#'     seed = 123
-#'   ) |>
-#'   mc_multilife_status(status = "joint") |>
-#'   mc_insurance(
-#'     i = 0.04,
-#'     type = "whole",
-#'     benefit = 100000,
-#'     col_K = "K_status",
-#'     col_T = "T_status"
-#'   ) |>
-#'   mc_annuity(
-#'     i = 0.04,
-#'     type = "whole",
-#'     payment = 1,
-#'     k = 1,
-#'     timing = "due",
-#'     col_K = "K_status",
-#'     col_T = "T_status"
-#'   ) |>
-#'   mc_premium() |>
-#'   mc_loss()
-#'
-#' # Transitional compatibility with old column arguments
-#' sim_values |>
+#' # A premium supplied directly as an annualized amount
+#' simulated |>
 #'   mc_loss(
-#'     benefit_col = "pv_benefit",
-#'     annuity_col = "pv_annuity",
-#'     premium_col = "P",
-#'     loss_col = "loss"
+#'     P = 120,
+#'     premium_unit = "annualized"
 #'   )
+#'
+#' # Historical coefficient multiplying the annuity PV directly
+#' tibble::tibble(
+#'   pv_benefit = c(900, 700),
+#'   pv_annuity = c(8, 7),
+#'   P = 100
+#' ) |>
+#'   mc_loss()
 #'
 #' @export
 mc_loss <- function(
@@ -216,23 +136,33 @@ mc_loss <- function(
     col_P = "P",
     col_L = "L",
     P = NULL,
+    premium_unit = c(
+      "auto",
+      "annualized",
+      "per_payment",
+      "annuity_scale"
+    ),
+    k = NULL,
+    annuity_payment = NULL,
+    tol = 1e-10,
     ...
 ) {
+  data_missing <- missing(.data)
+  col_Z_missing <- missing(col_Z)
+  col_Y_missing <- missing(col_Y)
+  col_P_missing <- missing(col_P)
+  col_L_missing <- missing(col_L)
+  P_missing <- missing(P)
+
   dots <- list(...)
 
-  # Use exact name matching for deprecated arguments.
-  # Do not use `dots$premium`, because `$` partially matches `premium_col`.
-  dot_has <- function(nm) {
-    nm %in% names(dots)
+  dot_has <- function(name) {
+    name %in% names(dots)
   }
 
-  dot_get <- function(nm) {
-    dots[[nm]]
+  dot_get <- function(name) {
+    dots[[name]]
   }
-
-  # -------------------------------------------------------------------------
-  # Transitional compatibility with the previous public API
-  # -------------------------------------------------------------------------
 
   allowed_old <- c(
     "data",
@@ -255,60 +185,75 @@ mc_loss <- function(
   }
 
   if (dot_has("data")) {
-    if (!is.null(.data)) {
+    if (!data_missing) {
       stop("Provide only one of `.data` or deprecated `data`.", call. = FALSE)
     }
 
     .data <- dot_get("data")
+    data_missing <- FALSE
   }
 
   if (dot_has("benefit_col")) {
-    if (!identical(col_Z, "pv_benefit")) {
-      stop("Provide only one of `col_Z` or deprecated `benefit_col`.",
-           call. = FALSE)
+    if (!col_Z_missing) {
+      stop(
+        "Provide only one of `col_Z` or deprecated `benefit_col`.",
+        call. = FALSE
+      )
     }
 
     col_Z <- dot_get("benefit_col")
+    col_Z_missing <- FALSE
   }
 
   if (dot_has("annuity_col")) {
-    if (!identical(col_Y, "pv_annuity")) {
-      stop("Provide only one of `col_Y` or deprecated `annuity_col`.",
-           call. = FALSE)
+    if (!col_Y_missing) {
+      stop(
+        "Provide only one of `col_Y` or deprecated `annuity_col`.",
+        call. = FALSE
+      )
     }
 
     col_Y <- dot_get("annuity_col")
+    col_Y_missing <- FALSE
   }
 
   if (dot_has("premium_col")) {
-    if (!identical(col_P, "P")) {
-      stop("Provide only one of `col_P` or deprecated `premium_col`.",
-           call. = FALSE)
+    if (!col_P_missing) {
+      stop(
+        "Provide only one of `col_P` or deprecated `premium_col`.",
+        call. = FALSE
+      )
     }
 
     col_P <- dot_get("premium_col")
+    col_P_missing <- FALSE
   }
 
   if (dot_has("loss_col")) {
-    if (!identical(col_L, "L")) {
-      stop("Provide only one of `col_L` or deprecated `loss_col`.",
-           call. = FALSE)
+    if (!col_L_missing) {
+      stop(
+        "Provide only one of `col_L` or deprecated `loss_col`.",
+        call. = FALSE
+      )
     }
 
     col_L <- dot_get("loss_col")
+    col_L_missing <- FALSE
   }
 
   if (dot_has("premium")) {
-    if (!is.null(P)) {
-      stop("Provide only one of `P` or deprecated `premium`.", call. = FALSE)
+    if (!P_missing) {
+      stop(
+        "Provide only one of `P` or deprecated `premium`.",
+        call. = FALSE
+      )
     }
 
     P <- dot_get("premium")
+    P_missing <- FALSE
   }
 
-  # -------------------------------------------------------------------------
-  # Validation
-  # -------------------------------------------------------------------------
+  premium_unit <- match.arg(premium_unit)
 
   if (!is.data.frame(.data)) {
     stop("`.data` must be a data frame or tibble.", call. = FALSE)
@@ -319,39 +264,263 @@ mc_loss <- function(
   .mc_assert_character_scalar(col_P, "col_P")
   .mc_assert_character_scalar(col_L, "col_L")
 
-  if (col_L %in% c(col_Z, col_Y, col_P)) {
+  if (!is.numeric(tol) ||
+      length(tol) != 1L ||
+      is.na(tol) ||
+      !is.finite(tol) ||
+      tol < 0) {
+    stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
+  }
+
+  n_rows <- nrow(.data)
+  Z <- .data[[col_Z]]
+  Y <- .data[[col_Y]]
+
+  constant_column <- function(column, label) {
+    values <- .data[[column]]
+
+    if (!is.numeric(values)) {
+      stop("`", column, "` must be numeric.", call. = FALSE)
+    }
+
+    observed <- unique(values[!is.na(values)])
+
+    if (length(observed) != 1L || !is.finite(observed[[1L]])) {
+      stop(
+        "`", column, "` must contain one constant finite value for the ",
+        "simulated contract.",
+        call. = FALSE
+      )
+    }
+
+    observed[[1L]]
+  }
+
+  k_from_data <- NULL
+
+  if ("payments_per_year" %in% names(.data)) {
+    k_from_data <- constant_column(
+      "payments_per_year",
+      "payments_per_year"
+    )
+  }
+
+  if ("k" %in% names(.data)) {
+    k_legacy <- constant_column("k", "k")
+
+    if (!is.null(k_from_data) && abs(k_from_data - k_legacy) > tol) {
+      stop(
+        "`payments_per_year` and `k` are inconsistent in `.data`.",
+        call. = FALSE
+      )
+    }
+
+    if (is.null(k_from_data)) {
+      k_from_data <- k_legacy
+    }
+  }
+
+  if (is.null(k)) {
+    k <- if (is.null(k_from_data)) 1L else k_from_data
+  } else if (!is.null(k_from_data) &&
+             is.numeric(k) &&
+             length(k) == 1L &&
+             is.finite(k) &&
+             abs(k - k_from_data) > tol) {
     stop(
-      "`col_L` must be different from `col_Z`, `col_Y`, and `col_P`.",
+      "`k` does not agree with the payment frequency stored in `.data`.",
       call. = FALSE
     )
   }
 
-  Z <- .data[[col_Z]]
-  Y <- .data[[col_Y]]
-
-  if (!is.null(P)) {
-    .mc_assert_numeric_scalar(P, "P")
-    P_value <- rep(P, length(Z))
-  } else {
-    if (!col_P %in% names(.data) &&
-        identical(col_P, "P") &&
-        "premium" %in% names(.data)) {
-      col_P <- "premium"
-    }
-
-    .mc_assert_numeric_column(.data, col_P, "col_P")
-    P_value <- .data[[col_P]]
+  if (!is.numeric(k) ||
+      length(k) != 1L ||
+      is.na(k) ||
+      !is.finite(k) ||
+      k < 1 ||
+      abs(k - round(k)) > tol) {
+    stop("`k` must be a single positive integer.", call. = FALSE)
   }
 
-  L <- Z - P_value * Y
+  k <- as.integer(round(k))
+
+  payment_from_data <- NULL
+
+  if ("payment_per_payment" %in% names(.data)) {
+    payment_from_data <- constant_column(
+      "payment_per_payment",
+      "payment_per_payment"
+    )
+  } else if ("payment" %in% names(.data)) {
+    payment_from_data <- constant_column("payment", "payment")
+  } else if ("payment_annualized" %in% names(.data)) {
+    payment_from_data <-
+      constant_column("payment_annualized", "payment_annualized") / k
+  }
+
+  if (is.null(annuity_payment)) {
+    if (!is.null(payment_from_data)) {
+      annuity_payment <- payment_from_data
+    } else if (k == 1L) {
+      annuity_payment <- 1
+    } else {
+      stop(
+        "The payment amount used to construct `col_Y` cannot be inferred. ",
+        "Supply `annuity_payment`, or retain the payment metadata returned ",
+        "by `mc_annuity()`.",
+        call. = FALSE
+      )
+    }
+  } else if (!is.null(payment_from_data) &&
+             is.numeric(annuity_payment) &&
+             length(annuity_payment) == 1L &&
+             is.finite(annuity_payment) &&
+             abs(annuity_payment - payment_from_data) >
+               tol * max(1, abs(payment_from_data))) {
+    stop(
+      "`annuity_payment` does not agree with the payment amount stored ",
+      "in `.data`.",
+      call. = FALSE
+    )
+  }
+
+  if (!is.numeric(annuity_payment) ||
+      length(annuity_payment) != 1L ||
+      is.na(annuity_payment) ||
+      !is.finite(annuity_payment) ||
+      annuity_payment <= 0) {
+    stop(
+      "`annuity_payment` must be a single positive finite number.",
+      call. = FALSE
+    )
+  }
+
+  if ("payment_annualized" %in% names(.data)) {
+    annualized_basis <- constant_column(
+      "payment_annualized",
+      "payment_annualized"
+    )
+
+    if (abs(annualized_basis - k * annuity_payment) >
+        tol * max(1, abs(annualized_basis))) {
+      stop(
+        "`payment_annualized` is inconsistent with ",
+        "`k * annuity_payment`.",
+        call. = FALSE
+      )
+    }
+  }
+
+  premium_column <- NULL
+
+  if (!is.null(P)) {
+    .mc_assert_numeric_scalar(P, "P", min = 0)
+    premium_input <- rep(P, n_rows)
+    premium_column <- col_P
+  } else {
+    if (col_P_missing) {
+      candidates <- c(
+        "premium_annualized",
+        "premium_per_payment",
+        "P",
+        "premium"
+      )
+
+      premium_column <- candidates[
+        candidates %in% names(.data)
+      ][1L]
+    } else {
+      premium_column <- col_P
+    }
+
+    if (length(premium_column) == 0L ||
+        is.na(premium_column) ||
+        !premium_column %in% names(.data)) {
+      stop(
+        "No premium was found. Supply `P`, or provide one of ",
+        "`premium_annualized`, `premium_per_payment`, `P`, or `premium`.",
+        call. = FALSE
+      )
+    }
+
+    .mc_assert_numeric_column(.data, premium_column, "col_P")
+    premium_input <- .data[[premium_column]]
+
+    if (any(
+      is.na(premium_input) |
+        !is.finite(premium_input) |
+        premium_input < 0
+    )) {
+      stop(
+        "The premium column must contain nonnegative finite values.",
+        call. = FALSE
+      )
+    }
+  }
+
+  resolved_unit <- premium_unit
+
+  if (identical(resolved_unit, "auto")) {
+    if (identical(premium_column, "premium_annualized")) {
+      resolved_unit <- "annualized"
+    } else if (identical(premium_column, "premium_per_payment")) {
+      resolved_unit <- "per_payment"
+    } else {
+      resolved_unit <- "annuity_scale"
+    }
+  }
+
+  if (identical(resolved_unit, "annualized")) {
+    premium_annualized <- premium_input
+    premium_per_payment <- premium_annualized / k
+    premium_annuity_scale <-
+      premium_per_payment / annuity_payment
+  } else if (identical(resolved_unit, "per_payment")) {
+    premium_per_payment <- premium_input
+    premium_annualized <- k * premium_per_payment
+    premium_annuity_scale <-
+      premium_per_payment / annuity_payment
+  } else {
+    premium_annuity_scale <- premium_input
+    premium_per_payment <-
+      premium_annuity_scale * annuity_payment
+    premium_annualized <-
+      k * premium_per_payment
+  }
+
+  pv_premiums <- premium_annuity_scale * Y
+  L <- Z - pv_premiums
+
+  reserved_loss_names <- c(
+    col_Z,
+    col_Y,
+    premium_column,
+    "premium_annualized",
+    "premium_per_payment",
+    "payments_per_year",
+    "premium_annuity_scale",
+    "pv_premiums"
+  )
+
+  if (col_L %in% reserved_loss_names) {
+    stop(
+      "`col_L` conflicts with an input or standardized premium column.",
+      call. = FALSE
+    )
+  }
 
   out <- .data |>
     dplyr::mutate(
-      "{col_P}" := P_value,
+      "{premium_column}" := premium_input,
+      premium_annualized = premium_annualized,
+      premium_per_payment = premium_per_payment,
+      payments_per_year = k,
+      premium_annuity_scale = premium_annuity_scale,
+      pv_premiums = pv_premiums,
       "{col_L}" := L
     )
 
-  if (!identical(col_L, "loss") && !"loss" %in% names(out)) {
+  if (!identical(col_L, "loss")) {
     out <- out |>
       dplyr::mutate(
         loss = L
@@ -360,4 +529,3 @@ mc_loss <- function(
 
   out
 }
-

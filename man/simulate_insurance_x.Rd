@@ -21,66 +21,42 @@ simulate_insurance_x(
 )
 }
 \arguments{
-\item{lt}{A life table or a \code{tidyact_life_contract} object. A life table
-must contain columns \code{x} and \code{lx}.}
+\item{lt}{A life table or a \code{tidyact_life_contract}.}
 
-\item{x}{Integer actuarial age. Optional when \code{lt} is a
-\code{tidyact_life_contract}.}
+\item{x}{Integer actuarial age.}
 
-\item{i}{Numeric scalar. Annual interest-rate input. Optional when
-\code{lt} is a \code{tidyact_life_contract}.}
+\item{i}{Numeric scalar interest-rate input.}
 
-\item{i_type}{Character string indicating the interest-rate type. Allowed
-values are \code{"effective"}, \code{"nominal_interest"},
-\code{"nominal_discount"}, and \code{"force"}.}
+\item{i_type}{Interest-rate convention.}
 
-\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
-for \code{i_type = "effective"} and \code{i_type = "force"}.}
+\item{m}{Positive integer nominal conversion frequency.}
 
-\item{type}{Character string. One of \code{"whole"}, \code{"term"}, or
-\code{"endowment"}.}
+\item{type}{\code{"whole"}, \code{"term"}, or \code{"endowment"}.}
 
-\item{n}{Term in years. Required as finite for term and endowment insurance.
-Use \code{Inf} for whole life.}
+\item{n}{Positive integer term, or \code{Inf} for whole life.}
 
-\item{benefit}{Numeric scalar. Insurance benefit.}
+\item{benefit}{Nonnegative insurance benefit.}
 
-\item{method}{Simulation method. Currently \code{"inverse"} is supported.}
+\item{method}{Simulation method. Currently only \code{"inverse"}.}
 
-\item{n_sim}{Positive integer. Number of simulations.}
+\item{n_sim}{Positive integer number of simulations.}
 
-\item{seed}{Optional seed for reproducibility.}
+\item{seed}{Optional nonnegative integer seed.}
 
-\item{output}{Character string. Use \code{"simulations"} for the simulated
-data or \code{"summary"} for summary statistics using
-\code{\link{summary_mc}}.}
+\item{output}{\code{"simulations"} or \code{"summary"}.}
 
-\item{...}{Transitional compatibility for older calls using
-\code{mortality_table}, \code{age}, \code{rate}, \code{rate_type},
-\code{insurance_type}, and \code{term_years}.}
+\item{...}{Transitional compatibility for \code{mortality_table},
+\code{age}, \code{rate}, \code{rate_type}, \code{insurance_type}, and
+\code{term_years}.}
 }
 \value{
-A tibble. If \code{output = "simulations"}, the tibble contains one
-row per simulation. If \code{output = "summary"}, the tibble is the output
-of \code{\link{summary_mc}} applied to the simulated present values.
+A tibble with one row per simulation, or a summary. Simulation
+output includes \code{benefit_indicator}, \code{benefit_time},
+\code{present_value}, and \code{pv_benefit}.
 }
 \description{
-Simulates the present value of a discrete single-life insurance using a life
-table and annual curtate future lifetimes, with compact actuarial notation.
-}
-\details{
-The function supports direct use with \code{lt}, \code{x}, and \code{i}, and
-pipe workflows with \code{\link{life_contract}}.
-
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age,
-\code{i} is the interest-rate input, \code{i_type} is the interest-rate type,
-\code{m} is the conversion frequency for nominal rates, and \code{n} is the
-insurance term.
-
-The benefit is paid at the end of the year of death for whole-life and term
-insurance. For endowment insurance, the benefit is paid at death within the
-term or at maturity if the life survives.
+Simulates present values of a discrete single-life insurance payable at the
+end of the year of death, or at maturity for an endowment insurance.
 }
 \examples{
 lt <- data.frame(
@@ -92,23 +68,11 @@ simulate_insurance_x(
   lt = lt,
   x = 60,
   i = 0.05,
-  type = "whole",
-  n_sim = 25,
-  seed = 123
-)
-
-simulate_insurance_x(
-  lt = lt,
-  x = 60,
-  i = 0.06,
-  i_type = "nominal_interest",
-  m = 12,
   type = "term",
   n = 5,
   benefit = 100000,
   n_sim = 25,
-  seed = 123,
-  output = "summary"
+  seed = 123
 )
 
 }
@@ -117,6 +81,8 @@ Other simulation:
 \code{\link{simulate_annuity_x}()}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{annuity_xy}()},

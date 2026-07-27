@@ -29,6 +29,7 @@ plot_cash_flow(
   arrow_size = 0.8,
   timeline_size = 0.7,
   label_digits = 2L,
+  label_format = c("auto", "full", "compact"),
   currency = "",
   col_inflow = "#1B9E77",
   col_outflow = "#D95F02",
@@ -85,6 +86,11 @@ plot_cash_flow(
 \item{timeline_size}{Numeric line width for the time axis.}
 
 \item{label_digits}{Integer number of decimal digits for cash-flow labels.}
+
+\item{label_format}{Character string controlling label notation. Use
+\code{"auto"} to abbreviate values from one million onward,
+\code{"full"} for unabridged values, or \code{"compact"} for
+abbreviated values such as \code{1.25M}.}
 
 \item{currency}{Optional currency or unit prefix, such as \code{$}.}
 
@@ -146,11 +152,14 @@ plot_cash_flow(
 \code{pv_flow}, \code{fv_flow}, \code{irr_flow}, \code{standardize_interest}
 
 Other time-value: 
+\code{\link{accumulation_factor}()},
+\code{\link{discount_factor}()},
 \code{\link{future_value}()},
 \code{\link{fv_flow}()},
 \code{\link{irr_flow}()},
 \code{\link{irr_flow_multi}()},
 \code{\link{present_value}()},
-\code{\link{pv_flow}()}
+\code{\link{pv_flow}()},
+\code{\link{solve_value}()}
 }
 \concept{time-value}

@@ -142,6 +142,7 @@ amort_schedule(
 \code{\link{pv_flow}}, \code{\link{standardize_interest}}
 
 Other amortization: 
+\code{\link{amort_schedule_general}()},
 \code{\link{sinking_fund_schedule}()}
 }
 \concept{amortization}

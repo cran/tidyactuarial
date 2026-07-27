@@ -50,11 +50,16 @@ while at least one life is alive. Ignored when \code{benefit} is supplied.}
 according to the survival state of the two lives.}
 
 \item{n}{Term in years. Use \code{Inf} for the maximum horizon allowed by
-the life tables.}
+the life tables. For exact k-thly valuation
+(\code{woolhouse = "none"}), fractional terms are allowed when
+\code{n * k} is an integer. Woolhouse approximations require an integer
+number of years.}
 
 \item{h}{Nonnegative integer deferment period in years.}
 
-\item{k}{Positive integer. Number of payments per year.}
+\item{k}{Positive integer. Number of payments per year. The annuity is
+normalized to an annual payment rate of 1, so each individual payment has
+amount \code{1 / k}.}
 
 \item{timing}{Payment timing. Use \code{"immediate"} or \code{"due"}.}
 
@@ -108,7 +113,15 @@ When \code{benefit = NULL}, \code{status = "joint"} uses
 \code{benefit = list(both = 1, x_only = 1, y_only = 1)}.
 
 For \code{k}-thly payments, the function values a payment rate of 1 per year,
-so each payment has size \eqn{1/k}.
+so each payment has size \eqn{1/k}. For exact valuation, a fractional term
+is admissible whenever it contains a whole number of payments:
+\deqn{nk \in \mathbb{N}.}
+
+Woolhouse approximations are applied only to the standard joint-life and
+last-survivor statuses. For a deferred annuity, the Woolhouse endpoint
+corrections are multiplied by the issue-date value of the status at the
+beginning of the payment period. This preserves the deferment factor
+\eqn{v^h\,{}_hp_{xy}} or its last-survivor analogue.
 }
 \examples{
 lt <- data.frame(
@@ -168,6 +181,8 @@ annuity_xy(
 \code{\link{premium_xy}}, \code{\link{t_pxy}}, \code{\link{t_px}}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{insurance_variable_k}()},

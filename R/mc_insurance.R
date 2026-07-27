@@ -13,8 +13,10 @@
 #'   typically returned by \code{\link{simulate_lifetime}} or by
 #'   \code{\link{mc_multilife_status}} when working with multiple-life statuses.
 #' @param i Numeric scalar. Interest-rate input used for discounting.
-#' @param benefit Numeric scalar. Benefit amount payable under the insurance.
-#'   Default is \code{1}.
+#' @param benefit Numeric scalar. Monetary amount paid when the insured
+#'   benefit is triggered. Default is \code{1}. Unlike an annuity payment,
+#'   this is a single benefit amount and has no annualized-versus-per-payment
+#'   interpretation.
 #' @param type Character string specifying the insurance type. Canonical
 #'   options are \code{"whole"}, \code{"term"}, \code{"deferred"},
 #'   \code{"deferred_term"}, \code{"pure_endowment"}, and \code{"endowment"}.
@@ -64,8 +66,11 @@
 #' }
 #'
 #' If \code{timing = "end_of_year"}, death benefits are discounted using
-#' \eqn{K_x + 1}. If \code{timing = "moment_of_death"}, death benefits are
-#' discounted using \eqn{T_x}.
+#' \eqn{K_x + 1}. Under this discrete convention, finite terms and deferral
+#' periods must be whole numbers of years because eligibility is determined
+#' from the curtate lifetime \eqn{K_x}. If
+#' \code{timing = "moment_of_death"}, death benefits are discounted using
+#' \eqn{T_x}, and fractional terms or deferral periods are allowed.
 #'
 #' The following insurance types are supported:
 #' \itemize{
@@ -251,7 +256,12 @@ mc_insurance <- function(
 ) {
   dots <- list(...)
   type_missing <- missing(type)
+  h_missing <- missing(h)
+  timing_missing <- missing(timing)
   i_type_missing <- missing(i_type)
+  col_K_missing <- missing(col_K)
+  col_T_missing <- missing(col_T)
+  col_pv_missing <- missing(col_pv)
 
   # -------------------------------------------------------------------------
   # Transitional compatibility with the previous public API
@@ -314,20 +324,22 @@ mc_insurance <- function(
   }
 
   if (!is.null(dots$deferral_years)) {
-    if (!identical(h, 0) && !identical(h, 0L)) {
+    if (!h_missing) {
       stop("Provide only one of `h` or deprecated `deferral_years`.", call. = FALSE)
     }
 
     h <- dots$deferral_years
+    h_missing <- FALSE
   }
 
   if (!is.null(dots$payment_timing)) {
-    if (!missing(timing)) {
+    if (!timing_missing) {
       stop("Provide only one of `timing` or deprecated `payment_timing`.",
            call. = FALSE)
     }
 
     timing <- dots$payment_timing
+    timing_missing <- FALSE
   }
 
   if (!is.null(dots$interest_type)) {
@@ -340,28 +352,31 @@ mc_insurance <- function(
   }
 
   if (!is.null(dots$k_col)) {
-    if (!identical(col_K, "Kx")) {
+    if (!col_K_missing) {
       stop("Provide only one of `col_K` or deprecated `k_col`.", call. = FALSE)
     }
 
     col_K <- dots$k_col
+    col_K_missing <- FALSE
   }
 
   if (!is.null(dots$tx_col)) {
-    if (!identical(col_T, "Tx")) {
+    if (!col_T_missing) {
       stop("Provide only one of `col_T` or deprecated `tx_col`.", call. = FALSE)
     }
 
     col_T <- dots$tx_col
+    col_T_missing <- FALSE
   }
 
   if (!is.null(dots$benefit_col)) {
-    if (!identical(col_pv, "pv_benefit")) {
+    if (!col_pv_missing) {
       stop("Provide only one of `col_pv` or deprecated `benefit_col`.",
            call. = FALSE)
     }
 
     col_pv <- dots$benefit_col
+    col_pv_missing <- FALSE
   }
 
   type <- match.arg(
@@ -407,7 +422,7 @@ mc_insurance <- function(
 
   .mc_assert_numeric_scalar(i, "i")
   .mc_assert_numeric_scalar(benefit, "benefit", min = 0)
-  .mc_assert_numeric_scalar(m, "m", min = 0, strict_min = TRUE)
+  .mc_assert_positive_integer(m, "m")
   .mc_assert_numeric_column(.data, col_K, "col_K")
   .mc_assert_character_scalar(col_T, "col_T")
   .mc_assert_character_scalar(col_pv, "col_pv")
@@ -424,6 +439,35 @@ mc_insurance <- function(
     .mc_assert_numeric_scalar(h, "h", min = 0, strict_min = TRUE)
   } else {
     .mc_assert_numeric_scalar(h, "h", min = 0)
+  }
+
+  if (timing == "end_of_year") {
+    assert_whole_years <- function(value, name) {
+      if (!is.null(value) &&
+          abs(value - round(value)) > sqrt(.Machine$double.eps)) {
+        stop(
+          "`", name, "` must be a whole number of years when ",
+          "`timing = \"end_of_year\"`, because benefit eligibility is ",
+          "determined from the curtate lifetime.",
+          call. = FALSE
+        )
+      }
+    }
+
+    if (type %in% c(
+      "term",
+      "deferred_term",
+      "pure_endowment",
+      "endowment"
+    )) {
+      assert_whole_years(n, "n")
+      n <- round(n)
+    }
+
+    if (type %in% c("deferred", "deferred_term")) {
+      assert_whole_years(h, "h")
+      h <- round(h)
+    }
   }
 
   m <- as.integer(round(m))
@@ -480,8 +524,16 @@ mc_insurance <- function(
   benefit_time <- rep(NA_real_, length(Kx))
 
   if (type == "whole") {
-    benefit_indicator <- rep(1, length(Kx))
-    benefit_time <- death_time
+    benefit_indicator <- ifelse(
+      is.finite(death_time),
+      1,
+      NA_real_
+    )
+    benefit_time <- ifelse(
+      benefit_indicator == 1,
+      death_time,
+      NA_real_
+    )
   }
 
   if (type == "term") {
@@ -531,8 +583,16 @@ mc_insurance <- function(
       death_before_term <- Tx <= n
     }
 
-    benefit_indicator <- rep(1, length(Kx))
-    benefit_time <- ifelse(death_before_term, death_time, n)
+    benefit_indicator <- ifelse(
+      is.na(death_before_term),
+      NA_real_,
+      1
+    )
+    benefit_time <- ifelse(
+      is.na(death_before_term),
+      NA_real_,
+      ifelse(death_before_term, death_time, n)
+    )
   }
 
   pv_benefit <- ifelse(

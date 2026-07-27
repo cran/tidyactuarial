@@ -1,182 +1,26 @@
-#' @importFrom utils head tail
-#' @importFrom rlang .data
-NULL
-
-# Global variables used in tidy evaluation and dplyr/data-masking contexts.
-# This avoids R CMD check notes for column names and special tidy-eval syntax.
+# Global variables used with tidy evaluation
 #
-# The list intentionally includes both the current compact actuarial names
-# and selected transitional names kept for backward compatibility.
+# These names correspond to columns created and manipulated internally by
+# tidyactuarial functions. Declaring them here prevents false-positive
+# "no visible binding for global variable" notes during R CMD check.
+#
+# This file does not create objects in the package namespace and does not
+# modify the behavior of any function.
 
 if (getRversion() >= "2.15.1") {
-  utils::globalVariables(c(
-    ".data",
-    ":=",
-
-    # Internal working columns
-    ".portfolio",
-    ".P",
-    ".D",
-    ".C",
-    ".bad_na",
-    ".row_id",
-
-    # Generic identifiers
-    "scenario_id",
-    "scenario_time",
-    "cashflow_id",
-    "sim_id",
-    "simulation_id",
-    "life_id",
-    "portfolio_id",
-    "bond_id",
-    "loan_id",
-
-    # Core actuarial / financial notation
-    "x",
-    "y",
-    "t",
-    "C",
-    "P",
-    "D",
-    "V",
-    "L",
-    "G",
-    "Z",
-    "Y",
-    "Z_t",
-    "Y_t",
-    "L_t",
-    "P_net",
-    "P_total",
-    "P_annual",
-    "C_P",
-    "D_P",
-
-    # Interest, term, timing, and payment structure
-    "i",
-    "i_type",
-    "i_effective",
-    "v",
-    "m",
-    "n",
-    "h",
-    "k",
-    "n_guar",
-    "n_prem",
-    "timing",
-    "premium_timing",
-    "premium_start",
-    "reserve_timing",
-    "payment",
-    "benefit",
-    "payment_time",
-    "benefit_time",
-    "benefit_indicator",
-
-    # Life table and mortality columns
-    "lx",
-    "dx",
-    "qx",
-    "px",
-    "mx",
-    "mu_x",
-    "Lx",
-    "Tx",
-    "ex",
-    "frac",
-    "law",
-    "q_total",
-    "p_total",
-    "d_total",
-    "q_death",
-    "q_disability",
-    "q_withdrawal",
-
-    # Simulated lifetime and Monte Carlo columns
-    "Kx",
-    "Tx",
-    "K_status",
-    "T_status",
-    "curtate_lifetime",
-    "death_age",
-    "died_within_horizon",
-    "covered",
-    "contract_type",
-    "status",
-    "n_lives",
-    "status_rank",
-    "event_life_id",
-    "n_event_lives",
-    "lifetimes",
-    "pv_benefit",
-    "pv_annuity",
-    "pv_annuity",
-    "present_value",
-    "n_payments",
-    "first_payment_time",
-    "last_payment_time",
-    "in_force",
-
-    # Reserve, premium, loss, and compatibility columns
-    "premium",
-    "premium_paid",
-    "P_paid",
-    "loss",
-    "reserve",
-    "reserve_loss",
-    "future_pv_benefit",
-    "future_pv_premiums",
-    "apv_benefits",
-    "a_premiums",
-    "apv_premiums",
-    "premium_annual",
-
-    # Compatibility names retained during the API migration
-    "age",
-    "age_x",
-    "age_y",
-    "x_t",
-    "y_t",
-    "rate",
-    "rate_type",
-    "interest_type",
-    "effective_rate",
-    "discount_factor",
-    "insurance",
-    "insurance_type",
-    "annuity",
-    "annuity_type",
-    "term",
-    "term_years",
-    "deferral_years",
-    "deferment_years",
-    "guarantee_years",
-    "payments_per_year",
-    "premium_term_years",
-    "payment_timing",
-    "cohort",
-    "duration",
-
-    # Dataset helper columns
-    "country",
-    "country_code",
-    "continent",
-    "region",
-    "year",
-    "pandemic_period",
-    "sex",
-    "source",
-    "cashflow_type",
-    "description",
-    "face",
-    "c",
-    "yield",
-    "yield_rate",
-    "bond_type",
-    "L",
-    "R",
-    "n_months",
-    "loan_type"
-  ))
+  utils::globalVariables(
+    c(
+      "cash_flow",
+      "cashflow_id",
+      "d_total",
+      "duration_contribution",
+      "p_total",
+      "q_total",
+      "remaining_time",
+      "residual",
+      "solution",
+      "time",
+      "value"
+    )
+  )
 }

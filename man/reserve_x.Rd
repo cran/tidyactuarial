@@ -2,7 +2,7 @@
 % Please edit documentation in R/reserve_x.R
 \name{reserve_x}
 \alias{reserve_x}
-\title{Benefit reserve schedule for single-life insurance}
+\title{Benefit reserves for single-life insurance}
 \usage{
 reserve_x(
   lt,
@@ -12,131 +12,184 @@ reserve_x(
   m = 1L,
   type = c("whole", "term", "endowment"),
   n = Inf,
+  h = 0L,
   benefit = 1,
   P = NULL,
+  k = 1L,
+  frac = c("UDD", "CF", "CML", "Balducci"),
+  timing = c("due", "immediate"),
+  premium_start = c("issue", "deferred"),
   n_prem = NULL,
+  woolhouse = c("none", "first", "second"),
   t = NULL,
   method = c("prospective", "recursive"),
-  tidy = TRUE,
+  output = c("summary", "value", "audit", "table"),
+  tidy = NULL,
+  check = TRUE,
   ...
 )
 }
 \arguments{
-\item{lt}{A life table data frame with columns \code{x} and \code{lx}.}
+\item{lt}{A life table containing columns \code{x} and \code{lx}, or a
+single-life contract created with \code{\link{life_contract}}.}
 
-\item{x}{Integer actuarial age at issue.}
+\item{x}{Integer actuarial age at issue. Optional for a life contract.}
 
-\item{i}{Annual interest-rate input.}
+\item{i}{Numeric scalar. Annual interest-rate input. Optional for a life
+contract.}
 
-\item{i_type}{Character string indicating the interest-rate type. Allowed
-values are \code{"effective"}, \code{"nominal_interest"},
-\code{"nominal_discount"}, and \code{"force"}.}
+\item{i_type}{Interest-rate type: \code{"effective"},
+\code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.}
 
-\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
-for \code{i_type = "effective"} and \code{i_type = "force"}.}
+\item{m}{Positive integer. Conversion frequency for nominal interest rates.}
 
-\item{type}{Character string. One of \code{"whole"}, \code{"term"}, or
+\item{type}{Insurance type: \code{"whole"}, \code{"term"}, or
 \code{"endowment"}.}
 
-\item{n}{Insurance term in years. Use \code{Inf} for whole-life insurance.
-For term and endowment insurance, this must be finite.}
+\item{n}{Insurance term in years. Use \code{Inf} for whole-life insurance.}
 
-\item{benefit}{Numeric scalar. Insurance benefit amount.}
+\item{h}{Nonnegative integer deferment period in years.}
 
-\item{P}{Optional numeric scalar. Premium per annual payment. If \code{NULL},
-the net premium is computed internally by the equivalence principle.}
+\item{benefit}{Positive insurance benefit.}
 
-\item{n_prem}{Optional premium-paying term in years. If \code{NULL}, premiums
-are payable for the full contract duration.}
+\item{P}{Optional annualized premium \eqn{P^{(k)}}. If \code{NULL}, it is
+calculated with \code{\link{premium_x}} by the equivalence principle.}
 
-\item{t}{Optional integer vector of policy durations at which to compute
-reserves. If \code{NULL}, reserves are computed for all integer durations
-from issue to the contract horizon.}
+\item{k}{Positive integer. Number of premium payments per year.}
 
-\item{method}{Character string. Either \code{"prospective"} or
-\code{"recursive"}.}
+\item{frac}{Fractional-age assumption for exact k-thly premium annuities.}
 
-\item{tidy}{Logical scalar. If \code{TRUE}, returns a reserve schedule as a
-tibble. If \code{FALSE}, returns a named numeric vector.}
+\item{timing}{Premium timing. Currently only \code{"due"} is supported,
+which gives reserves immediately before any premium payable at duration
+\code{t}.}
+
+\item{premium_start}{Start of premium payments: \code{"issue"} or
+\code{"deferred"}.}
+
+\item{n_prem}{Premium-paying term in years. A fractional term is permitted
+when \code{n_prem * k} is an integer.}
+
+\item{woolhouse}{Woolhouse approximation order for the premium annuity:
+\code{"none"}, \code{"first"}, or \code{"second"}.}
+
+\item{t}{Optional integer vector of policy durations. If \code{NULL}, all
+supported integer durations are returned.}
+
+\item{method}{Reserve method: \code{"prospective"} or \code{"recursive"}.
+The recursive method currently supports annual premiums only
+(\code{k = 1}).}
+
+\item{output}{Output level. \code{"summary"} returns a compact reserve
+schedule, \code{"value"} returns a named numeric vector, and
+\code{"audit"} returns the reserve components in long format.
+\code{"table"} is accepted as a deprecated alias for \code{"summary"}.}
+
+\item{tidy}{Deprecated compatibility argument. \code{TRUE} maps to
+\code{output = "summary"} and \code{FALSE} to
+\code{output = "value"}.}
+
+\item{check}{Logical scalar. If \code{TRUE}, validates inputs.}
 
 \item{...}{Transitional compatibility for older calls using
 \code{mortality_table}, \code{age}, \code{rate}, \code{rate_type},
 \code{insurance_type}, \code{term_years}, \code{premium},
-\code{premium_term_years}, \code{durations}, and \code{output}.}
+\code{premium_term_years}, and \code{durations}.}
 }
 \value{
-If \code{tidy = TRUE}, a tibble with one row per selected duration.
-If \code{tidy = FALSE}, a named numeric vector of reserves.
+For \code{output = "summary"}, a tibble with at most six columns:
+duration, attained age, reserve, annualized premium, premium per payment,
+and method.
+
+For \code{output = "value"}, a named numeric vector.
+
+For \code{output = "audit"}, a long-format tibble containing future benefit
+APV, future premium APV, reserve, and premium amounts at each duration.
 }
 \description{
-Computes terminal benefit reserves at selected policy durations for a fully
-discrete single-life insurance contract, using compact actuarial notation.
+Computes terminal benefit reserves at selected integer policy durations by
+the prospective or recursive method.
 }
 \details{
-The function supports whole-life, term, and endowment insurance. Reserves may
-be computed prospectively or recursively. Premiums are assumed payable
-annually in advance. Limited-payment policies are supported through
-\code{n_prem}.
+The prospective method supports annual and true k-thly premiums payable in
+advance. The premium input \code{P} is always interpreted as the annualized
+premium \eqn{P^{(k)}}. The amount paid at each premium date is
+\eqn{P^{(k)} / k}.
 
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age at
-issue, \code{i} is the interest-rate input, \code{i_type} is the
-interest-rate type, \code{m} is the conversion frequency for nominal rates,
-\code{n} is the contract term, \code{P} is the annual premium, and \code{t}
-is the policy duration.
+At integer duration \eqn{t}, conditional on survival to age \eqn{x+t}, the
+prospective reserve is
+\deqn{
+{}_tV_x =
+\operatorname{APV}_t(\text{future benefits})
+-
+P^{(k)}
+\operatorname{APV}_t(\text{future premium annuity}).
+}
 
-The prospective reserve is computed as
-\deqn{{}_tV_x =
-APV_t(\text{future benefits}) -
-P\,APV_t(\text{future premiums}).}
+The premium annuity is normalized to an annual payment rate of 1, so each
+installment has amount \eqn{1/k}. Therefore, the multiplier in the reserve
+formula is the annualized premium \eqn{P^{(k)}}, not the installment
+\eqn{P^{(k)}/k}.
 
-The recursive method uses the annual fully discrete recursion
-\deqn{{}_{k+1}V =
-\frac{({}_kV + P_k)(1+i) - b_{k+1}q_{x+k}}{p_{x+k}}.}
+Reserves are measured immediately before any premium payable at duration
+\eqn{t}. This is the standard fully discrete terminal-reserve convention
+for premiums payable in advance.
 
-When \code{P = NULL}, the net premium is computed directly from the life
-table by applying the equivalence principle at issue.
+For annual premiums, the recursive method uses
+\deqn{
+{}_{t+1}V_x =
+\frac{
+({}_tV_x + P_t)(1+i) - b_{t+1}q_{x+t}
+}{p_{x+t}}.
+}
 }
 \examples{
 lt <- data.frame(
-  x  = 60:70,
-  lx = c(100000, 99000, 97500, 95500, 93000, 90000,
-         86000, 81000, 75000, 68000, 60000)
+  x = 40:90,
+  lx = round(100000 * exp(-0.018 * (0:50)^1.35))
 )
+lt$lx[nrow(lt)] <- 0
 
 reserve_x(
   lt = lt,
-  x = 60,
-  i = 0.06,
-  type = "whole"
-)
-
-reserve_x(
-  lt = lt,
-  x = 60,
-  i = 0.06,
-  type = "endowment",
-  n = 5,
-  benefit = 100000
-)
-
-reserve_x(
-  lt = lt,
-  x = 60,
-  i = 0.06,
+  x = 40,
+  i = 0.05,
   type = "term",
-  n = 5,
+  n = 20,
   benefit = 100000,
-  t = c(0, 1, 2, 3, 4, 5),
-  tidy = FALSE
+  k = 12,
+  n_prem = 10,
+  t = c(0, 5, 10, 15, 20)
 )
+
+life_contract(
+  lt = lt,
+  lives = "single",
+  x = 40,
+  i = 0.05
+) |>
+  add_insurance(
+    type = "term",
+    benefit = 100000,
+    n = 20
+  ) |>
+  add_premium_schedule(
+    k = 12,
+    n_prem = 10
+  ) |>
+  reserve_x(
+    t = c(0, 5, 10, 15, 20),
+    output = "summary"
+  )
 
 }
 \seealso{
 \code{\link{premium_x}}, \code{\link{insurance_x}},
-\code{\link{annuity_x}}, \code{\link{t_px}}
+\code{\link{annuity_x}}, \code{\link{life_contract}},
+\code{\link{add_insurance}}, \code{\link{add_premium_schedule}}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{annuity_xy}()},

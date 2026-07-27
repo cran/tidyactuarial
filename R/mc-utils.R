@@ -77,8 +77,14 @@
 #'
 #' @keywords internal
 .mc_assert_character_scalar <- function(x, arg) {
-  if (!is.character(x) || length(x) != 1 || is.na(x)) {
-    stop("`", arg, "` must be a character string.", call. = FALSE)
+  if (!is.character(x) ||
+      length(x) != 1L ||
+      is.na(x) ||
+      !nzchar(trimws(x))) {
+    stop(
+      "`", arg, "` must be a single nonempty character string.",
+      call. = FALSE
+    )
   }
 
   invisible(TRUE)
@@ -95,6 +101,10 @@
 #'
 #' @keywords internal
 .mc_assert_column <- function(data, col, arg) {
+  if (!is.data.frame(data)) {
+    stop("`data` must be a data frame or tibble.", call. = FALSE)
+  }
+
   .mc_assert_character_scalar(col, arg)
 
   if (!col %in% names(data)) {
@@ -208,43 +218,67 @@
                                m = 1,
                                rate = NULL,
                                interest_type = NULL) {
-  # Transitional internal compatibility.
-  if (missing(i) && !is.null(rate)) {
+  i_missing <- missing(i)
+  i_type_missing <- missing(i_type)
+
+  if (!is.null(rate)) {
+    if (!i_missing) {
+      stop(
+        "Provide only one of `i` or deprecated `rate`.",
+        call. = FALSE
+      )
+    }
+
     i <- rate
-  } else if (!missing(i) && !is.null(rate)) {
-    stop("Provide only one of `i` or deprecated `rate`.", call. = FALSE)
+    i_missing <- FALSE
   }
 
   if (!is.null(interest_type)) {
+    if (!i_type_missing) {
+      stop(
+        "Provide only one of `i_type` or deprecated `interest_type`.",
+        call. = FALSE
+      )
+    }
+
     i_type <- interest_type
+    i_type_missing <- FALSE
   }
 
-  if (missing(i)) {
+  if (i_missing) {
     stop("`i` must be provided.", call. = FALSE)
   }
 
-  # `match.arg()` cannot handle the legacy value "nominal", so normalize first
-  # whenever the user/internal caller supplies a scalar explicitly.
-  if (length(i_type) != 1L) {
-    i_type <- match.arg(i_type)
-  } else {
-    i_type <- .mc_normalize_i_type(i_type)
+  if (i_type_missing) {
+    i_type <- "effective"
   }
+
+  i_type <- .mc_normalize_i_type(i_type)
 
   .mc_assert_numeric_scalar(i, "i")
-  .mc_assert_numeric_scalar(m, "m", min = 0, strict_min = TRUE)
-
-  if (abs(m - round(m)) > sqrt(.Machine$double.eps)) {
-    stop("`m` must be a positive integer.", call. = FALSE)
-  }
+  .mc_assert_positive_integer(m, "m")
 
   m <- as.integer(round(m))
 
-  standardize_interest(
+  i_effective <- standardize_interest(
     i_type = i_type,
     i = i,
     m = m
   )
+
+  if (!is.numeric(i_effective) ||
+      length(i_effective) != 1L ||
+      is.na(i_effective) ||
+      !is.finite(i_effective) ||
+      i_effective <= -1) {
+    stop(
+      "The supplied interest convention must imply a finite annual ",
+      "effective rate greater than -1.",
+      call. = FALSE
+    )
+  }
+
+  i_effective
 }
 
 
@@ -275,12 +309,27 @@
                                 m = 1,
                                 rate = NULL,
                                 interest_type = NULL) {
-  effective_rate <- .mc_effective_rate(
-    i = if (missing(i)) NULL else i,
-    i_type = i_type,
-    m = m,
-    rate = rate,
-    interest_type = interest_type
+  args <- list(m = m)
+
+  if (!missing(i)) {
+    args$i <- i
+  }
+
+  if (!missing(i_type)) {
+    args$i_type <- i_type
+  }
+
+  if (!is.null(rate)) {
+    args$rate <- rate
+  }
+
+  if (!is.null(interest_type)) {
+    args$interest_type <- interest_type
+  }
+
+  effective_rate <- do.call(
+    .mc_effective_rate,
+    args
   )
 
   1 / (1 + effective_rate)
@@ -304,8 +353,16 @@
     return(numeric(0))
   }
 
-  if (length(from) != 1 || length(to) != 1 || length(by) != 1) {
-    stop("`from`, `to`, and `by` must be numeric scalars.", call. = FALSE)
+  if (!is.numeric(from) ||
+      !is.numeric(to) ||
+      !is.numeric(by) ||
+      length(from) != 1L ||
+      length(to) != 1L ||
+      length(by) != 1L) {
+    stop(
+      "`from`, `to`, and `by` must be numeric scalars.",
+      call. = FALSE
+    )
   }
 
   if (is.na(from) || is.na(to) || is.na(by)) {
@@ -320,11 +377,21 @@
     stop("`by` must be positive.", call. = FALSE)
   }
 
-  if (to < from) {
+  tol <- sqrt(.Machine$double.eps) *
+    max(1, abs(from), abs(to), abs(by))
+
+  if (to < from - tol) {
     return(numeric(0))
   }
 
-  seq(from = from, to = to, by = by)
+  n_steps <- floor((to - from) / by + tol)
+
+  if (!is.finite(n_steps) || n_steps < 0) {
+    return(numeric(0))
+  }
+
+  times <- from + seq.int(0, n_steps) * by
+  times[times <= to + tol]
 }
 
 
@@ -336,9 +403,20 @@
 #'
 #' @keywords internal
 .mc_quantile_names <- function(probs) {
+  if (!is.numeric(probs) ||
+      length(probs) == 0L ||
+      anyNA(probs) ||
+      any(!is.finite(probs)) ||
+      any(probs < 0 | probs > 1)) {
+    stop(
+      "`probs` must be a nonempty numeric vector with values in [0, 1].",
+      call. = FALSE
+    )
+  }
+
   raw <- 100 * probs
 
-  names <- vapply(
+  quantile_names <- vapply(
     raw,
     function(x) {
       label <- formatC(x, format = "f", digits = 3)
@@ -350,5 +428,14 @@
     character(1)
   )
 
-  names
+  if (anyDuplicated(quantile_names)) {
+    stop(
+      "`probs` produces duplicated quantile column names at the supported ",
+      "display precision.",
+      call. = FALSE
+    )
+  }
+
+  quantile_names
 }
+

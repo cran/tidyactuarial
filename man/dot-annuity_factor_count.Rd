@@ -2,23 +2,11 @@
 % Please edit documentation in R/simulate_life_mc.R
 \name{.annuity_factor_count}
 \alias{.annuity_factor_count}
-\title{Internal helper: convert number of payments into annuity factors}
+\title{Internal helper: convert payment counts into annuity factors}
 \usage{
 .annuity_factor_count(n_payments, i_effective, k, timing)
 }
-\arguments{
-\item{n_payments}{Integer vector with number of payments.}
-
-\item{i_effective}{Annual effective interest rate.}
-
-\item{k}{Payment frequency.}
-
-\item{timing}{Payment timing.}
-}
-\value{
-Numeric vector of annuity factors.
-}
 \description{
-Internal helper: convert number of payments into annuity factors
+Internal helper: convert payment counts into annuity factors
 }
 \keyword{internal}

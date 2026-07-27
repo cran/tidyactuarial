@@ -10,6 +10,7 @@ mc_reserve(
   i = NULL,
   P = NULL,
   col_P = "P",
+  premium_unit = c("auto", "annualized", "per_payment", "annuity_scale"),
   benefit = 1,
   payment = 1,
   k = 1L,
@@ -30,284 +31,176 @@ mc_reserve(
   in_force_basis = c("auto", "complete", "curtate"),
   not_in_force = c("na", "zero"),
   col_L = "L_t",
+  tol = 1e-10,
+  premium = NULL,
   ...
 )
 }
 \arguments{
-\item{.data}{A data frame or tibble containing simulated future lifetimes,
-typically returned by \code{\link{simulate_lifetime}} or by
-\code{\link{mc_multilife_status}}.}
+\item{.data}{A data frame or tibble containing simulated curtate future
+lifetimes and, when required, complete future lifetimes.}
 
-\item{t}{Numeric vector. Policy duration or durations at which the reserve
-is evaluated. Default is \code{0}.}
+\item{t}{Nonnegative numeric vector of valuation durations.}
 
 \item{i}{Numeric scalar. Interest-rate input used for discounting.}
 
-\item{P}{Optional numeric scalar. Premium used in the reserve loss. If
-\code{NULL}, the function first tries to use \code{col_P} from
-\code{.data}. If \code{col_P} is not found, a Monte Carlo net premium at
-issue is estimated internally as \eqn{\bar{Z}_0 / \bar{Y}_0}.}
+\item{P}{Optional nonnegative numeric scalar supplied directly as the
+premium input.}
 
-\item{col_P}{Character string. Name of the premium column in \code{.data}.
-Default is \code{"P"}. If this column is not found and \code{col_P = "P"},
-the legacy column \code{"premium"} is used when available.}
+\item{col_P}{Character scalar naming a premium column in \code{.data}.
+The default is \code{"P"}. When it is not supplied explicitly, modern
+standardized premium columns are preferred.}
 
-\item{benefit}{Numeric scalar. Benefit amount payable under the insurance.
-Default is \code{1}.}
+\item{premium_unit}{Unit of \code{P} or the selected premium column:
+\code{"annualized"}, \code{"per_payment"}, or
+\code{"annuity_scale"}. With \code{"auto"},
+\code{premium_annualized}, \code{premium_per_payment}, and
+\code{premium_annuity_scale} determine their own units, while legacy
+\code{P} and \code{premium} retain their historical annuity-scale
+interpretation.}
 
-\item{payment}{Numeric scalar. Amount of each premium annuity payment.
-Default is \code{1}.}
+\item{benefit}{Nonnegative numeric scalar. Insurance benefit amount.}
 
-\item{k}{Positive integer. Number of premium payments per year. Default is
-\code{1}, corresponding to annual premiums.}
+\item{payment}{Positive numeric scalar. Amount used at each premium-annuity
+payment date. For the normalized \eqn{k}-thly convention, use
+\code{payment = 1 / k}.}
 
-\item{type}{Character string specifying the insurance type. Canonical
-options are \code{"whole"}, \code{"term"}, \code{"deferred"},
-\code{"deferred_term"}, \code{"pure_endowment"}, and
-\code{"endowment"}. Transitional aliases \code{"whole_life"} and
-\code{"deferred_temporary"} are also accepted.}
+\item{k}{Positive integer number of premium payments per year.}
 
-\item{annuity_type}{Character string specifying the premium annuity type.
-Canonical options are \code{"whole"}, \code{"temporary"},
-\code{"deferred"}, \code{"deferred_temporary"}, \code{"certain"}, and
-\code{"guaranteed"}. The transitional alias \code{"whole_life"} is also
-accepted.}
+\item{type}{Insurance type. Supported values are \code{"whole"},
+\code{"term"}, \code{"deferred"}, \code{"deferred_term"},
+\code{"pure_endowment"}, and \code{"endowment"}.}
 
-\item{n}{Numeric scalar. Contract term in years. Required for insurance
-types \code{"term"}, \code{"deferred_term"}, \code{"pure_endowment"},
-and \code{"endowment"}, and for annuity types \code{"temporary"},
-\code{"deferred_temporary"}, and \code{"certain"}.}
+\item{annuity_type}{Premium-annuity type. Supported values are
+\code{"whole"}, \code{"temporary"}, \code{"deferred"},
+\code{"deferred_temporary"}, \code{"certain"}, and
+\code{"guaranteed"}.}
 
-\item{h}{Numeric scalar. Deferral period in years. Default is \code{0}.}
+\item{n}{Optional contract or premium term in years.}
 
-\item{n_guar}{Numeric scalar. Guaranteed payment period in years. Required
-when \code{annuity_type = "guaranteed"}.}
+\item{h}{Nonnegative deferral period in years.}
 
-\item{timing}{Character string specifying when death benefits are paid.
-Available options are \code{"end_of_year"} and
-\code{"moment_of_death"}. Default is \code{"end_of_year"}.}
+\item{n_guar}{Optional guaranteed premium-payment period in years.}
 
-\item{premium_timing}{Character string specifying the premium payment timing.
-Available options are \code{"due"} and \code{"immediate"}. Default is
-\code{"due"}.}
+\item{timing}{Death-benefit timing: \code{"end_of_year"} or
+\code{"moment_of_death"}.}
 
-\item{reserve_timing}{Character string specifying whether payments due
-exactly at the valuation duration are included. Available options are
-\code{"before_payment"} and \code{"after_payment"}.}
+\item{premium_timing}{Premium-annuity timing: \code{"due"} or
+\code{"immediate"}.}
 
-\item{i_type}{Character string specifying the interest-rate convention.
-Allowed values are \code{"effective"}, \code{"nominal_interest"},
-\code{"nominal_discount"}, and \code{"force"}. The transitional value
-\code{"nominal"} is accepted and treated as \code{"nominal_interest"}.}
+\item{reserve_timing}{Whether cash flows exactly at the valuation duration
+are included: \code{"before_payment"} or \code{"after_payment"}.}
 
-\item{m}{Positive integer. Number of interest conversion periods per year
-for nominal annual rates. Default is \code{1}. This argument controls the
-interest-rate conversion frequency only. It does not represent premium
-payment frequency.}
+\item{i_type}{Interest-rate convention.}
 
-\item{col_K}{Character string. Name of the column containing simulated
-curtate future lifetimes. Default is \code{"Kx"}.}
+\item{m}{Positive integer nominal conversion frequency.}
 
-\item{col_T}{Character string. Name of the column containing simulated
-complete future lifetimes. Default is \code{"Tx"}.}
+\item{col_K}{Curtate future lifetime column.}
 
-\item{in_force_basis}{Character string specifying how the in-force indicator
-is evaluated. Available options are \code{"auto"}, \code{"complete"},
-and \code{"curtate"}.}
+\item{col_T}{Complete future lifetime column.}
 
-\item{not_in_force}{Character string specifying what to return for scenarios
-that are not in force at the valuation duration. Available options are
-\code{"na"} and \code{"zero"}.}
+\item{in_force_basis}{Basis used to determine whether a simulated policy is
+in force: \code{"auto"}, \code{"complete"}, or \code{"curtate"}.}
 
-\item{col_L}{Character string. Name of the output reserve loss column.
-Default is \code{"L_t"}.}
+\item{not_in_force}{Output for known scenarios that are not in force:
+\code{"na"} or \code{"zero"}. Missing lifetime information remains
+missing under either option.}
 
-\item{...}{Transitional compatibility for older calls using \code{data},
-\code{duration}, \code{rate}, \code{premium},
-\code{premium_col}, \code{payments_per_year}, \code{insurance},
-\code{annuity}, \code{term}, \code{deferral_years},
-\code{guarantee_years}, \code{payment_timing},
-\code{interest_type}, \code{k_col}, \code{tx_col}, and
-\code{reserve_col}.}
+\item{col_L}{Output column containing the prospective loss.}
+
+\item{tol}{Nonnegative numeric tolerance for consistency checks.}
+
+\item{premium}{Deprecated explicit alias for \code{P}. It remains a
+formal argument because otherwise R partially matches it against
+\code{premium_unit} and \code{premium_timing}.}
+
+\item{...}{Transitional compatibility for older argument names.}
 }
 \value{
-A tibble with one row per original simulation and per requested
-duration. It contains the original simulation columns and additional columns
-including \code{t}, \code{in_force}, \code{i}, \code{i_type}, \code{m},
-\code{i_effective}, \code{v}, \code{type}, \code{annuity_type},
-\code{benefit}, \code{payment}, \code{k}, \code{Z_t}, \code{Y_t},
-\code{P}, and \code{L_t} or another name supplied through \code{col_L}.
-
-For transition, the output also includes legacy columns such as
-\code{duration}, \code{rate}, \code{interest_type}, \code{effective_rate},
-\code{discount_factor}, \code{insurance}, \code{annuity},
-\code{payments_per_year}, \code{term}, \code{deferral_years},
-\code{guarantee_years}, \code{future_pv_benefit},
-\code{future_pv_premiums}, \code{premium}, and \code{reserve_loss}.
+A tibble with one row per simulation and requested duration. Important
+standardized columns include:
+\describe{
+\item{Z_t}{Future benefit present value at duration \code{t}.}
+\item{Y_t}{Future premium-annuity basis present value.}
+\item{future_pv_premiums}{Actual future premium present value.}
+\item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
+\item{premium_per_payment}{Premium paid at each date.}
+\item{premium_annuity_scale}{Coefficient multiplying \code{Y_t}.}
+\item{L_t}{Prospective loss, or the name supplied through \code{col_L}.}
+}
 }
 \description{
-Computes simulated prospective reserve losses at one or more policy
-durations from simulated future lifetimes, using compact actuarial notation.
+Computes simulated prospective loss random variables at one or more policy
+durations. Future benefits and future premiums are revalued from each
+requested duration.
 }
 \details{
-This function recalculates future benefit and future premium present values
-from each valuation duration. It is not a wrapper around
-\code{\link{mc_loss}}, because reserves require valuing only the cash flows
-that remain after the valuation time.
-
-For a policy in force at duration \eqn{t}, the simulated prospective loss is
-
+Let \eqn{Z_t} be the present value at duration \eqn{t} of future benefits.
+Suppose the future premium annuity is constructed with amount \eqn{c} at
+each of the \eqn{k} payment dates per year:
 \deqn{
-  L_t = Z_t - P Y_t,
+Y_{t,c}=c\sum_{j:t_j\ge t}v^{t_j-t}.
 }
 
-where \eqn{Z_t} is the present value at duration \eqn{t} of future benefits,
-\eqn{Y_t} is the present value at duration \eqn{t} of future premium
-payments, and \eqn{P} is the premium per payment.
-
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{t} is the valuation duration, \code{i} is the
-interest-rate input, \code{i_type} is the interest-rate convention, \code{m}
-is the nominal conversion frequency, \code{k} is the premium payment
-frequency, \code{n} is the contract term, \code{h} is the deferral period,
-\code{P} is the premium per payment, and \code{L_t} is the simulated
-prospective loss at duration \code{t}.
-
-The arguments \code{m} and \code{k} have deliberately different meanings:
-\itemize{
-\item \code{m} is used only for nominal interest-rate conversion.
-\item \code{k} controls how frequently future premium payments are made.
+If \eqn{P^{(k)}} is the annualized premium, then the installment is
+\eqn{P^{(k)}/k} and the coefficient multiplying \eqn{Y_{t,c}} is
+\deqn{
+q=\frac{P^{(k)}}{kc}.
+}
+Therefore the simulated prospective loss is
+\deqn{
+L_t=Z_t-qY_{t,c}.
 }
 
-The argument \code{payment} represents the amount of each premium annuity
-payment used to construct \eqn{Y_t}. Thus, for monthly premiums with total
-annual premium equal to 1, use \code{payment = 1 / 12} and \code{k = 12}.
+Under the recommended normalization \code{payment = 1 / k},
+\eqn{q=P^{(k)}} and
+\deqn{
+L_t=Z_t-P^{(k)}Y_t^{(k)}.
+}
 
-If \code{k = 1}, future premiums are annual. If \code{k > 1}, future
-premiums are made at fractional times, and a valid complete future lifetime
-column supplied through \code{col_T} is required for life-contingent premium
-annuities.
+If no premium is supplied, the function estimates the issue scale
+coefficient from complete benefit-annuity simulation pairs:
+\deqn{
+\widehat q=\frac{\overline Z_0}{\overline Y_{0,c}}.
+}
+This makes the sample mean issue loss equal to zero, up to numerical error,
+when \code{reserve_timing = "before_payment"}.
 
-Durations may be integer or fractional. Fractional reserve durations require
-complete future lifetimes. For example, monthly reserve calculations may use
-\code{t = seq(0, 20, by = 1 / 12)}.
-
-If \code{reserve_timing = "before_payment"}, cash flows occurring exactly at
-the valuation duration are included. If
-\code{reserve_timing = "after_payment"}, cash flows occurring exactly at the
-valuation duration are excluded.
-
-If \code{not_in_force = "na"}, scenarios that are not in force at a given
-duration receive \code{NA} values for future present values and reserve
-losses. This is useful for estimating reserves conditional on the policy
-still being in force. If \code{not_in_force = "zero"}, those scenarios
-receive zero values, which may be useful for portfolio run-off summaries.
-
-This function computes prospective reserves under the simulated model. It
-does not include expenses, surrender values, taxes, profit loadings, or
-statutory reserving adjustments.
+The column \code{Y_t} is the present value of the premium-annuity basis,
+including the amount supplied through \code{payment}. The column
+\code{future_pv_premiums} is the actual simulated present value of premium
+income, equal to \code{premium_annuity_scale * Y_t}.
 }
 \examples{
-lt <- tibble::tibble(
-  x = 40:100,
-  qx = seq(0.002, 1, length.out = 61)
+simulated <- tibble::tibble(
+  Kx = c(2, 4),
+  Tx = c(2.4, 4.7)
 )
 
-# Annual prospective reserves for whole-life insurance
-lt |>
-  simulate_lifetime(
-    x = 40,
-    n_sim = 25,
-    seed = 123
-  ) |>
+simulated |>
   mc_reserve(
-    t = c(0, 5, 10),
+    t = c(0, 1),
     i = 0.05,
     type = "whole",
     annuity_type = "whole",
-    benefit = 1,
-    payment = 1,
-    k = 1,
-    premium_timing = "due"
-  )
-
-# Monthly premium reserve curve at annual valuation durations
-lt |>
-  simulate_lifetime(
-    x = 40,
-    n_sim = 25,
-    frac = "udd",
-    seed = 123
-  ) |>
-  mc_reserve(
-    t = c(0, 1, 2, 3),
-    i = 0.05,
-    type = "whole",
-    annuity_type = "whole",
-    benefit = 1,
     payment = 1 / 12,
-    k = 12,
-    premium_timing = "due"
+    k = 12
   )
 
-# Fractional reserve durations
-lt |>
-  simulate_lifetime(
-    x = 40,
-    n_sim = 25,
-    frac = "udd",
-    seed = 123
-  ) |>
-  mc_reserve(
-    t = seq(0, 1, by = 1 / 4),
-    i = 0.05,
-    type = "whole",
-    annuity_type = "whole",
-    benefit = 1,
-    payment = 1 / 12,
-    k = 12,
-    premium_timing = "due"
-  ) |>
-  summary_mc(value_col = "L_t", by = "t")
-
-# Joint-life reserve using a multiple-life status
-lt |>
-  simulate_lifetimes(
-    x = c(60, 58),
-    n_sim = 25,
-    seed = 123
-  ) |>
-  mc_multilife_status(status = "joint") |>
-  mc_reserve(
-    t = c(0, 5),
-    i = 0.04,
-    type = "whole",
-    annuity_type = "whole",
-    benefit = 1,
-    payment = 1,
-    k = 1,
-    col_K = "K_status",
-    col_T = "T_status"
-  )
-
-}
-\references{
-Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A.,
-and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
-Society of Actuaries.
 }
 \seealso{
-\code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
-\code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
-\code{\link{mc_annuity}}, \code{\link{mc_premium}}, \code{\link{mc_loss}},
-\code{\link{summary_mc}}
+\code{\link{mc_annuity}}, \code{\link{mc_insurance}},
+\code{\link{mc_premium}}, \code{\link{mc_loss}},
+\code{\link{reserve_x}}, \code{\link{reserve_xy}}
 
 Other monte-carlo: 
 \code{\link{mc_annuity}()},
 \code{\link{mc_insurance}()},
 \code{\link{mc_loss}()},
+\code{\link{mc_multilife_status}()},
 \code{\link{mc_premium}()},
 \code{\link{simulate_lifetime}()},
+\code{\link{simulate_lifetimes}()},
 \code{\link{summary_mc}()}
 }
 \concept{monte-carlo}

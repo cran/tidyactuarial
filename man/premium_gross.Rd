@@ -2,116 +2,182 @@
 % Please edit documentation in R/premium_gross.R
 \name{premium_gross}
 \alias{premium_gross}
-\title{Gross (expense-loaded) premium from a net premium}
+\title{Gross premium under a simple expense-loaded equivalence principle}
 \usage{
-premium_gross(prem, alpha = 0, beta = 0, gamma = 0, tidy = FALSE, ...)
+premium_gross(
+  prem,
+  alpha = 0,
+  beta = 0,
+  gamma = 0,
+  k = NULL,
+  output = c("value", "summary", "audit", "table"),
+  tidy = NULL,
+  check = TRUE,
+  tol = 1e-10,
+  ...
+)
 }
 \arguments{
-\item{prem}{A one-row data frame or tibble containing at least:
-\itemize{
-\item \code{premium} or \code{P}: net premium per payment.
-\item \code{apv_premiums} or \code{a_premiums}: APV of the premium
-annuity.
-}}
+\item{prem}{A one-row data frame or tibble. The preferred input is
+\code{premium_x(..., output = "summary")} or
+\code{premium_xy(..., output = "summary")}. It must contain an annualized
+net premium and the APV of the normalized premium annuity.}
 
-\item{alpha}{Numeric scalar greater than or equal to 0. Initial acquisition
-expense as a multiple of one gross premium payment. The initial expense is
-\eqn{\alpha G}, paid once at issue.}
+\item{alpha}{Nonnegative numeric scalar. Initial acquisition expense as a
+multiple of one gross premium installment. The expense at issue is
+\eqn{\alpha G^{(k)} / k}.}
 
-\item{beta}{Numeric scalar in \eqn{[0,1)}. Proportional collection expense
-as a fraction of each gross premium payment.}
+\item{beta}{Numeric scalar in \eqn{[0,1)}. Proportional expense charged on
+every gross premium installment.}
 
-\item{gamma}{Numeric scalar greater than or equal to 0. Fixed maintenance
-expense per premium payment period, in monetary units.}
+\item{gamma}{Nonnegative numeric scalar. Fixed monetary expense incurred at
+every premium-payment date. Its APV is
+\eqn{\gamma k a^{(k)}}, because \code{a_premiums} is normalized with
+payments of \eqn{1/k}.}
 
-\item{tidy}{Logical scalar. If \code{FALSE}, returns the gross premium as a
-numeric value. If \code{TRUE}, returns a one-row tibble with the expense
-breakdown.}
+\item{k}{Optional positive integer payment frequency. By default it is
+inferred from \code{payments_per_year} or \code{k} in \code{prem}; if
+neither is present, \code{k = 1} is used.}
 
-\item{...}{Transitional compatibility for older calls using
-\code{output = "value"} or \code{output = "table"}. This argument will be
-removed in a future version.}
+\item{output}{Output level. \code{"value"} returns the annualized gross
+premium, \code{"summary"} returns a compact one-row tibble, and
+\code{"audit"} returns the extended-equivalence components in long
+format. \code{"table"} is accepted as a compatibility alias for
+\code{"summary"}.}
+
+\item{tidy}{Deprecated compatibility argument. \code{TRUE} maps to
+\code{output = "summary"} and \code{FALSE} to
+\code{output = "value"}.}
+
+\item{check}{Logical scalar. If \code{TRUE}, validates the inputs.}
+
+\item{tol}{Nonnegative numeric tolerance used for consistency checks.}
+
+\item{...}{Transitional compatibility. The deprecated argument
+\code{payments_per_year} is mapped to \code{k}.}
 }
 \value{
-If \code{tidy = FALSE}, a numeric gross premium per payment.
+For \code{output = "value"}, a numeric scalar containing the annualized
+gross premium \eqn{G^{(k)}}.
 
-If \code{tidy = TRUE}, a one-row tibble with columns \code{G},
-\code{P_net}, \code{alpha}, \code{beta}, \code{gamma}, \code{loading_pct},
-and \code{a_premiums}.
+For \code{output = "summary"}, a one-row tibble with six columns:
+annualized gross premium, gross premium per payment, annualized net premium,
+annualized loading, payment frequency, and equivalence residual.
+
+For \code{output = "audit"}, a long-format tibble with the APVs of gross
+premiums, benefits, and each expense component.
 }
 \description{
-Adjusts a net premium using a simple expense structure
-\eqn{(\alpha, \beta, \gamma)} to obtain the gross or commercial premium
-through the extended equivalence principle, using compact actuarial notation.
+Converts a net-premium result from \code{\link{premium_x}} or
+\code{\link{premium_xy}} into an expense-loaded gross premium.
 }
 \details{
-The function is designed to work with the detailed output of
-\code{\link{premium_x}} or \code{\link{premium_xy}} when those functions
-return a one-row tibble containing the APV of the premium annuity. It can
-also be used with any compatible one-row tibble.
+The function preserves the package-wide distinction between an annualized
+premium and the amount paid at each of the \code{k} payment dates.
 
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}. The gross premium is denoted by \code{G}, the net
-premium by \code{P_net}, and the APV of the premium annuity by
-\code{a_premiums}.
+Let \eqn{a^{(k)}} denote the APV of the premium annuity returned by
+\code{\link{premium_x}} or \code{\link{premium_xy}}. That annuity has
+\eqn{k} payments per year, each of amount \eqn{1/k}; hence it represents an
+annual payment rate of 1.
 
-The extended equivalence principle equates the APV of gross premiums with
-the APV of benefits plus expenses:
+If \eqn{P^{(k)}} is the annualized net premium and \eqn{G^{(k)}} is the
+annualized gross premium, the extended equivalence equation implemented is
 \deqn{
-G \ddot{a} =
-P_{\text{net}}\ddot{a}
-+ \alpha G
-+ \beta G \ddot{a}
-+ \gamma \ddot{a}.
+G^{(k)}a^{(k)}
+=
+P^{(k)}a^{(k)}
++
+\alpha\frac{G^{(k)}}{k}
++
+\beta G^{(k)}a^{(k)}
++
+\gamma k a^{(k)}.
 }
 
-Solving for the gross premium gives:
+Therefore,
+\deqn{
+G^{(k)}
+=
+\frac{P^{(k)} + k\gamma}
+{(1-\beta)-\alpha/(k a^{(k)})}.
+}
+
+The actual premium installment is
+\deqn{
+G_{\mathrm{per\ payment}} = \frac{G^{(k)}}{k}.
+}
+
+For \code{k = 1}, this reduces to the previous annual formula:
 \deqn{
 G =
-\frac{P_{\text{net}} + \gamma}
-{(1-\beta) - \alpha / \ddot{a}}.
+\frac{P_{\mathrm{net}}+\gamma}
+{(1-\beta)-\alpha/a}.
 }
 
-In this function, \eqn{\ddot{a}} is supplied through the
-\code{apv_premiums} or \code{a_premiums} column of \code{prem}.
+This intentionally simple model assumes that \code{gamma} is incurred at
+the same dates and under the same contingency as premium payments. Expenses
+with a different timing or contingency require their own APV and are not
+represented by \code{gamma}.
+
+Preferred column names in \code{prem} are
+\code{premium_annualized}, \code{premium_per_payment},
+\code{payments_per_year}, and \code{apv_premium_annuity}. Legacy annual
+tables using \code{P}, \code{premium}, \code{P_net},
+\code{a_premiums}, or \code{apv_premiums} remain supported.
+
+Legacy premium columns are accepted automatically only when \code{k = 1},
+because their unit is ambiguous for subannual premiums.
 }
 \examples{
-# Compatible one-row premium table
 net <- tibble::tibble(
-  premium = 1200,
-  apv_premiums = 12.5
+  premium_annualized = 1200,
+  premium_per_payment = 100,
+  payments_per_year = 12,
+  apv_premium_annuity = 10
 )
 
-premium_gross(net, alpha = 0.5, beta = 0.05, gamma = 50)
-
-# Finan-style expense structure:
-# 10\% of each premium plus fixed expenses of 275 per payment period
-premium_gross(net, alpha = 0, beta = 0.10, gamma = 275)
-
-# Detailed output with expense breakdown
 premium_gross(
   net,
   alpha = 0.5,
   beta = 0.05,
-  gamma = 50,
-  tidy = TRUE
+  gamma = 20,
+  output = "summary"
 )
 
-# Also accepts compact actuarial column names
-net2 <- tibble::tibble(
-  P = 1200,
-  a_premiums = 12.5
-)
-
-premium_gross(net2, alpha = 0.5, beta = 0.05, gamma = 50)
+# Pipeline from a net-premium calculation
+\dontrun{
+life_contract(
+  lt = lt,
+  lives = "single",
+  x = 40,
+  i = 0.05
+) |>
+  add_insurance(
+    type = "term",
+    benefit = 100000,
+    n = 20
+  ) |>
+  add_premium_schedule(
+    k = 12,
+    n_prem = 10
+  ) |>
+  premium_x(output = "summary") |>
+  premium_gross(
+    alpha = 0.5,
+    beta = 0.05,
+    gamma = 20,
+    output = "summary"
+  )
+}
 
 }
 \seealso{
-\code{\link{premium_x}} for single-life net premiums,
-\code{\link{premium_xy}} for two-life net premiums,
-\code{\link{annuity_x}} for building custom expense APVs.
+\code{\link{premium_x}}, \code{\link{premium_xy}},
+\code{\link{annuity_x}}, \code{\link{annuity_xy}}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{annuity_xy}()},

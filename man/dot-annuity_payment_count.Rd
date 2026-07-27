@@ -2,25 +2,11 @@
 % Please edit documentation in R/simulate_life_mc.R
 \name{.annuity_payment_count}
 \alias{.annuity_payment_count}
-\title{Internal helper: count annuity payments from simulated curtate lifetimes}
+\title{Internal helper: count annuity payments}
 \usage{
-.annuity_payment_count(Kx, died_within_horizon, n, k, timing)
-}
-\arguments{
-\item{Kx}{Simulated curtate future lifetimes.}
-
-\item{died_within_horizon}{Logical vector.}
-
-\item{n}{Term in years.}
-
-\item{k}{Payment frequency.}
-
-\item{timing}{Payment timing.}
-}
-\value{
-Integer vector with number of payments.
+.annuity_payment_count(Kx, died_within_horizon, n, k, timing, Tx = NULL)
 }
 \description{
-Internal helper: count annuity payments from simulated curtate lifetimes
+Internal helper: count annuity payments
 }
 \keyword{internal}

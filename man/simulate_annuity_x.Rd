@@ -14,6 +14,7 @@ simulate_annuity_x(
   k = 1L,
   timing = c("due", "immediate"),
   payment = 1,
+  frac = c("udd", "cml", "balducci"),
   method = c("inverse"),
   n_sim = 10000L,
   seed = NULL,
@@ -22,66 +23,66 @@ simulate_annuity_x(
 )
 }
 \arguments{
-\item{lt}{A life table or a \code{tidyact_life_contract} object. A life table
-must contain columns \code{x} and \code{lx}.}
+\item{lt}{A life table or a \code{tidyact_life_contract}. A life table must
+contain columns \code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age. Optional when \code{lt} is a
-\code{tidyact_life_contract}.}
+\item{x}{Integer actuarial age. Optional for a life contract.}
 
-\item{i}{Numeric scalar. Annual interest-rate input. Optional when
-\code{lt} is a \code{tidyact_life_contract}.}
+\item{i}{Numeric scalar interest-rate input.}
 
-\item{i_type}{Character string indicating the interest-rate type. Allowed
-values are \code{"effective"}, \code{"nominal_interest"},
-\code{"nominal_discount"}, and \code{"force"}.}
+\item{i_type}{Interest-rate convention.}
 
-\item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
-for \code{i_type = "effective"} and \code{i_type = "force"}.}
+\item{m}{Positive integer nominal conversion frequency.}
 
-\item{n}{Term in years. Use \code{Inf} for whole life.}
+\item{n}{Positive integer term in years, or \code{Inf} for whole life.}
 
-\item{k}{Positive integer. Number of annuity payments per year.}
+\item{k}{Positive integer number of annuity payments per year.}
 
-\item{timing}{Character string. Either \code{"due"} or \code{"immediate"}.}
+\item{timing}{Payment timing: \code{"due"} or \code{"immediate"}.}
 
-\item{payment}{Numeric scalar. Level payment per payment period.}
+\item{payment}{Nonnegative amount paid at each payment date. To simulate an
+annualized payment rate of 1 with \code{k} payments per year, use
+\code{payment = 1 / k}.}
 
-\item{method}{Simulation method. Currently \code{"inverse"} is supported.}
+\item{frac}{Fractional-age assumption used to simulate the complete lifetime
+within the year of death: \code{"udd"}, \code{"cml"}, or
+\code{"balducci"}.}
 
-\item{n_sim}{Positive integer. Number of simulations.}
+\item{method}{Simulation method. Currently only \code{"inverse"}.}
 
-\item{seed}{Optional seed for reproducibility.}
+\item{n_sim}{Positive integer number of simulations.}
 
-\item{output}{Character string. Use \code{"simulations"} for the simulated
-data or \code{"summary"} for summary statistics using
-\code{\link{summary_mc}}.}
+\item{seed}{Optional nonnegative integer seed.}
 
-\item{...}{Transitional compatibility for older calls using
-\code{mortality_table}, \code{age}, \code{rate}, \code{rate_type},
-\code{term_years}, and \code{payments_per_year}.}
+\item{output}{\code{"simulations"} or \code{"summary"}.}
+
+\item{...}{Transitional compatibility for \code{mortality_table},
+\code{age}, \code{rate}, \code{rate_type}, \code{term_years}, and
+\code{payments_per_year}.}
 }
 \value{
-A tibble. If \code{output = "simulations"}, the tibble contains one
-row per simulation. If \code{output = "summary"}, the tibble is the output
-of \code{\link{summary_mc}} applied to the simulated present values.
+A tibble with one row per simulation, or a summary from
+\code{\link{summary_mc}}. Simulation output includes
+\code{payment_per_payment}, \code{payment_annualized}, \code{Kx},
+\code{Tx}, \code{n_payments}, \code{present_value}, and
+\code{pv_annuity}.
 }
 \description{
-Simulates the present value of a discrete single-life annuity using a life
-table and annual curtate future lifetimes, with compact actuarial notation.
+Simulates present values of a discrete single-life annuity from a life table.
+Annual and subannual payments are supported. For subannual payments, a
+complete future lifetime is generated inside the year of death under a
+fractional-age assumption.
 }
 \details{
-The function supports direct use with \code{lt}, \code{x}, and \code{i}, and
-pipe workflows with \code{\link{life_contract}}.
+The amount \code{payment} is a per-payment amount. If \eqn{N} payments are
+made at times \eqn{t_j}, the simulated present value is
+\deqn{
+\sum_{j=1}^{N} \mathrm{payment}\,v^{t_j}.
+}
 
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age,
-\code{i} is the interest-rate input, \code{i_type} is the interest-rate type,
-\code{m} is the conversion frequency for nominal rates, \code{n} is the term,
-and \code{k} is the payment frequency.
-
-The simulation is based on the curtate future lifetime \eqn{K_x}. For annual
-payments, an annuity-due pays while the life is alive at the beginning of the
-year, and an annuity-immediate pays at the end of completed years.
+For \code{k > 1}, the curtate lifetime alone is insufficient because
+payments may occur during the year of death. The function therefore
+simulates a complete lifetime \eqn{T_x=K_x+S} under \code{frac}.
 }
 \examples{
 lt <- data.frame(
@@ -100,14 +101,13 @@ simulate_annuity_x(
 simulate_annuity_x(
   lt = lt,
   x = 60,
-  i = 0.06,
-  i_type = "nominal_interest",
-  m = 12,
+  i = 0.05,
   n = 5,
   k = 12,
+  payment = 1 / 12,
+  frac = "udd",
   n_sim = 25,
-  seed = 123,
-  output = "summary"
+  seed = 123
 )
 
 }
@@ -116,6 +116,8 @@ Other simulation:
 \code{\link{simulate_insurance_x}()}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{annuity_xy}()},

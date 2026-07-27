@@ -13,8 +13,9 @@
 #'   typically returned by \code{\link{simulate_lifetime}} or by
 #'   \code{\link{mc_multilife_status}} when working with multiple-life statuses.
 #' @param i Numeric scalar. Interest-rate input used for discounting.
-#' @param payment Numeric scalar. Amount of each annuity payment. Default is
-#'   \code{1}.
+#' @param payment Numeric scalar. Amount paid at each annuity payment date.
+#'   Default is \code{1}. This is a per-payment amount, not an annualized
+#'   payment rate.
 #' @param k Positive integer. Number of annuity payments per year. Default is
 #'   \code{1}, corresponding to annual payments.
 #' @param type Character string specifying the annuity type. Canonical options
@@ -68,7 +69,9 @@
 #'
 #' The argument \code{payment} represents the amount of each annuity payment.
 #' Thus, for a monthly annuity with total annual payment equal to 1, use
-#' \code{payment = 1 / 12} and \code{k = 12}.
+#' \code{payment = 1 / 12} and \code{k = 12}. The output makes the units
+#' explicit through \code{payment_per_payment = payment} and
+#' \code{payment_annualized = k * payment}.
 #'
 #' For annual payments, \code{k = 1}, the function works directly with
 #' \eqn{K_x}. For fractional payments, such as monthly, quarterly, or
@@ -99,7 +102,10 @@
 #'   \item{i_effective}{Equivalent annual effective interest rate.}
 #'   \item{v}{Annual discount factor.}
 #'   \item{type}{Canonical annuity type.}
-#'   \item{payment}{Amount of each annuity payment.}
+#'   \item{payment}{Legacy-compatible amount of each annuity payment.}
+#'   \item{payment_per_payment}{Amount paid at each payment date.}
+#'   \item{payment_annualized}{Payment amount multiplied by the number of
+#'   payments per year.}
 #'   \item{k}{Annuity payment frequency.}
 #'   \item{n}{Annuity term, if applicable.}
 #'   \item{h}{Deferral period.}
@@ -255,6 +261,12 @@ mc_annuity <- function(
 ) {
   dots <- list(...)
   type_missing <- missing(type)
+  k_missing <- missing(k)
+  h_missing <- missing(h)
+  i_type_missing <- missing(i_type)
+  col_K_missing <- missing(col_K)
+  col_T_missing <- missing(col_T)
+  col_pv_missing <- missing(col_pv)
 
   # -------------------------------------------------------------------------
   # Transitional compatibility with the previous public API
@@ -302,7 +314,7 @@ mc_annuity <- function(
   }
 
   if (!is.null(dots$payments_per_year)) {
-    if (!identical(k, 1L) && !identical(k, 1)) {
+    if (!k_missing) {
       stop(
         "Provide only one of `k` or deprecated `payments_per_year`.",
         call. = FALSE
@@ -310,6 +322,7 @@ mc_annuity <- function(
     }
 
     k <- dots$payments_per_year
+    k_missing <- FALSE
   }
 
   if (!is.null(dots$annuity)) {
@@ -329,11 +342,12 @@ mc_annuity <- function(
   }
 
   if (!is.null(dots$deferral_years)) {
-    if (!identical(h, 0) && !identical(h, 0L)) {
+    if (!h_missing) {
       stop("Provide only one of `h` or deprecated `deferral_years`.", call. = FALSE)
     }
 
     h <- dots$deferral_years
+    h_missing <- FALSE
   }
 
   if (!is.null(dots$guarantee_years)) {
@@ -346,37 +360,41 @@ mc_annuity <- function(
   }
 
   if (!is.null(dots$interest_type)) {
-    if (!missing(i_type)) {
+    if (!i_type_missing) {
       stop("Provide only one of `i_type` or deprecated `interest_type`.",
            call. = FALSE)
     }
 
     i_type <- dots$interest_type
+    i_type_missing <- FALSE
   }
 
   if (!is.null(dots$k_col)) {
-    if (!identical(col_K, "Kx")) {
+    if (!col_K_missing) {
       stop("Provide only one of `col_K` or deprecated `k_col`.", call. = FALSE)
     }
 
     col_K <- dots$k_col
+    col_K_missing <- FALSE
   }
 
   if (!is.null(dots$tx_col)) {
-    if (!identical(col_T, "Tx")) {
+    if (!col_T_missing) {
       stop("Provide only one of `col_T` or deprecated `tx_col`.", call. = FALSE)
     }
 
     col_T <- dots$tx_col
+    col_T_missing <- FALSE
   }
 
   if (!is.null(dots$annuity_col)) {
-    if (!identical(col_pv, "pv_annuity")) {
+    if (!col_pv_missing) {
       stop("Provide only one of `col_pv` or deprecated `annuity_col`.",
            call. = FALSE)
     }
 
     col_pv <- dots$annuity_col
+    col_pv_missing <- FALSE
   }
 
   type <- match.arg(
@@ -418,7 +436,7 @@ mc_annuity <- function(
   .mc_assert_numeric_scalar(i, "i")
   .mc_assert_numeric_scalar(payment, "payment", min = 0)
   .mc_assert_positive_integer(k, "k")
-  .mc_assert_numeric_scalar(m, "m", min = 0, strict_min = TRUE)
+  .mc_assert_positive_integer(m, "m")
   .mc_assert_numeric_column(.data, col_K, "col_K")
   .mc_assert_character_scalar(col_T, "col_T")
   .mc_assert_character_scalar(col_pv, "col_pv")
@@ -451,6 +469,28 @@ mc_annuity <- function(
 
   k <- as.integer(round(k))
   m <- as.integer(round(m))
+
+  assert_payment_grid <- function(value, name) {
+    if (!is.null(value) &&
+        abs(value * k - round(value * k)) >
+          sqrt(.Machine$double.eps)) {
+      stop(
+        "`", name, " * k` must be an integer so that the contract contains ",
+        "a whole number of payments.",
+        call. = FALSE
+      )
+    }
+  }
+
+  if (type %in% c("temporary", "deferred_temporary", "certain")) {
+    assert_payment_grid(n, "n")
+    n <- round(n * k) / k
+  }
+
+  if (type == "guaranteed") {
+    assert_payment_grid(n_guar, "n_guar")
+    n_guar <- round(n_guar * k) / k
+  }
 
   needs_T <- k > 1L && type != "certain"
 
@@ -499,6 +539,8 @@ mc_annuity <- function(
   }
 
   payment_interval <- 1 / k
+  payment_per_payment <- payment
+  payment_annualized <- payment_per_payment * k
 
   payment_times <- Map(
     function(K, T) {
@@ -532,7 +574,7 @@ mc_annuity <- function(
   pv_annuity <- vapply(
     payment_times,
     function(times) {
-      payment * sum(v^times)
+      payment_per_payment * sum(v^times)
     },
     numeric(1)
   )
@@ -579,7 +621,9 @@ mc_annuity <- function(
       discount_factor = v,
       type = type,
       annuity = ifelse(type == "whole", "whole_life", type),
-      payment = payment,
+      payment = payment_per_payment,
+      payment_per_payment = payment_per_payment,
+      payment_annualized = payment_annualized,
       k = k,
       payments_per_year = k,
       n = n_out,

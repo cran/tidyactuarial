@@ -39,13 +39,18 @@ Ignored for \code{i_type = "effective"} and \code{i_type = "force"}.
 In \code{tidyactuarial}, \code{m} is reserved for interest conversion
 frequency, not deferment.}
 
-\item{n}{Integer term in years. Use \code{NULL} or \code{Inf} for a
-whole-life annuity.}
+\item{n}{Numeric term in years. Use \code{NULL} or \code{Inf} for a
+whole-life annuity. For exact k-thly valuation
+(\code{woolhouse = "none"}), fractional terms are allowed when
+\code{n * k} is an integer. Woolhouse approximations require an
+integer number of years.}
 
 \item{h}{Integer deferment period in years.}
 
 \item{k}{Positive integer. Number of annuity payments per year. For example,
-use \code{k = 12} for monthly payments.}
+use \code{k = 12} for monthly payments. The annuity is normalized to
+an annual payment rate of 1, so each individual payment has amount
+\code{1 / k}.}
 
 \item{timing}{Character string. Either \code{"immediate"} for payments at
 the end of each payment period or \code{"due"} for payments at the
@@ -114,7 +119,16 @@ Deferment is handled through
 where \eqn{h} is the deferment period.
 
 For k-thly payments with \code{woolhouse = "none"}, fractional survival is
-computed under the selected fractional-age assumption.
+computed under the selected fractional-age assumption. The payment stream
+is normalized to an annual payment rate of 1:
+\deqn{\ddot{a}_{x:\overline{n}|}^{(k)} =
+\frac{1}{k}\sum_{j=0}^{kn-1}
+v^{j/k}\,{}_{j/k}p_x.}
+Consequently, each k-thly installment has amount \eqn{1/k}. This
+normalization is essential when the function is used as the premium
+annuity in the equivalence principle: the resulting premium is annualized,
+and the amount paid at each installment is the annualized premium divided
+by \eqn{k}.
 }
 \examples{
 lt <- data.frame(
@@ -176,6 +190,8 @@ life_contract(lt = lt, lives = "single", x = 60, i = 0.06) |>
 \code{\link{reserve_x}}, \code{\link{t_px}}, \code{\link{t_Ex}}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_xy}()},
 \code{\link{insurance_variable_k}()},

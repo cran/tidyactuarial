@@ -11,6 +11,10 @@ mc_loss(
   col_P = "P",
   col_L = "L",
   P = NULL,
+  premium_unit = c("auto", "annualized", "per_payment", "annuity_scale"),
+  k = NULL,
+  annuity_payment = NULL,
+  tol = 1e-10,
   ...
 )
 }
@@ -18,205 +22,130 @@ mc_loss(
 \item{.data}{A data frame or tibble containing simulated present values of
 benefits and premium annuities.}
 
-\item{col_Z}{Character string. Name of the column containing the simulated
-present value of benefits. Default is \code{"pv_benefit"}.}
+\item{col_Z}{Character scalar naming the simulated present value of benefits.
+Default is \code{"pv_benefit"}.}
 
-\item{col_Y}{Character string. Name of the column containing the simulated
-present value of premium annuities. Default is \code{"pv_annuity"}.}
+\item{col_Y}{Character scalar naming the simulated present value of the
+premium annuity. Default is \code{"pv_annuity"}.}
 
-\item{col_P}{Character string. Name of the column containing the premium.
-Default is \code{"P"}. If this column is not found and \code{col_P = "P"},
-the legacy column \code{"premium"} is used when available.}
+\item{col_P}{Character scalar naming the premium input column. When omitted,
+the function searches, in order, for \code{premium_annualized},
+\code{premium_per_payment}, \code{P}, and \code{premium}.}
 
-\item{col_L}{Character string. Name of the output column containing the
-simulated loss random variable. Default is \code{"L"}.}
+\item{col_L}{Character scalar naming the simulated loss output. Default is
+\code{"L"}.}
 
-\item{P}{Optional numeric scalar. If supplied, this value is used as the
-premium instead of reading the premium from \code{col_P}.}
+\item{P}{Optional nonnegative numeric scalar supplied directly instead of
+reading a premium column.}
+
+\item{premium_unit}{Unit of \code{P} or the selected premium column:
+\code{"annualized"}, \code{"per_payment"}, or
+\code{"annuity_scale"}. The latter is the coefficient that directly
+multiplies \code{col_Y}. With \code{"auto"}, explicit modern column names
+determine the unit, while \code{P}, \code{premium}, and a direct
+\code{P} argument retain their historical annuity-scale interpretation.}
+
+\item{k}{Optional positive integer number of premium payments per year.
+By default it is inferred from \code{payments_per_year} or \code{k} in
+\code{.data}; if neither exists, \code{k = 1} is used.}
+
+\item{annuity_payment}{Optional positive numeric scalar giving the payment
+amount used to construct \code{col_Y}. It is normally inferred from
+\code{payment_per_payment}, \code{payment}, or
+\code{payment_annualized} in the output of \code{\link{mc_annuity}}.}
+
+\item{tol}{Nonnegative numeric tolerance for consistency checks.}
 
 \item{...}{Transitional compatibility for older calls using \code{data},
 \code{benefit_col}, \code{annuity_col}, \code{premium_col},
 \code{loss_col}, and \code{premium}.}
 }
 \value{
-A tibble with the original columns and one additional column
-containing the simulated loss random variable. The name of this column is
-controlled by \code{col_L}. For transition, if \code{col_L != "loss"} and
-the input does not already contain a column named \code{loss}, a legacy
-column \code{loss} is also added with the same value.
+A tibble containing the original simulation and standardized columns:
+\describe{
+\item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
+\item{premium_per_payment}{Amount collected at each premium date.}
+\item{payments_per_year}{Premium payment frequency \code{k}.}
+\item{premium_annuity_scale}{Coefficient multiplying \code{col_Y}.}
+\item{pv_premiums}{Simulated present value of premium income.}
+\item{L}{Simulated loss, or the name supplied through \code{col_L}.}
+}
+
+A compatibility column \code{loss} is synchronized with \code{col_L}.
 }
 \description{
-Computes simulated actuarial loss random variables from Monte Carlo present
-values of benefits, premium annuities, and premiums, using compact actuarial
-notation.
+Constructs simulated actuarial losses from present values of benefits and
+premium-payment annuities while keeping annualized premiums distinct from
+amounts paid at each premium date.
 }
 \details{
-This function constructs the simulated loss random variable
-
+Let \eqn{Z} be the present value random variable of benefits. Suppose
+\code{col_Y} contains
 \deqn{
-  L = Z - P Y,
+Y_c = c\sum_j v^{t_j},
+}
+where \eqn{c} is the amount used in \code{\link{mc_annuity}} at each of the
+\eqn{k} premium dates per year.
+
+If \eqn{P^{(k)}} is the annualized premium, the actual installment is
+\eqn{P^{(k)}/k}, and the simulated present value of premiums is
+\deqn{
+\Pi =
+\frac{P^{(k)}}{k c}Y_c.
+}
+Hence the loss at issue is
+\deqn{
+L = Z - \Pi.
 }
 
-where \eqn{Z} is the present value random variable of insurance benefits,
-\eqn{Y} is the present value random variable of the premium annuity, and
-\eqn{P} is the premium per payment.
+The recommended normalized premium annuity uses
+\code{payment = 1 / k} in \code{\link{mc_annuity}}. Then \eqn{c=1/k},
+\eqn{Y_c=Y^{(k)}}, and the expression simplifies to
+\deqn{
+L = Z - P^{(k)}Y^{(k)}.
+}
 
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{Z} denotes the present value random variable of
-benefits, \code{Y} denotes the present value random variable of the premium
-annuity, \code{P} denotes the premium per payment, and \code{L} denotes the
-actuarial loss random variable at issue.
+This convention agrees with \code{\link{premium_x}},
+\code{\link{premium_xy}}, \code{\link{reserve_x}}, and
+\code{\link{reserve_xy}}: the premium is annualized, while the amount
+collected at each date is the annualized premium divided by \code{k}.
 
-The function does not estimate the premium. It only constructs the simulated
-loss random variable. The premium may come from a column previously created
-by \code{\link{mc_premium}}, or it may be supplied directly through the
-\code{P} argument.
-
-The interpretation of \code{P} depends on how the premium annuity present
-value was constructed. If \code{pv_annuity} was generated with annual
-payments, then \code{P} corresponds to that annual premium structure. If
-\code{pv_annuity} was generated using fractional payments in
-\code{\link{mc_annuity}}, such as \code{payment = 1 / 12} and
-\code{k = 12}, then \code{P} is applied to that same fractional payment
-pattern.
-
-Thus, \code{mc_loss()} can be used without modification for annual premiums,
-monthly premiums, quarterly premiums, semiannual premiums, and multiple-life
-premium structures, provided that \code{col_Y} contains the appropriate
-simulated premium annuity present value.
-
-The resulting loss column can be used to estimate quantities such as expected
-loss, variance, standard deviation, probability of positive loss, loss
-quantiles, empirical value-at-risk measures, and sensitivities across
-actuarial assumptions.
+For backward compatibility, legacy columns \code{P} and \code{premium}
+are interpreted as coefficients that multiply the supplied annuity present
+value directly. If such a coefficient is \eqn{q}, then
+\deqn{
+P_{\mathrm{per\ payment}} = q c,
+\qquad
+P^{(k)} = k q c.
+}
 }
 \examples{
-# Example 1: direct use with simulated present values
-sim_values <- tibble::tibble(
-  sim_id = 1:5,
-  pv_benefit = c(0.80, 0.75, 0.95, 0.60, 0.70),
-  pv_annuity = c(8.0, 7.5, 9.0, 6.0, 7.0),
-  P = 0.10
+simulated <- tibble::tibble(
+  pv_benefit = c(900, 700, 1100),
+  pv_annuity = c(8, 7, 9),
+  payment_per_payment = 1 / 12,
+  payment_annualized = 1,
+  payments_per_year = 12,
+  premium_annualized = 120
 )
 
-sim_values |>
+simulated |>
   mc_loss()
 
-# Example 2: using a premium supplied directly
-sim_values |>
-  mc_loss(P = 0.12)
-
-# Example 3: annual whole life loss
-lt <- tibble::tibble(
-  x = 40:100,
-  qx = seq(0.002, 1, length.out = 61)
-)
-
-lt |>
-  simulate_lifetime(
-    x = 40,
-    n_sim = 25,
-    seed = 123
-  ) |>
-  mc_insurance(
-    i = 0.05,
-    type = "whole",
-    benefit = 1
-  ) |>
-  mc_annuity(
-    i = 0.05,
-    type = "whole",
-    payment = 1,
-    k = 1,
-    timing = "due"
-  ) |>
-  mc_premium() |>
-  mc_loss()
-
-# Example 4: monthly whole life loss
-lt |>
-  simulate_lifetime(
-    x = 40,
-    n_sim = 25,
-    frac = "udd",
-    seed = 123
-  ) |>
-  mc_insurance(
-    i = 0.05,
-    type = "whole",
-    benefit = 1
-  ) |>
-  mc_annuity(
-    i = 0.05,
-    type = "whole",
-    payment = 1 / 12,
-    k = 12,
-    timing = "due"
-  ) |>
-  mc_premium() |>
-  mc_loss()
-
-# Example 5: summarising simulated losses
-lt |>
-  simulate_lifetime(
-    x = 45,
-    n_sim = 25,
-    frac = "udd",
-    seed = 123
-  ) |>
-  mc_insurance(
-    i = 0.04,
-    type = "term",
-    n = 20,
-    benefit = 100000
-  ) |>
-  mc_annuity(
-    i = 0.04,
-    type = "temporary",
-    n = 20,
-    payment = 1 / 12,
-    k = 12,
-    timing = "due"
-  ) |>
-  mc_premium() |>
-  mc_loss() |>
-  summary_mc(value_col = "L")
-
-# Example 6: joint-life annual loss
-lt |>
-  simulate_lifetimes(
-    x = c(60, 58),
-    n_sim = 25,
-    seed = 123
-  ) |>
-  mc_multilife_status(status = "joint") |>
-  mc_insurance(
-    i = 0.04,
-    type = "whole",
-    benefit = 100000,
-    col_K = "K_status",
-    col_T = "T_status"
-  ) |>
-  mc_annuity(
-    i = 0.04,
-    type = "whole",
-    payment = 1,
-    k = 1,
-    timing = "due",
-    col_K = "K_status",
-    col_T = "T_status"
-  ) |>
-  mc_premium() |>
-  mc_loss()
-
-# Transitional compatibility with old column arguments
-sim_values |>
+# A premium supplied directly as an annualized amount
+simulated |>
   mc_loss(
-    benefit_col = "pv_benefit",
-    annuity_col = "pv_annuity",
-    premium_col = "P",
-    loss_col = "loss"
+    P = 120,
+    premium_unit = "annualized"
   )
+
+# Historical coefficient multiplying the annuity PV directly
+tibble::tibble(
+  pv_benefit = c(900, 700),
+  pv_annuity = c(8, 7),
+  P = 100
+) |>
+  mc_loss()
 
 }
 \references{
@@ -225,17 +154,18 @@ and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 Society of Actuaries.
 }
 \seealso{
-\code{\link{simulate_lifetime}}, \code{\link{simulate_lifetimes}},
-\code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
-\code{\link{mc_annuity}}, \code{\link{mc_premium}},
-\code{\link{mc_reserve}}, \code{\link{summary_mc}}
+\code{\link{mc_annuity}}, \code{\link{mc_insurance}},
+\code{\link{mc_premium}}, \code{\link{mc_reserve}},
+\code{\link{premium_x}}, \code{\link{premium_xy}}
 
 Other monte-carlo: 
 \code{\link{mc_annuity}()},
 \code{\link{mc_insurance}()},
+\code{\link{mc_multilife_status}()},
 \code{\link{mc_premium}()},
 \code{\link{mc_reserve}()},
 \code{\link{simulate_lifetime}()},
+\code{\link{simulate_lifetimes}()},
 \code{\link{summary_mc}()}
 }
 \concept{monte-carlo}

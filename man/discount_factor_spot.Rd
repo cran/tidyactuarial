@@ -90,6 +90,8 @@ discount_factor_spot(
 \code{\link{pv_flow}}
 
 Other interest: 
+\code{\link{accumulation_factor}()},
+\code{\link{discount_factor}()},
 \code{\link{forward_rate}()},
 \code{\link{interest_equivalents}()},
 \code{\link{standardize_interest}()},

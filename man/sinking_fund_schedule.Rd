@@ -131,6 +131,7 @@ sinking_fund_schedule(
 \code{\link{amort_schedule}}, \code{\link{s_angle}}
 
 Other amortization: 
-\code{\link{amort_schedule}()}
+\code{\link{amort_schedule}()},
+\code{\link{amort_schedule_general}()}
 }
 \concept{amortization}

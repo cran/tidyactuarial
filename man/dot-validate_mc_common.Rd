@@ -6,22 +6,6 @@
 \usage{
 .validate_mc_common(x, i, m, n_sim, seed, n)
 }
-\arguments{
-\item{x}{Integer age.}
-
-\item{i}{Interest-rate input.}
-
-\item{m}{Nominal conversion frequency.}
-
-\item{n_sim}{Number of simulations.}
-
-\item{seed}{Optional seed.}
-
-\item{n}{Term in years.}
-}
-\value{
-Invisibly returns \code{TRUE}.
-}
 \description{
 Internal helper: validate common Monte Carlo arguments
 }

@@ -10,45 +10,101 @@ mc_multilife_status(
   col_sim = "sim_id",
   col_life = "life_id",
   col_K = "Kx",
-  col_T = "Tx"
+  col_T = "Tx",
+  tol = 1e-10
 )
 }
 \arguments{
-\item{data}{A data frame or tibble produced by \code{simulate_lifetimes()}.}
+\item{data}{A data frame or tibble, typically returned by
+\code{\link{simulate_lifetimes}}.}
 
-\item{status}{Multiple-life status. One of \code{"joint"}, \code{"joint_life"},
-\code{"last"}, \code{"last_survivor"}, or \code{"last_survivor_life"}.}
+\item{status}{Multiple-life status. Canonical values are \code{"joint"} and
+\code{"last_survivor"}. The aliases \code{"joint_life"},
+\code{"last"}, and \code{"last_survivor_life"} are accepted.}
 
-\item{col_sim}{Name of the simulation identifier column.}
+\item{col_sim}{Character scalar naming the simulation identifier column.}
 
-\item{col_life}{Name of the life identifier column.}
+\item{col_life}{Character scalar naming the life identifier column. The
+default is \code{"life_id"}. Supply \code{NULL} only when no life
+identifier exists; in that case the function can validate equal row counts
+across simulations but cannot detect duplicated or substituted lives.}
 
-\item{col_K}{Name of the curtate future lifetime column.}
+\item{col_K}{Character scalar naming the curtate future lifetime column.}
 
-\item{col_T}{Name of the complete future lifetime column.}
+\item{col_T}{Character scalar naming the complete future lifetime column.}
+
+\item{tol}{Nonnegative numeric tolerance used when checking that each
+complete future lifetime is compatible with its curtate lifetime.}
 }
 \value{
-A tibble with one row per simulation and the columns \code{K_status}
-and \code{T_status}.
+A tibble with one row per simulation and:
+\describe{
+\item{sim_id}{Standard simulation identifier.}
+\item{sim}{Compatibility alias for the simulation identifier.}
+\item{K_status}{Curtate future lifetime of the status.}
+\item{T_status}{Complete future lifetime of the status.}
+\item{n_lives}{Number of lives represented in each simulation.}
+\item{status}{Canonical status: \code{"joint"} or
+\code{"last_survivor"}.}
+}
+
+If \code{col_sim} is neither \code{"sim_id"} nor \code{"sim"}, that
+original identifier column is also retained.
 }
 \description{
-Combines simulated future lifetimes from multiple lives into a single
-multiple-life status. For a joint-life status, the status fails at the first
-death. For a last-survivor status, the status fails at the last death.
+Combines simulated future lifetimes for several lives into one simulated
+multiple-life status. A joint-life status terminates at the first death,
+whereas a last-survivor status terminates at the last death.
+}
+\details{
+For simulated complete future lifetimes \eqn{T_1,\ldots,T_r}, the
+multiple-life complete future lifetime is
+\deqn{
+T_{\mathrm{joint}}=\min(T_1,\ldots,T_r)
+}
+for the joint-life status and
+\deqn{
+T_{\mathrm{last}}=\max(T_1,\ldots,T_r)
+}
+for the last-survivor status.
+
+The corresponding curtate future lifetime is obtained with the same minimum
+or maximum operation on \eqn{K_1,\ldots,K_r}. Because the function validates
+\eqn{K_j \le T_j < K_j+1}, the returned values satisfy the same
+curtate-complete relationship.
+
+When \code{col_life} is available, every simulation must contain exactly one
+row for every life and the same set of lives must appear in every
+simulation. This prevents a missing or duplicated life from being silently
+treated as a different multiple-life contract.
 }
 \examples{
-lt <- tibble::tibble(
-  x = 40:100,
-  qx = seq(0.002, 1, length.out = 61)
+simulated <- tibble::tibble(
+  sim_id = rep(1:2, each = 2),
+  life_id = rep(c("x", "y"), times = 2),
+  Kx = c(2, 5, 4, 1),
+  Tx = c(2.4, 5.2, 4.5, 1.3)
 )
 
-lt |>
-  simulate_lifetimes(
-    x = c(60, 58),
-    n_sim = 25,
-    frac = "udd",
-    seed = 123
-  ) |>
+simulated |>
   mc_multilife_status(status = "joint")
 
+simulated |>
+  mc_multilife_status(status = "last_survivor")
+
 }
+\seealso{
+\code{\link{simulate_lifetimes}}, \code{\link{mc_insurance}},
+\code{\link{mc_annuity}}, \code{\link{mc_reserve}}
+
+Other monte-carlo: 
+\code{\link{mc_annuity}()},
+\code{\link{mc_insurance}()},
+\code{\link{mc_loss}()},
+\code{\link{mc_premium}()},
+\code{\link{mc_reserve}()},
+\code{\link{simulate_lifetime}()},
+\code{\link{simulate_lifetimes}()},
+\code{\link{summary_mc}()}
+}
+\concept{monte-carlo}

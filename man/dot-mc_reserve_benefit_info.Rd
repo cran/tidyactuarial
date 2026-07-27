@@ -6,27 +6,7 @@
 \usage{
 .mc_reserve_benefit_info(Kx, Tx, death_time, type, n, h, timing)
 }
-\arguments{
-\item{Kx}{Numeric vector of simulated curtate future lifetimes.}
-
-\item{Tx}{Numeric vector of simulated complete future lifetimes.}
-
-\item{death_time}{Numeric vector of death benefit payment times.}
-
-\item{type}{Character string specifying the insurance type.}
-
-\item{n}{Numeric scalar or \code{NULL}.}
-
-\item{h}{Numeric scalar.}
-
-\item{timing}{Character string. Either \code{"end_of_year"} or
-\code{"moment_of_death"}.}
-}
-\value{
-A list with \code{benefit_indicator} and \code{benefit_time}.
-}
 \description{
-Determines whether a benefit is paid and at what time for each simulated
-scenario.
+Internal helper: benefit payment information for reserve calculations
 }
 \keyword{internal}

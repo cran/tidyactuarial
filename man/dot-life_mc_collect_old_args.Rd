@@ -2,19 +2,11 @@
 % Please edit documentation in R/simulate_life_mc.R
 \name{.life_mc_collect_old_args}
 \alias{.life_mc_collect_old_args}
-\title{Internal helper: collect old Monte Carlo argument names}
+\title{Internal helper: collect deprecated Monte Carlo argument names}
 \usage{
 .life_mc_collect_old_args(dots, allowed)
 }
-\arguments{
-\item{dots}{List of arguments from \code{...}.}
-
-\item{allowed}{Character vector with allowed deprecated names.}
-}
-\value{
-A list.
-}
 \description{
-Internal helper: collect old Monte Carlo argument names
+Internal helper: collect deprecated Monte Carlo argument names
 }
 \keyword{internal}

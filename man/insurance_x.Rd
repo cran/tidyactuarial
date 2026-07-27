@@ -149,6 +149,8 @@ insurance_x(
 \code{\link{reserve_x}}, \code{\link{t_Ex}}, \code{\link{insurance_xy}}
 
 Other life-contingencies: 
+\code{\link{add_insurance}()},
+\code{\link{add_premium_schedule}()},
 \code{\link{annuity_multi}()},
 \code{\link{annuity_x}()},
 \code{\link{annuity_xy}()},

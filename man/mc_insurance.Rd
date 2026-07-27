@@ -28,8 +28,10 @@ typically returned by \code{\link{simulate_lifetime}} or by
 
 \item{i}{Numeric scalar. Interest-rate input used for discounting.}
 
-\item{benefit}{Numeric scalar. Benefit amount payable under the insurance.
-Default is \code{1}.}
+\item{benefit}{Numeric scalar. Monetary amount paid when the insured
+benefit is triggered. Default is \code{1}. Unlike an annuity payment,
+this is a single benefit amount and has no annualized-versus-per-payment
+interpretation.}
 
 \item{type}{Character string specifying the insurance type. Canonical
 options are \code{"whole"}, \code{"term"}, \code{"deferred"},
@@ -123,8 +125,11 @@ The arguments \code{m} and \code{col_K} have deliberately different roles:
 }
 
 If \code{timing = "end_of_year"}, death benefits are discounted using
-\eqn{K_x + 1}. If \code{timing = "moment_of_death"}, death benefits are
-discounted using \eqn{T_x}.
+\eqn{K_x + 1}. Under this discrete convention, finite terms and deferral
+periods must be whole numbers of years because eligibility is determined
+from the curtate lifetime \eqn{K_x}. If
+\code{timing = "moment_of_death"}, death benefits are discounted using
+\eqn{T_x}, and fractional terms or deferral periods are allowed.
 
 The following insurance types are supported:
 \itemize{
@@ -256,9 +261,11 @@ Society of Actuaries.
 Other monte-carlo: 
 \code{\link{mc_annuity}()},
 \code{\link{mc_loss}()},
+\code{\link{mc_multilife_status}()},
 \code{\link{mc_premium}()},
 \code{\link{mc_reserve}()},
 \code{\link{simulate_lifetime}()},
+\code{\link{simulate_lifetimes}()},
 \code{\link{summary_mc}()}
 }
 \concept{monte-carlo}

@@ -132,6 +132,8 @@ Kellison, S. G. \emph{The Theory of Interest}.
 \code{\link{discount_factor_spot}}, \code{\link{standardize_interest}}
 
 Other interest: 
+\code{\link{accumulation_factor}()},
+\code{\link{discount_factor}()},
 \code{\link{discount_factor_spot}()},
 \code{\link{forward_rate}()},
 \code{\link{interest_equivalents}()},

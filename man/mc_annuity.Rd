@@ -30,8 +30,9 @@ typically returned by \code{\link{simulate_lifetime}} or by
 
 \item{i}{Numeric scalar. Interest-rate input used for discounting.}
 
-\item{payment}{Numeric scalar. Amount of each annuity payment. Default is
-\code{1}.}
+\item{payment}{Numeric scalar. Amount paid at each annuity payment date.
+Default is \code{1}. This is a per-payment amount, not an annualized
+payment rate.}
 
 \item{k}{Positive integer. Number of annuity payments per year. Default is
 \code{1}, corresponding to annual payments.}
@@ -91,7 +92,10 @@ A tibble with the original simulation columns and additional columns:
 \item{i_effective}{Equivalent annual effective interest rate.}
 \item{v}{Annual discount factor.}
 \item{type}{Canonical annuity type.}
-\item{payment}{Amount of each annuity payment.}
+\item{payment}{Legacy-compatible amount of each annuity payment.}
+\item{payment_per_payment}{Amount paid at each payment date.}
+\item{payment_annualized}{Payment amount multiplied by the number of
+payments per year.}
 \item{k}{Annuity payment frequency.}
 \item{n}{Annuity term, if applicable.}
 \item{h}{Deferral period.}
@@ -134,7 +138,9 @@ The arguments \code{m} and \code{k} have different meanings:
 
 The argument \code{payment} represents the amount of each annuity payment.
 Thus, for a monthly annuity with total annual payment equal to 1, use
-\code{payment = 1 / 12} and \code{k = 12}.
+\code{payment = 1 / 12} and \code{k = 12}. The output makes the units
+explicit through \code{payment_per_payment = payment} and
+\code{payment_annualized = k * payment}.
 
 For annual payments, \code{k = 1}, the function works directly with
 \eqn{K_x}. For fractional payments, such as monthly, quarterly, or
@@ -263,9 +269,11 @@ Society of Actuaries.
 Other monte-carlo: 
 \code{\link{mc_insurance}()},
 \code{\link{mc_loss}()},
+\code{\link{mc_multilife_status}()},
 \code{\link{mc_premium}()},
 \code{\link{mc_reserve}()},
 \code{\link{simulate_lifetime}()},
+\code{\link{simulate_lifetimes}()},
 \code{\link{summary_mc}()}
 }
 \concept{monte-carlo}

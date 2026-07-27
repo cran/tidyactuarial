@@ -25,9 +25,14 @@
 #'   \code{x_only}, and \code{y_only}. These weights define the payment rate
 #'   according to the survival state of the two lives.
 #' @param n Term in years. Use \code{Inf} for the maximum horizon allowed by
-#'   the life tables.
+#'   the life tables. For exact k-thly valuation
+#'   (\code{woolhouse = "none"}), fractional terms are allowed when
+#'   \code{n * k} is an integer. Woolhouse approximations require an integer
+#'   number of years.
 #' @param h Nonnegative integer deferment period in years.
-#' @param k Positive integer. Number of payments per year.
+#' @param k Positive integer. Number of payments per year. The annuity is
+#'   normalized to an annual payment rate of 1, so each individual payment has
+#'   amount \code{1 / k}.
 #' @param timing Payment timing. Use \code{"immediate"} or \code{"due"}.
 #' @param woolhouse Woolhouse approximation for \code{k > 1}:
 #'   \code{"none"}, \code{"first"}, or \code{"second"}.
@@ -62,7 +67,15 @@
 #' \code{benefit = list(both = 1, x_only = 1, y_only = 1)}.
 #'
 #' For \code{k}-thly payments, the function values a payment rate of 1 per year,
-#' so each payment has size \eqn{1/k}.
+#' so each payment has size \eqn{1/k}. For exact valuation, a fractional term
+#' is admissible whenever it contains a whole number of payments:
+#' \deqn{nk \in \mathbb{N}.}
+#'
+#' Woolhouse approximations are applied only to the standard joint-life and
+#' last-survivor statuses. For a deferred annuity, the Woolhouse endpoint
+#' corrections are multiplied by the issue-date value of the status at the
+#' beginning of the payment period. This preserves the deferment factor
+#' \eqn{v^h\,{}_hp_{xy}} or its last-survivor analogue.
 #'
 #' @return
 #' If \code{tidy = FALSE}, a numeric scalar.
@@ -146,6 +159,10 @@ annuity_xy <- function(
     tidy = FALSE,
     ...
 ) {
+  i_type_missing <- missing(i_type)
+  m_missing <- missing(m)
+  status_missing <- missing(status)
+
   dots <- list(...)
 
   # -------------------------------------------------------------------------
@@ -205,10 +222,11 @@ annuity_xy <- function(
   }
 
   if (!is.null(dots$rate_type)) {
-    if (!identical(i_type, "effective")) {
+    if (!i_type_missing) {
       stop("Provide only one of `i_type` or deprecated `rate_type`.", call. = FALSE)
     }
     i_type <- dots$rate_type
+    i_type_missing <- FALSE
   }
 
   if (!is.null(dots$cohort)) {
@@ -273,7 +291,7 @@ annuity_xy <- function(
       stop("`annuity_xy()` requires a two-life `life_contract()` object.", call. = FALSE)
     }
 
-    lt <- contract$mortality_table
+    lt <- contract$lt %||% contract$mortality_table
 
     if (is.null(x)) {
       x <- contract$x %||% contract$age_x
@@ -287,16 +305,19 @@ annuity_xy <- function(
       i <- contract$i %||% contract$rate
     }
 
-    if (identical(i_type, "effective")) {
-      i_type <- contract$i_type %||% contract$rate_type %||% i_type
+    if (i_type_missing || is.null(i_type)) {
+      i_type <- contract$i_type %||% contract$rate_type %||% "effective"
+      i_type_missing <- FALSE
     }
 
-    if (identical(m, 1L) || identical(m, 1)) {
-      m <- contract$m %||% m
+    if (m_missing || is.null(m)) {
+      m <- contract$m %||% 1L
+      m_missing <- FALSE
     }
 
-    if (contract$lives == "last_survivor") {
-      status <- "last"
+    if (status_missing) {
+      status <- if (contract$lives == "last_survivor") "last" else "joint"
+      status_missing <- FALSE
     }
   }
 
@@ -370,8 +391,17 @@ annuity_xy <- function(
   if (missing(frac)) {
     frac_x <- attr(lt_x, "frac")
     frac_y <- attr(lt_y, "frac")
-    ok_x <- !is.null(frac_x) && frac_x %in% c("UDD", "CF", "Balducci")
-    ok_y <- !is.null(frac_y) && frac_y %in% c("UDD", "CF", "Balducci")
+    valid_frac <- c("UDD", "CF", "CML", "Balducci")
+    ok_x <- !is.null(frac_x) && frac_x %in% valid_frac
+    ok_y <- !is.null(frac_y) && frac_y %in% valid_frac
+
+    if (ok_x && identical(frac_x, "CML")) {
+      frac_x <- "CF"
+    }
+
+    if (ok_y && identical(frac_y, "CML")) {
+      frac_y <- "CF"
+    }
 
     if (ok_x && ok_y) {
       if (!identical(frac_x, frac_y)) {
@@ -467,9 +497,22 @@ annuity_xy <- function(
 
   if (!is.numeric(n) || length(n) != 1L ||
       is.na(n) || n < 0 ||
-      (!is.infinite(n) &&
-       (!is.finite(n) || abs(n - round(n)) > 1e-10))) {
-    stop("`n` must be `Inf` or a single nonnegative integer.", call. = FALSE)
+      (!is.infinite(n) && !is.finite(n))) {
+    stop(
+      "`n` must be `Inf` or a single nonnegative finite value.",
+      call. = FALSE
+    )
+  }
+
+  state_benefit_supplied <- !is.null(benefit)
+
+  if (state_benefit_supplied && !identical(woolhouse, "none")) {
+    stop(
+      "Woolhouse approximations are supported only for the standard ",
+      "joint-life or last-survivor status. Use `woolhouse = 'none'` when ",
+      "`benefit` supplies state-based payment weights.",
+      call. = FALSE
+    )
   }
 
   if (!is.null(benefit)) {
@@ -504,7 +547,28 @@ annuity_xy <- function(
   k <- as.integer(round(k))
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    if (identical(woolhouse, "none")) {
+      n_payments_check <- n * k
+
+      if (abs(n_payments_check - round(n_payments_check)) > 1e-10) {
+        stop(
+          "For exact k-thly valuation, `n * k` must be an integer so that ",
+          "the term contains a whole number of payments.",
+          call. = FALSE
+        )
+      }
+
+      n <- round(n_payments_check) / k
+    } else {
+      if (abs(n - round(n)) > 1e-10) {
+        stop(
+          "Woolhouse approximations require `n` to be an integer number of years.",
+          call. = FALSE
+        )
+      }
+
+      n <- as.integer(round(n))
+    }
   }
 
   if (!x %in% as.integer(round(lt_x$x))) {
@@ -563,9 +627,19 @@ annuity_xy <- function(
     horizon <- max(h_both, h_x_only, h_y_only)
   }
 
+  available_term <- max(0, horizon - h)
+
   term_used <- if (is.infinite(n)) {
-    max(0L, horizon - h)
+    available_term
   } else {
+    if (n > available_term + 1e-10) {
+      stop(
+        "`n` exceeds the horizon supported by the two life tables after ",
+        "allowing for deferment `h`.",
+        call. = FALSE
+      )
+    }
+
     n
   }
 
@@ -644,7 +718,7 @@ annuity_xy <- function(
   }
 
   exact_apv <- function(nn, kk, tim) {
-    N <- nn * kk
+    N <- as.integer(round(nn * kk))
 
     if (N == 0L) {
       return(0)
@@ -681,16 +755,22 @@ annuity_xy <- function(
     ep_end <- expected_payment(h + term_used)
 
     if (is.na(ep_start) || ep_start <= 0) {
-      ep_start <- 1
+      stop(
+        "The selected status must have positive probability at the start of ",
+        "the deferred payment period for Woolhouse approximation.",
+        call. = FALSE
+      )
     }
 
     if (is.na(ep_end)) {
       ep_end <- 0
     }
 
-    nEx_status <- v_fun(term_used) * ep_end / ep_start
+    endpoint_start <- v_fun(h) * ep_start
+    endpoint_end <- v_fun(h + term_used) * ep_end
+    endpoint_difference <- endpoint_start - endpoint_end
 
-    adj1 <- (k - 1) / (2 * k) * (1 - nEx_status)
+    adj1 <- (k - 1) / (2 * k) * endpoint_difference
 
     if (woolhouse == "first") {
       due_k <- annual_due - adj1
@@ -699,7 +779,7 @@ annuity_xy <- function(
 
       ep_m1 <- expected_payment(h + 1)
 
-      if (is.na(ep_m1) || ep_start <= 0) {
+      if (is.na(ep_m1) || ep_m1 <= 0) {
         mu_start <- 0
       } else {
         p_status_1 <- ep_m1 / ep_start
@@ -708,7 +788,7 @@ annuity_xy <- function(
 
       ep_n1 <- expected_payment(h + term_used + 1)
 
-      if (is.na(ep_n1) || is.na(ep_end) || ep_end <= 0) {
+      if (is.na(ep_n1) || ep_end <= 0 || ep_n1 <= 0) {
         mu_end <- 0
       } else {
         p_status_n1 <- ep_n1 / ep_end
@@ -717,7 +797,10 @@ annuity_xy <- function(
 
       adj2 <- (k^2 - 1) /
         (12 * k^2) *
-        (delta + mu_start - nEx_status * (delta + mu_end))
+        (
+          endpoint_start * (delta + mu_start) -
+            endpoint_end * (delta + mu_end)
+        )
 
       due_k <- annual_due - adj1 - adj2
     }
@@ -725,7 +808,7 @@ annuity_xy <- function(
     result <- if (timing == "due") {
       due_k
     } else {
-      due_k - (1 / k) * (1 - nEx_status)
+      due_k - (1 / k) * endpoint_difference
     }
   }
 

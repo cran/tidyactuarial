@@ -11,140 +11,96 @@ simulate_lifetime(
   x_col = "x",
   qx_col = "qx",
   method = c("inverse", "multinomial", "antithetic"),
-  frac = c("udd", "constant_force", "none"),
+  frac = c("udd", "cml", "balducci", "none", "constant_force"),
   seed = NULL,
-  include_distribution = FALSE
+  include_distribution = FALSE,
+  truncation = c("conditional", "error"),
+  tol = 1e-10
 )
 }
 \arguments{
 \item{lt}{A data frame or tibble containing the life table.}
 
-\item{x}{Numeric scalar. Initial actuarial age of the individual.}
+\item{x}{Nonnegative integer initial actuarial age. The age must appear
+explicitly in the column selected by \code{x_col}.}
 
-\item{n_sim}{Positive integer. Number of Monte Carlo simulations. Default is
-\code{10000}.}
+\item{n_sim}{Positive integer number of simulations.}
 
-\item{x_col}{Character string. Name of the age column in \code{lt}. Default
-is \code{"x"}.}
+\item{x_col}{Character scalar naming the age column.}
 
-\item{qx_col}{Character string. Name of the one-year death probability
-column in \code{lt}. Default is \code{"qx"}.}
+\item{qx_col}{Character scalar naming the one-year death-probability column.}
 
-\item{method}{Character string specifying the simulation method for
-\eqn{K_x}. Available options are \code{"inverse"}, \code{"multinomial"},
-and \code{"antithetic"}.}
+\item{method}{Simulation method for the curtate future lifetime:
+\code{"inverse"}, \code{"multinomial"}, or \code{"antithetic"}.}
 
-\item{frac}{Character string specifying how the fractional part of the
-complete future lifetime is generated within the year of death. Available
-options are \code{"udd"}, \code{"constant_force"}, and \code{"none"}.}
+\item{frac}{Fractional-age assumption used inside the year of death:
+\code{"udd"}, \code{"cml"}, \code{"balducci"}, or \code{"none"}.
+The legacy value \code{"constant_force"} is accepted as an alias for
+\code{"cml"}.}
 
-\item{seed}{Optional integer seed for reproducibility. Default is
-\code{NULL}.}
+\item{seed}{Optional nonnegative integer seed. When supplied, the caller's
+random-number state is restored after simulation.}
 
-\item{include_distribution}{Logical. If \code{TRUE}, the probability mass
-function used to simulate \eqn{K_x} is attached as a list-column named
-\code{distribution}.}
+\item{include_distribution}{Logical scalar. If \code{TRUE}, the probability
+distribution used for simulation is attached as a list-column.}
+
+\item{truncation}{Treatment of a life table whose available death
+probabilities do not exhaust the lifetime distribution. With
+\code{"conditional"}, the historical behavior is retained and the
+probabilities are normalized conditional on death within the available
+ages, with a warning. With \code{"error"}, the simulation stops.}
+
+\item{tol}{Nonnegative numeric tolerance used for age-grid and probability
+checks.}
 }
 \value{
-A tibble with one row per simulation and columns:
-\describe{
-\item{sim_id}{Simulation identifier.}
-\item{x}{Initial actuarial age.}
-\item{age}{Compatibility column equal to \code{x}.}
-\item{method}{Simulation method used.}
-\item{frac}{Fractional-age simulation assumption.}
-\item{fractional}{Compatibility column equal to \code{frac}.}
-\item{Kx}{Simulated curtate future lifetime.}
-\item{Tx}{Simulated complete future lifetime. If \code{frac = "none"},
-this column contains \code{NA}.}
-}
-
-If \code{include_distribution = TRUE}, the output also includes a list-column
-named \code{distribution} containing the probability mass function used for
-the simulation.
+A tibble with one row per simulation and standardized columns
+including \code{sim_id}, \code{Kx}, \code{curtate_lifetime}, \code{Tx},
+\code{complete_lifetime}, \code{death_age}, \code{method}, and \code{frac}.
+The logical column \code{distribution_conditioned} indicates whether a
+truncated table was normalized conditionally.
 }
 \description{
-Simulates curtate and, optionally, complete future lifetimes from a life table
-containing one-year death probabilities, using compact actuarial notation.
+Simulates curtate and, optionally, complete future lifetimes from a life
+table containing one-year death probabilities.
 }
 \details{
-This function is designed as the simulation engine for Monte Carlo life
-contingency calculations in \code{tidyactuarial}. It generates simulated
-values of the curtate future lifetime \eqn{K_x} and a simulated complete
-future lifetime \eqn{T_x}. The output is a tidy tibble that can be used
-naturally with pipes and downstream Monte Carlo functions.
-
-For a life aged \eqn{x}, the curtate future lifetime \eqn{K_x} follows
-
+For a life aged \eqn{x}, the curtate future lifetime has probability mass
+function
 \deqn{
-  P(K_x = k) = {}_k p_x q_{x+k},
+P(K_x=k)={}_kp_xq_{x+k}.
 }
+The selected life-table ages must therefore start at \eqn{x} and proceed in
+consecutive one-year steps. Missing or duplicated ages are rejected because
+the survival recursion would otherwise no longer represent
+\eqn{{}_kp_x}.
 
-where \eqn{{}_k p_x} is the probability of surviving \eqn{k} complete years
-from age \eqn{x}, and \eqn{q_{x+k}} is the one-year probability of death at
-attained age \eqn{x+k}.
-
-This function follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{lt} denotes the life table, \code{x} denotes the
-actuarial age, and \code{frac} denotes the fractional-age simulation
-assumption.
-
-The function first constructs the conditional distribution of \eqn{K_x} from
-the selected age onward. Then it generates simulated values according to the
-selected method.
-
-The available simulation methods are:
-\itemize{
-\item \code{"inverse"}: inverse transform simulation using the cumulative
-distribution of \eqn{K_x}.
-\item \code{"multinomial"}: direct sampling from the probability mass
-function of \eqn{K_x}.
-\item \code{"antithetic"}: inverse transform simulation using antithetic
-uniforms \eqn{U} and \eqn{1-U}.
-}
-
-The \code{frac} argument controls the simulated complete future lifetime
-\eqn{T_x}. If \code{frac = "udd"}, a uniform fractional lifetime is added to
-\eqn{K_x}. If \code{frac = "constant_force"}, the fractional lifetime within
-the year of death is generated under a constant force of mortality
-assumption conditional on death during that year. If \code{frac = "none"},
-the complete lifetime is returned as \code{NA}.
-
-The probabilities are normalized internally to handle finite life tables. If
-the life table is truncated, the simulated distribution is conditional on
-death occurring within the available range of ages. In practical work, it is
-recommended that the last available death probability be equal to 1.
+Under UDD, the fractional part of \eqn{T_x} is uniform conditional on the
+year of death. Under CML, it follows the conditional constant-force
+distribution. Under Balducci, it follows the corresponding conditional
+Balducci distribution.
 }
 \examples{
 lt <- tibble::tibble(
-  x = 40:100,
-  qx = seq(0.002, 1, length.out = 61)
+  x = 40:43,
+  qx = c(0.10, 0.20, 0.30, 1)
 )
 
-# Basic simulation using inverse transform sampling
 lt |>
   simulate_lifetime(
     x = 40,
     n_sim = 25,
     method = "inverse",
+    frac = "udd",
     seed = 123
   )
 
-# Antithetic simulation
 lt |>
   simulate_lifetime(
     x = 40,
     n_sim = 25,
     method = "antithetic",
-    seed = 123
-  )
-
-# Returning the distribution used for simulation
-lt |>
-  simulate_lifetime(
-    x = 40,
-    n_sim = 25,
-    include_distribution = TRUE,
+    frac = "cml",
     seed = 123
   )
 
@@ -155,15 +111,18 @@ and Nesbitt, C. J. (1997). \emph{Actuarial Mathematics}. Second Edition.
 Society of Actuaries.
 }
 \seealso{
-\code{\link{mc_insurance}}, \code{\link{mc_annuity}},
-\code{\link{mc_premium}}, \code{\link{mc_loss}}
+\code{\link{simulate_lifetimes}}, \code{\link{mc_insurance}},
+\code{\link{mc_annuity}}, \code{\link{mc_premium}},
+\code{\link{mc_loss}}, \code{\link{mc_reserve}}
 
 Other monte-carlo: 
 \code{\link{mc_annuity}()},
 \code{\link{mc_insurance}()},
 \code{\link{mc_loss}()},
+\code{\link{mc_multilife_status}()},
 \code{\link{mc_premium}()},
 \code{\link{mc_reserve}()},
+\code{\link{simulate_lifetimes}()},
 \code{\link{summary_mc}()}
 }
 \concept{monte-carlo}

@@ -6,20 +6,6 @@
 \usage{
 .resolve_life_mc_inputs(lt, x = NULL, i = NULL, i_type = NULL, m = NULL)
 }
-\arguments{
-\item{lt}{A life table or tidyactuarial life contract.}
-
-\item{x}{Integer age.}
-
-\item{i}{Interest-rate input.}
-
-\item{i_type}{Interest-rate type.}
-
-\item{m}{Nominal conversion frequency.}
-}
-\value{
-A list with resolved arguments.
-}
 \description{
 Internal helper: resolve inputs for single-life Monte Carlo functions
 }

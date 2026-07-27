@@ -27,6 +27,10 @@
 #' @param arrow_size Numeric line width for arrows.
 #' @param timeline_size Numeric line width for the time axis.
 #' @param label_digits Integer number of decimal digits for cash-flow labels.
+#' @param label_format Character string controlling label notation. Use
+#'   \code{"auto"} to abbreviate values from one million onward,
+#'   \code{"full"} for unabridged values, or \code{"compact"} for
+#'   abbreviated values such as \code{1.25M}.
 #' @param currency Optional currency or unit prefix, such as `$`.
 #' @param col_inflow Character color for inflow arrows.
 #' @param col_outflow Character color for outflow arrows.
@@ -102,6 +106,7 @@ plot_cash_flow <- function(
     arrow_size = 0.8,
     timeline_size = 0.7,
     label_digits = 2L,
+    label_format = c("auto", "full", "compact"),
     currency = "",
     col_inflow = "#1B9E77",
     col_outflow = "#D95F02",
@@ -110,6 +115,7 @@ plot_cash_flow <- function(
     ...
 ) {
   day_count <- match.arg(day_count)
+  label_format <- match.arg(label_format)
   dots <- list(...)
 
   if (length(dots) > 0L) {
@@ -241,10 +247,52 @@ plot_cash_flow <- function(
     NULL
   }
 
-  format_amount <- function(x) {
+  trim_trailing_zeros <- function(x) {
+    x <- sub("(\\.[0-9]*?)0+$", "\\1", x)
+    sub("\\.$", "", x)
+  }
+
+  format_compact <- function(x) {
     abs_x <- abs(x)
-    formatted <- formatC(abs_x, format = "f", digits = label_digits, big.mark = ",")
-    ifelse(x < 0, paste0("-", currency, formatted), paste0(currency, formatted))
+    units <- c("", "K", "M", "B", "T")
+
+    exponent <- ifelse(
+      abs_x == 0,
+      0,
+      pmin(4, pmax(0, floor(log10(abs_x) / 3)))
+    )
+
+    scaled <- abs_x / (1000^exponent)
+    formatted <- formatC(
+      scaled,
+      format = "f",
+      digits = label_digits,
+      big.mark = ""
+    )
+
+    paste0(trim_trailing_zeros(formatted), units[exponent + 1L])
+  }
+
+  format_amount <- function(x) {
+    use_compact <- label_format == "compact" ||
+      (label_format == "auto" && max(abs(x), na.rm = TRUE) >= 1e6)
+
+    formatted <- if (use_compact) {
+      format_compact(x)
+    } else {
+      formatC(
+        abs(x),
+        format = "f",
+        digits = label_digits,
+        big.mark = ""
+      )
+    }
+
+    ifelse(
+      x < 0,
+      paste0("-", currency, formatted),
+      paste0(currency, formatted)
+    )
   }
 
   y_axis_labels <- function(x) {
@@ -367,9 +415,62 @@ plot_cash_flow <- function(
 
   y_range <- max(abs(plot_data$yend))
   if (y_range == 0) y_range <- 1
+
   label_offset <- 0.06 * y_range
-  plot_data$label_y <- ifelse(plot_data$yend >= 0, plot_data$yend + label_offset, plot_data$yend - label_offset)
+  plot_data$label_y <- ifelse(
+    plot_data$yend >= 0,
+    plot_data$yend + label_offset,
+    plot_data$yend - label_offset
+  )
   plot_data$label <- format_amount(plot_data$C)
+
+  x_min <- min(plot_data$x)
+  x_max <- max(plot_data$x)
+
+  plot_data$label_hjust <- dplyr::case_when(
+    plot_data$x == x_min & plot_data$x != x_max ~ 0,
+    plot_data$x == x_max & plot_data$x != x_min ~ 1,
+    TRUE ~ 0.5
+  )
+
+  has_positive <- any(plot_data$yend > 0)
+  has_negative <- any(plot_data$yend < 0)
+
+  if (!has_positive && !has_negative) {
+    y_lower <- -0.15
+    y_upper <- 0.15
+  } else {
+    positive_top <- if (has_positive) {
+      max(plot_data$label_y[plot_data$yend > 0])
+    } else {
+      0
+    }
+
+    negative_bottom <- if (has_negative) {
+      min(plot_data$label_y[plot_data$yend < 0])
+    } else {
+      0
+    }
+
+    data_span <- positive_top - negative_bottom
+    if (!is.finite(data_span) || data_span <= 0) data_span <- 1
+
+    axis_padding <- 0.10 * data_span
+
+    y_lower <- if (has_negative) {
+      negative_bottom - axis_padding
+    } else {
+      0
+    }
+
+    y_upper <- if (has_positive) {
+      positive_top + axis_padding
+    } else {
+      0
+    }
+  }
+
+  show_flow_legend <- dplyr::n_distinct(plot_data$type) > 1L
 
   subtitle_parts <- character(0)
   if (!is.null(i)) {
@@ -389,8 +490,6 @@ plot_cash_flow <- function(
   if (is.null(subtitle) && length(subtitle_parts) > 0L) subtitle <- paste(subtitle_parts, collapse = "   |   ")
   if (is.null(title)) title <- "Cash-flow diagram"
 
-  y_limit <- y_range * 1.25
-
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data[["x"]])) +
     ggplot2::geom_hline(yintercept = 0, linewidth = timeline_size, color = "grey35") +
     ggplot2::geom_segment(
@@ -407,9 +506,17 @@ plot_cash_flow <- function(
     ggplot2::scale_color_manual(
       values = c(inflow = col_inflow, outflow = col_outflow),
       labels = c(inflow = "Inflow", outflow = "Outflow"),
-      name = NULL
+      name = NULL,
+      drop = TRUE
     ) +
-    ggplot2::scale_y_continuous(limits = c(-y_limit, y_limit), labels = y_axis_labels) +
+    ggplot2::scale_y_continuous(
+      labels = y_axis_labels,
+      expand = ggplot2::expansion(mult = c(0, 0))
+    ) +
+    ggplot2::coord_cartesian(
+      ylim = c(y_lower, y_upper),
+      clip = "off"
+    ) +
     ggplot2::labs(
       title = title,
       subtitle = subtitle,
@@ -418,7 +525,7 @@ plot_cash_flow <- function(
     ) +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(
-      legend.position = "bottom",
+      legend.position = if (show_flow_legend) "bottom" else "none",
       panel.grid.minor = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_blank(),
       plot.title = ggplot2::element_text(face = "bold"),
@@ -430,29 +537,38 @@ plot_cash_flow <- function(
   if (show_labels) {
     p <- p +
       ggplot2::geom_label(
-        ggplot2::aes(y = .data[["label_y"]], label = .data[["label"]], fill = .data[["type"]]),
+        ggplot2::aes(
+          y = .data[["label_y"]],
+          label = .data[["label"]],
+          fill = .data[["type"]],
+          hjust = .data[["label_hjust"]]
+        ),
         size = label_size,
         label.size = 0,
         alpha = 0.92,
         color = "white",
         show.legend = FALSE
       ) +
-      ggplot2::scale_fill_manual(values = c(inflow = col_inflow, outflow = col_outflow), guide = "none")
+      ggplot2::scale_fill_manual(
+        values = c(inflow = col_inflow, outflow = col_outflow),
+        guide = "none",
+        drop = TRUE
+      )
   }
 
   if (!x_is_date) {
     unique_x <- sort(unique(plot_data$x))
     if (length(unique_x) <= 15L) {
-      p <- p + ggplot2::scale_x_continuous(breaks = unique_x, expand = ggplot2::expansion(mult = 0.05))
+      p <- p + ggplot2::scale_x_continuous(breaks = unique_x, expand = ggplot2::expansion(mult = 0.08))
     } else {
-      p <- p + ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = 0.05))
+      p <- p + ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = 0.08))
     }
   } else {
     unique_dates <- sort(unique(plot_data$x))
     if (length(unique_dates) <= 8L) {
-      p <- p + ggplot2::scale_x_date(breaks = unique_dates, date_labels = date_labels, expand = ggplot2::expansion(mult = 0.05))
+      p <- p + ggplot2::scale_x_date(breaks = unique_dates, date_labels = date_labels, expand = ggplot2::expansion(mult = 0.08))
     } else {
-      p <- p + ggplot2::scale_x_date(date_labels = date_labels, expand = ggplot2::expansion(mult = 0.05))
+      p <- p + ggplot2::scale_x_date(date_labels = date_labels, expand = ggplot2::expansion(mult = 0.08))
     }
   }
 
