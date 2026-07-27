@@ -1,7 +1,7 @@
-47e59ecea86844ed3d7bba2adec64bc9 *DESCRIPTION
+8dc6f18628f24165979bb056009dfc4b *DESCRIPTION
 26fb9cf1e17b938c4c10fa501bebb8d5 *LICENSE
 311a96c39a60003e9ffa2639a2ac8082 *NAMESPACE
-b66b8d6324c5038c27d022c21657b4c6 *NEWS.md
+7fb1a92b8c528f950f300156e12ab856 *NEWS.md
 617633121009b83bcbc5476791cc2eb1 *R/a_angle.R
 5005cc0f6986e5b42a024bbd6c2542e7 *R/accumulation_factor.R
 d092ba0c40561586e59a937d972a71d9 *R/amort_schedule.R
@@ -74,7 +74,7 @@ a5960887219a3c10bc4b9a9f38e28388 *R/reserve_x.R
 b813b890cdfbb68f174b816dc3947f15 *R/reserve_xy.R
 b58175a1f90ce30f1cecbad6f7d64318 *R/s_angle.R
 80bcd2dec022d809ad18223f371d7e15 *R/simulate_life_mc.R
-eab73df6e84b16be70f5f0bc37507439 *R/simulate_lifetime.R
+fec89bc891766427b02c3e874e8d2b04 *R/simulate_lifetime.R
 8ffc0907b1e94ee7121315c5685d31d4 *R/simulate_lifetimes.R
 b8a29c07ae28acff56fa1ffb1c0e727b *R/sinking_fund_schedule.R
 9bf382e8a55c39dabad8b9cfa8815bfe *R/solve_value_v3.R
@@ -207,7 +207,7 @@ f2b0480fa75be1eaaae098e93d8fcd6e *tests/testthat/test-annuity_x.R
 959e199433fb65594afa275cd345b4be *tests/testthat/test-annuity_xy-v2.R
 19e98bb31ddfc8c803c181d30d0f6ac7 *tests/testthat/test-contract_components-xy.R
 5865f2b7b240bb535dc1158746d4698b *tests/testthat/test-convexity_cash_flow.R
-3e8b69214664521171eabfd05974079a *tests/testthat/test-cran-multilife-workflow.R
+3c04b9a19defe91e2a3909029ca578d3 *tests/testthat/test-cran-multilife-workflow.R
 98df7e1140ef5af55a589b31f79ca544 *tests/testthat/test-discount_factor.R
 9eccd2965e2eda52c5fc388553c5d6a7 *tests/testthat/test-duration_cash_flow.R
 b680f4ca1c0ca5b7e0050a9966f88d11 *tests/testthat/test-life_contract.R

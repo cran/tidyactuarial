@@ -303,7 +303,14 @@ simulate_lifetime <- function(
   }
 
   prob <- prob_unconditional / total_prob
+
+  # Protect the inverse-transform grid against platform-specific floating-point
+  # accumulation. On some systems, cumsum(prob) can end slightly above 1
+  # (for example, 1 + 7e-16). Replacing only the last value by 1 would then
+  # make the CDF decrease at its endpoint and `findInterval()` would fail.
   cdf <- cumsum(prob)
+  cdf <- pmin(cdf, 1)
+  cdf <- cummax(cdf)
   cdf[[length(cdf)]] <- 1
 
   dist <- tibble::tibble(
