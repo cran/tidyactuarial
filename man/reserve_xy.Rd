@@ -33,8 +33,8 @@ reserve_xy(
 )
 }
 \arguments{
-\item{lt}{One life table, \code{list(lt_x, lt_y)}, or a two-life
-\code{\link[=life_contract]{life_contract()}} object.}
+\item{lt}{One life table, `list(lt_x, lt_y)`, or a two-life
+[life_contract()] object.}
 
 \item{x, y}{Integer ages at issue. Optional for a life contract.}
 
@@ -44,10 +44,10 @@ reserve_xy(
 
 \item{m}{Conversion frequency for nominal rates.}
 
-\item{type}{One of \code{"whole"}, \code{"term"}, \code{"endowment"}, or
-\code{"pure_endowment"}.}
+\item{type}{One of `"whole"`, `"term"`, `"endowment"`, or
+`"pure_endowment"`.}
 
-\item{status}{\code{"joint"} or \code{"last"}.}
+\item{status}{`"joint"` or `"last"`.}
 
 \item{n}{Insurance term in years after deferment.}
 
@@ -55,28 +55,28 @@ reserve_xy(
 
 \item{benefit}{Positive benefit amount.}
 
-\item{P}{Optional annualized premium. If \code{NULL}, \code{\link[=premium_xy]{premium_xy()}} is used.}
+\item{P}{Optional annualized premium. If `NULL`, [premium_xy()] is used.}
 
-\item{n_prem}{Premium-paying term. Fractional values require \code{n_prem * k}
+\item{n_prem}{Premium-paying term. Fractional values require `n_prem * k`
 to be an integer.}
 
 \item{k}{Number of premium payments per year.}
 
-\item{timing}{\code{"due"} or \code{"immediate"}.}
+\item{timing}{`"due"` or `"immediate"`.}
 
-\item{premium_start}{\code{"issue"} or \code{"deferred"}.}
+\item{premium_start}{`"issue"` or `"deferred"`.}
 
 \item{frac}{Fractional-age assumption.}
 
-\item{woolhouse}{\code{"none"}, \code{"first"}, or \code{"second"}.}
+\item{woolhouse}{`"none"`, `"first"`, or `"second"`.}
 
 \item{t}{Integer policy durations.}
 
-\item{method}{\code{"prospective"} or \code{"recursive"}. Recursion currently
-requires \code{h = 0}, \code{k = 1}, due premiums, and premiums starting at issue.}
+\item{method}{`"prospective"` or `"recursive"`. Recursion currently
+requires `h = 0`, `k = 1`, due premiums, and premiums starting at issue.}
 
-\item{output}{\code{"summary"}, \code{"value"}, or \code{"audit"}. \code{"table"} is a
-compatibility alias for \code{"summary"}.}
+\item{output}{`"summary"`, `"value"`, or `"audit"`. `"table"` is a
+compatibility alias for `"summary"`.}
 
 \item{tidy}{Deprecated logical output selector.}
 
@@ -91,38 +91,52 @@ A compact tibble, a named numeric vector, or a long audit tibble.
 }
 \description{
 Computes prospective or recursive terminal reserves for joint-life and
-last-survivor insurance. For k-thly premiums, \code{P} is the annualized premium
-and each installment equals \code{P / k}.
+last-survivor insurance. For k-thly premiums, `P` is the annualized premium
+and each installment equals `P / k`.
 }
 \details{
 The prospective reserve is
 \deqn{{}_tV =
 \operatorname{APV}_t(\text{future benefits}) -
 P^{(k)}\operatorname{APV}_t(\text{future premium annuity}).}
-Because \code{\link[=annuity_xy]{annuity_xy()}} assigns amount \code{1 / k} to each payment,
-\code{P} is annualized and the actual installment is \code{P / k}.
+Because [annuity_xy()] assigns amount `1 / k` to each payment,
+`P` is annualized and the actual installment is `P / k`.
 
 Reserves are measured immediately before a premium payable at duration
-\code{t}. Pure endowments are valued as endowment APV minus term-insurance APV.
+`t`. With immediate premiums this includes the installment scheduled exactly
+at `t`, including a last installment at maturity. Future installments use
+the selected annuity method; the current installment is an exact `P / k`.
+Pure endowments use direct discounted survival to maturity, avoiding a
+subtraction of nearly equal insurance values.
+Both lives are assumed alive at the valuation duration, under independent
+mortality. In particular, `status = "last"` selects the insured event;
+it does not condition on an unspecified surviving life. Last-survivor
+recursion tracks the both-alive and each single-survivor state separately.
+Both recursive statuses use backward conditional transition identities,
+direct annual `lx` decrements and the original log interest basis. This
+avoids forward cancellation and loss from an effective-rate conversion.
+Unreachable transitions contribute exactly zero. The recursion's existing
+timing and deferment restrictions are retained. Conditional states whose
+reserves themselves overflow double precision are not generally recoverable.
 }
 \seealso{
-\code{\link[=premium_xy]{premium_xy()}}, \code{\link[=annuity_xy]{annuity_xy()}}, \code{\link[=insurance_xy]{insurance_xy()}}, \code{\link[=reserve_x]{reserve_x()}}
+[premium_xy()], [annuity_xy()], [insurance_xy()], [reserve_x()]
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

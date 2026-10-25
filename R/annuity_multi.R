@@ -42,6 +42,8 @@
 #'   matches joint-life; \code{alpha = 1} matches last-survivor.
 #' @param timing \code{"immediate"} or \code{"due"}.
 #' @param woolhouse \code{"none"}, \code{"first"}, or \code{"second"}.
+#' @param frac Fractional-age assumption for exact payments: \code{"UDD"}
+#'   (default), \code{"CF"}, \code{"CML"} (alias of CF), or \code{"Balducci"}.
 #'
 #' @details
 #' This function follows the compact actuarial notation used throughout
@@ -63,6 +65,28 @@
 #' the two statuses:
 #' \deqn{APV = APV(\text{joint-life}) +
 #' \alpha [APV(\text{last-survivor}) - APV(\text{joint-life})].}
+#'
+#' All values are measured at issue, conditional on the stated lives being
+#' alive at issue. Ages identify lives within one policy, not policy scenarios.
+#' A k-thly payment is \eqn{1/k} of an annual unit: exact valuation sums
+#' \eqn{F(h+j/k)/k}, with \eqn{F(t)=e^{-\delta t}w(t)} and the expected payment
+#' weight \eqn{w(t)} defined above. Due uses \eqn{j=0,\ldots,nk-1}; immediate
+#' uses \eqn{j=1,\ldots,nk}. The historical name \code{"reversionary"} means
+#' joint-and-survivor payments; it does not mean payments only after a death.
+#'
+#' For \code{k > 1}, \code{woolhouse = "none"} uses the actual fractional
+#' payment grid. First-order Woolhouse subtracts
+#' \eqn{(1-1/k)[F(h)-F(h+n)]/2} from the annual due value. Second-order also
+#' subtracts \eqn{(1-1/k^2)[(\delta+\eta_h)F(h)-
+#' (\delta+\eta_{h+n})F(h+n)]/12}. Here
+#' \eqn{\eta_t=-\log(w(t+1)/w(t))} is an annual forward estimate of the
+#' logarithmic decay of the payment weight, not an exact instantaneous force.
+#' Positive supported weights at both borders and the following year are
+#' required for second-order approximation. This is a smoothness approximation,
+#' not exact fractional valuation under \code{frac}; negative approximations
+#' produce a warning. Immediate subtracts \eqn{[F(h)-F(h+n)]/k} from due.
+#' Exact valuation requires consecutive annual ages and retains the documented
+#' conservative common-age horizon; it does not extrapolate unobserved lives.
 #'
 #' @return A single numeric value representing the APV.
 #'
@@ -86,6 +110,10 @@
 #'   timing = "due"
 #' )
 #'
+#' # Half-yearly payments, each equal to half an annual unit, under UDD
+#' annuity_multi(lt, ages = c(60, 62), i = 0.05, n = 5, k = 2,
+#'               timing = "due", frac = "UDD")
+#'
 #' annuity_multi(
 #'   lt = lt,
 #'   ages = c(60, 62),
@@ -97,291 +125,123 @@
 #'
 #' @export
 annuity_multi <- function(
-    lt,
-    ages,
-    i,
-    i_type = "effective",
-    m = 1L,
-    n = NULL,
-    h = 0L,
-    k = 1L,
-    annuity = c("cohort", "reversionary"),
-    cohort = c("first", "last"),
-    alpha = NULL,
+    lt, ages, i, i_type = "effective", m = 1L, n = NULL, h = 0L,
+    k = 1L, annuity = c("cohort", "reversionary"),
+    cohort = c("first", "last"), alpha = NULL,
     timing = c("immediate", "due"),
-    woolhouse = c("none", "first", "second")
+    woolhouse = c("none", "first", "second"),
+    frac = c("UDD", "CF", "CML", "Balducci")
 ) {
   annuity <- match.arg(annuity)
   cohort <- match.arg(cohort)
   timing <- match.arg(timing)
   woolhouse <- match.arg(woolhouse)
-
-  if (missing(i) || !is.numeric(i) || length(i) != 1L || is.na(i) ||
-      !is.finite(i)) {
+  frac <- match.arg(frac)
+  if (frac == "CML") frac <- "CF"
+  integer_scalar <- function(z, minimum) {
+    is.numeric(z) && length(z) == 1L && is.finite(z) &&
+      z >= minimum && abs(z - round(z)) <= 1e-10
+  }
+  if (missing(i) || !is.numeric(i) || length(i) != 1L || !is.finite(i))
     stop("`i` must be a single finite numeric value.", call. = FALSE)
+  if (!is.character(i_type) || length(i_type) != 1L || is.na(i_type) ||
+      !i_type %in% c("effective", "nominal_interest", "nominal_discount", "force"))
+    stop("`i_type` must be a single supported rate type.", call. = FALSE)
+  for (name in c("m", "h", "k")) {
+    value <- get(name)
+    if (!integer_scalar(value, if (name == "h") 0 else 1))
+      stop("`", name, "` must be a single integer in its valid range.", call. = FALSE)
   }
-
-  if (!is.character(i_type) || length(i_type) != 1L || is.na(i_type)) {
-    stop("`i_type` must be a single character string.", call. = FALSE)
-  }
-
-  valid_i_type <- c(
-    "effective",
-    "nominal_interest",
-    "nominal_discount",
-    "force"
-  )
-
-  if (!i_type %in% valid_i_type) {
-    stop(
-      "`i_type` must be one of: ",
-      paste(sprintf("'%s'", valid_i_type), collapse = ", "),
-      ".",
-      call. = FALSE
-    )
-  }
-
-  if (!is.numeric(m) || length(m) != 1L || is.na(m) || !is.finite(m) ||
-      m < 1 || abs(m - round(m)) > 1e-10) {
-    stop("`m` must be a single positive integer.", call. = FALSE)
-  }
-  m <- as.integer(round(m))
-
-  if (!is.numeric(ages) || length(ages) < 1L) {
-    stop("`ages` must be a non-empty numeric vector.", call. = FALSE)
-  }
-  ages <- as.integer(round(ages))
-
-  if (length(ages) > 3L) {
-    stop("`ages` must contain at most 3 lives (length <= 3).", call. = FALSE)
-  }
-
-  # --- normalize lt to a list of lifetables (one per life) ---
+  m <- round(m); k <- round(k); h <- round(h)
+  if (!is.numeric(ages) || !length(ages) || length(ages) > 3L ||
+      any(!is.finite(ages)) || any(abs(ages-round(ages)) > 1e-10) ||
+      any(abs(ages) > .Machine$integer.max))
+    stop("`ages` must contain 1 to 3 finite integer ages.", call. = FALSE)
+  ages <- round(ages)
+  if (annuity == "reversionary" &&
+      (!is.numeric(alpha) || length(alpha) != 1L || !is.finite(alpha)))
+    stop("`alpha` must be a single finite numeric value.", call. = FALSE)
   if (is.data.frame(lt)) {
-    lt_list <- rep(list(lt), length(ages))
-  } else if (is.list(lt) && length(lt) >= 1L &&
-             all(vapply(lt, is.data.frame, logical(1)))) {
-    if (length(lt) == 1L) {
-      lt_list <- rep(lt, length(ages))
-    } else if (length(lt) == length(ages)) {
-      lt_list <- lt
-    } else {
-      stop(
-        "When `lt` is a list, it must have length 1 or length equal to `length(ages)`.",
-        call. = FALSE
-      )
-    }
+    tables <- rep(list(lt),length(ages))
+  } else if (is.list(lt) && length(lt) %in% c(1L,length(ages)) &&
+             all(vapply(lt,is.data.frame,logical(1)))) {
+    tables <- rep(lt,length.out=length(ages))
   } else {
-    stop("`lt` must be a data frame or a list of data frames.", call. = FALSE)
+    stop("`lt` must be a table or list of one table per life.", call. = FALSE)
   }
+  mortality <- lapply(seq_along(ages),function(j)
+    .life_payment_basis(tables[[j]],ages[j]))
+  basis <- .interest_basis(i_type,i,m)
+  # Preserve the explicitly documented conservative common-age horizon.
+  omega <- min(vapply(mortality,function(z) z$omega,0))
+  if (is.null(n)) n <- max(0,omega-max(ages)-h)
+  if (!integer_scalar(n,0))
+    stop("`n` must be a nonnegative integer or NULL.", call. = FALSE)
+  n <- round(n)
+  if (n == 0) return(0)
+  if (!is.finite(h+n) || max(ages)+h+n > omega)
+    stop("Life table horizon insufficient (based on smallest omega).", call. = FALSE)
+  if (!is.finite(n*k) || n*k > .Machine$integer.max)
+    stop("Number of payments exceeds the supported payment grid.", call. = FALSE)
 
-  # validate lifetable structure
-  for (j in seq_along(lt_list)) {
-    if (!("x" %in% names(lt_list[[j]]))) {
-      stop("Each life table must contain column `x`.", call. = FALSE)
+  # Return sign and log absolute expected benefit, retaining rare survivors.
+  weight <- function(t) {
+    logs <- vapply(mortality,function(z) z$log_survival(t,frac),0)
+    if (anyNA(logs)) stop("Life table does not support required ages.",call.=FALSE)
+    all <- sum(logs)
+    hi <- max(logs)
+    any <- if (hi == -Inf) -Inf else if (hi < -36)
+      hi + log(sum(exp(logs-hi))) else
+      log(-expm1(sum(log1p(-exp(logs)))))
+    selected <- if (cohort == "first") all else any
+    if (annuity == "cohort") return(c(sign=1,log=selected))
+    if (all == any || alpha == 0) return(c(sign=1,log=all))
+    if (alpha == 1) return(c(sign=1,log=any))
+    scaled <- alpha + (1-alpha)*exp(all-any)
+    c(sign=sign(scaled),log=any+log(abs(scaled)))
+  }
+  payment <- function(t) {
+    w <- weight(t)
+    if (w[["log"]] == -Inf) return(0)
+    .cash_flow_value(w[["sign"]],w[["log"]]-basis$growth*t)
+  }
+  annual <- function() sum(vapply(h+0:(n-1),payment,0))
+  if (k == 1 || woolhouse == "none") {
+    N <- as.integer(n*k)
+    times <- h + (if (timing == "due") 0:(N-1L) else seq_len(N))/k
+    weights <- vapply(times,weight,c(sign=0,log=0))
+    logs <- vapply(seq_along(times),function(j) {
+      w <- weights[,j]
+      t <- times[j]
+      if (w[["log"]] == -Inf) -Inf else w[["log"]]-basis$growth*t
+    },0)
+    signs <- weights["sign",]
+    return(.cash_flow_sum(signs/k,logs))
+  }
+  # Euler-Maclaurin corrections at BOTH ends of the finite payment interval.
+  Fh <- payment(h)
+  Fn <- payment(h+n)
+  loss <- .cash_flow_sum(c(Fh,-Fn),c(0,0))
+  result <- annual()-(1-1/k)/2*loss
+  if (woolhouse == "second") {
+    force <- function(t) {
+      boundary_error <- function(e)
+        stop("Second-order Woolhouse requires supported positive border survival; use `none`.",call.=FALSE)
+      a <- tryCatch(weight(t),error=boundary_error)
+      b <- tryCatch(weight(t+1),error=boundary_error)
+      if (a[["sign"]] <= 0 || b[["sign"]] <= 0 ||
+          !is.finite(a[["log"]]) || !is.finite(b[["log"]]))
+        stop("Second-order Woolhouse requires positive supported border survival/weights; use `none`.",call.=FALSE)
+      -(b[["log"]]-a[["log"]])
     }
-
-    if (!("lx" %in% names(lt_list[[j]])) &&
-        !("px" %in% names(lt_list[[j]])) &&
-        !("qx" %in% names(lt_list[[j]]))) {
-      stop("Each life table must contain `lx`, `px`, or `qx`.", call. = FALSE)
-    }
-
-    lt_list[[j]] <- lt_list[[j]][order(lt_list[[j]]$x), ]
+    correction <- .cash_flow_sum(c(basis$growth+force(h),
+                                  -(basis$growth+force(h+n))),
+                                c(if (Fh == 0) -Inf else log(abs(Fh)),
+                                  if (Fn == 0) -Inf else log(abs(Fn))))
+    result <- result-(1-1/k^2)/12*correction
   }
-
-  h <- as.integer(round(h))
-  k <- as.integer(round(k))
-
-  if (h < 0) {
-    stop("`h` must be a single nonnegative integer.", call. = FALSE)
-  }
-
-  if (k < 1) {
-    stop("`k` must be a single positive integer.", call. = FALSE)
-  }
-
-  if (annuity == "reversionary") {
-    if (is.null(alpha) || !is.numeric(alpha) || length(alpha) != 1L ||
-        is.na(alpha)) {
-      stop("`alpha` must be a single numeric value.", call. = FALSE)
-    }
-  }
-
-  # --- Interest conversion ---
-  i_effective <- standardize_interest(
-    type = i_type,
-    rate = i,
-    m = m
-  )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  # Conservative omega: smallest last age across lifetables
-  omega_min <- min(vapply(
-    lt_list,
-    function(LT) max(LT$x, na.rm = TRUE),
-    numeric(1)
-  ))
-
-  # term after deferment
-  if (is.null(n)) {
-    n <- max(0L, omega_min - max(ages) - h)
-  } else {
-    n <- as.integer(round(n))
-    if (n < 0) {
-      stop("`n` must be nonnegative or NULL.", call. = FALSE)
-    }
-  }
-
-  if (n == 0L) {
-    return(0)
-  }
-
-  # Ensure the lifetables support the required ages (conservative but safe)
-  if (max(ages) + h + n > omega_min) {
-    stop(
-      "Life table horizon insufficient for requested deferment/term ",
-      "(based on smallest omega).",
-      call. = FALSE
-    )
-  }
-
-  v <- function(t) (1 + i_effective)^(-t)
-
-  # integer-year survival for one life with its own lifetable: {}_t p_age
-  t_px1 <- function(lt1, age, t) {
-    if (t == 0) return(1)
-
-    if ("lx" %in% names(lt1)) {
-      l0 <- lt1$lx[match(age, lt1$x)]
-      l1 <- lt1$lx[match(age + t, lt1$x)]
-      if (is.na(l0) || is.na(l1) || l0 <= 0) return(NA_real_)
-      return(l1 / l0)
-    }
-
-    if ("px" %in% names(lt1)) {
-      pxv <- lt1$px[match(age:(age + t - 1), lt1$x)]
-      if (anyNA(pxv)) return(NA_real_)
-      return(prod(pxv))
-    }
-
-    qxv <- lt1$qx[match(age:(age + t - 1), lt1$x)]
-    if (anyNA(qxv)) return(NA_real_)
-    prod(1 - qxv)
-  }
-
-  # Prob(all alive at time u) and Prob(any alive at time u), from issue ages
-  P_all_u <- function(u) {
-    p_vec <- vapply(
-      seq_along(ages),
-      function(j) t_px1(lt_list[[j]], ages[j], u),
-      numeric(1)
-    )
-
-    if (anyNA(p_vec)) return(NA_real_)
-
-    prod(p_vec)
-  }
-
-  P_any_u <- function(u) {
-    p_vec <- vapply(
-      seq_along(ages),
-      function(j) t_px1(lt_list[[j]], ages[j], u),
-      numeric(1)
-    )
-
-    if (anyNA(p_vec)) return(NA_real_)
-
-    1 - prod(1 - p_vec)
-  }
-
-  # Expected payment at absolute time u (years since issue)
-  E_pay_u <- function(u) {
-    pa <- P_all_u(u)
-    pn <- P_any_u(u)
-
-    if (is.na(pa) || is.na(pn)) return(NA_real_)
-
-    if (annuity == "cohort") {
-      if (cohort == "first") return(pa)
-      return(pn)
-    }
-
-    # reversionary: 1 while all alive; alpha while partially alive
-    pa + alpha * (pn - pa)
-  }
-
-  # Annual APV, payments at u = h + t, with t depending on timing
-  annual_apv <- function(n, timing) {
-    tt <- if (timing == "due") 0:(n - 1L) else 1:n
-    u <- h + tt
-
-    ep <- vapply(u, E_pay_u, numeric(1))
-
-    if (anyNA(ep)) {
-      stop("Life table does not support required ages for this annuity.", call. = FALSE)
-    }
-
-    sum(v(u) * ep)
-  }
-
-  # Exact k-thly computation is not implemented here. With woolhouse = "none",
-  # the annual base is returned, matching the previous implementation.
-  if (k == 1L || woolhouse == "none") {
-    return(annual_apv(n, timing))
-  }
-
-  # Woolhouse: adjust annual annuity-due value
-  adue <- annual_apv(n, "due")
-
-  # PV of expected payment at the first due date (time h)
-  pv_first <- v(h) * E_pay_u(h)
-
-  adj1 <- (k - 1) / (2 * k)
-
-  if (woolhouse == "first") {
-    adue_k <- adue - pv_first * adj1
-  } else {
-    delta <- log1p(i_effective)
-
-    # Approximate mu of the STATUS around time h using one-year survival ratio:
-    # p_status1 approx status_prob(h + 1) / status_prob(h).
-    p_h  <- E_pay_u(h)
-    p_h1 <- E_pay_u(h + 1L)
-
-    if (!is.finite(p_h) || p_h <= 0 || !is.finite(p_h1) || p_h1 < 0) {
-      stop(
-        "Cannot compute second-order Woolhouse adjustment ",
-        "(status probability at h is nonpositive).",
-        call. = FALSE
-      )
-    }
-
-    p_status1 <- p_h1 / p_h
-
-    if (p_status1 <= 0) {
-      stop("Cannot compute mu: derived status one-year survival <= 0.", call. = FALSE)
-    }
-
-    mu <- -log(p_status1)
-
-    adj2 <- (k^2 - 1) / (12 * k^2) * (delta + mu)
-
-    adue_k <- adue - pv_first * (adj1 + adj2)
-  }
-
-  if (timing == "due") return(adue_k)
-
-  # Convert due -> immediate (approx): remove 1/k of the first due payment PV
-  adue_k - pv_first * (1 / k)
+  if (timing == "immediate") result <- result-loss/k
+  if (is.na(result)) stop("Woolhouse approximation undefined; use `none`.",call.=FALSE)
+  if (result < 0) warning("Woolhouse approximation is negative; use `none`.",call.=FALSE)
+  result
 }

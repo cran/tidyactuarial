@@ -23,7 +23,8 @@ Recommended naming convention: cause columns start with \code{"q_"}
 \item{age_col}{Character. Name of the age column (default \code{"x"}).}
 
 \item{cause_cols}{Character vector. Names of the cause columns. If \code{NULL}
-(default), all columns other than \code{age_col} are treated as causes.}
+(default), all columns other than \code{age_col} are treated as causes.
+Cause names must not collide with reserved totals or generated death columns.}
 
 \item{radix}{Numeric. Starting cohort size at the first age (default \code{1e5}).}
 
@@ -37,13 +38,13 @@ at the last age (default \code{TRUE}).}
 \value{
 A tibble with columns:
 \itemize{
-\item \code{x}: integer ages.
-\item \code{lx}: cohort \eqn{\ell_x}.
-\item \code{q_total}: total decrement probability \eqn{q_x^{(\tau)}}.
-\item \code{p_total}: total survival probability \eqn{p_x^{(\tau)}}.
-\item \code{d_total}: total decrements \eqn{d_x^{(\tau)} = \ell_x q_x^{(\tau)}}.
-\item cause columns (as provided).
-\item cause-specific decrements \code{d_*} with \eqn{d_x^{(j)} = \ell_x q_x^{(j)}}.
+  \item \code{x}: integer ages.
+  \item \code{lx}: cohort \eqn{\ell_x}.
+  \item \code{q_total}: total decrement probability \eqn{q_x^{(\tau)}}.
+  \item \code{p_total}: total survival probability \eqn{p_x^{(\tau)}}.
+  \item \code{d_total}: total decrements \eqn{d_x^{(\tau)} = \ell_x q_x^{(\tau)}}.
+  \item cause columns (as provided).
+  \item cause-specific decrements \code{d_*} with \eqn{d_x^{(j)} = \ell_x q_x^{(j)}}.
 }
 }
 \description{

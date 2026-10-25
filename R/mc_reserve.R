@@ -6,6 +6,9 @@
 #'
 #' @param .data A data frame or tibble containing simulated curtate future
 #'   lifetimes and, when required, complete future lifetimes.
+#'   Observed curtate lifetimes must be finite nonnegative integers and
+#'   observed complete lifetimes finite and nonnegative. Paired observations
+#'   must satisfy \eqn{K_x \le T_x < K_x+1}; missing values remain missing.
 #' @param t Nonnegative numeric vector of valuation durations.
 #' @param i Numeric scalar. Interest-rate input used for discounting.
 #' @param P Optional nonnegative numeric scalar supplied directly as the
@@ -88,11 +91,45 @@
 #' }
 #' This makes the sample mean issue loss equal to zero, up to numerical error,
 #' when \code{reserve_timing = "before_payment"}.
+#' In this case \code{premium_unit} does not reinterpret the estimated
+#' coefficient: the selected unit only describes a supplied premium input.
+#' Missing issue annuities are excluded jointly with missing benefits.
 #'
 #' The column \code{Y_t} is the present value of the premium-annuity basis,
 #' including the amount supplied through \code{payment}. The column
 #' \code{future_pv_premiums} is the actual simulated present value of premium
 #' income, equal to \code{premium_annuity_scale * Y_t}.
+#' This identity is mathematical: the actual cash flows are valued directly
+#' using the original log interest rate, so a rounded or overflowing displayed
+#' coefficient or annuity basis need not destroy representable premium income.
+#' A supplied annuity-scale coefficient is interpreted as received; lost
+#' information is not inferred from an explicitly rounded coefficient.
+#'
+#' For \code{type = "pure_endowment"} and
+#' \code{timing = "moment_of_death"}, survival requires \eqn{T_x > n}.
+#' Death at exactly \code{n} belongs to the term component, so term and
+#' pure-endowment benefits form a disjoint partition of the endowment.
+#' The annual convention retains \eqn{K_x < n} and \eqn{K_x \ge n}.
+#'
+#' These are scenario-specific prospective losses, not conditional expected
+#' reserves. The existing in-force filter takes precedence over payment-date
+#' inclusion: complete lifetimes require \eqn{T_x > t}, and curtate lifetimes
+#' require \eqn{K_x \ge t}. Thus a complete lifetime dying exactly at \code{t}
+#' is not in force even for a before-payment calculation. The chosen
+#' \code{not_in_force} policy applies afterwards; unknown lifetimes stay missing.
+#' Known scenarios without a covered benefit have zero benefit value.
+#'
+#' At extreme rates, effective-rate and discount-factor metadata can lose
+#' range. The function retains the original rate and monetary amounts for
+#' valuation. Exactly coincident finite monetary flows can cancel even if
+#' their separate present values overflow. General cancellation between
+#' unrepresentable flows is not guaranteed. Internal premium estimation
+#' requires representable observed issue present values. Nonfinite converted
+#' premium metadata are accepted only when they match a conversion from the
+#' resolved premium; directly supplied premiums must remain finite.
+#' Positive infinite annualized annuity-basis metadata are likewise accepted
+#' only if they agree with the product of a finite payment basis and frequency.
+#' That infinite annualized value alone cannot identify the payment basis.
 #'
 #' @return A tibble with one row per simulation and requested duration. Important
 #'   standardized columns include:
@@ -491,7 +528,7 @@ mc_reserve <- function(
     stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
   }
 
-  constant_column <- function(column) {
+  constant_column <- function(column, allow_inf = FALSE) {
     values <- .data[[column]]
 
     if (!is.numeric(values)) {
@@ -500,7 +537,8 @@ mc_reserve <- function(
 
     observed <- unique(values[!is.na(values)])
 
-    if (length(observed) != 1L || !is.finite(observed[[1L]])) {
+    if (length(observed) != 1L ||
+        (!is.finite(observed[[1L]]) && !(allow_inf && observed[[1L]] == Inf))) {
       stop(
         "`", column, "` must contain one constant finite value for the ",
         "simulated contract.",
@@ -546,8 +584,12 @@ mc_reserve <- function(
   }
 
   .mc_assert_positive_integer(k, "k")
+  if (k > .Machine$integer.max || round(k) < 1)
+    stop("`k` must round to a positive integer within the supported range.", call. = FALSE)
+  if (round(m) < 1)
+    stop("`m` must round to a positive integer.", call. = FALSE)
   k <- as.integer(round(k))
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
 
   payment_from_data <- NULL
 
@@ -582,10 +624,12 @@ mc_reserve <- function(
   )
 
   if ("payment_annualized" %in% names(.data)) {
-    payment_annualized_data <- constant_column("payment_annualized")
+    payment_annualized_data <- constant_column("payment_annualized", allow_inf = TRUE)
 
-    if (abs(payment_annualized_data - k * payment) >
-        tol * max(1, abs(payment_annualized_data))) {
+    expected_basis <- k * payment
+    if (payment_annualized_data != expected_basis &&
+        (!is.finite(payment_annualized_data) || !is.finite(expected_basis) ||
+         abs(payment_annualized_data - expected_basis) > tol * max(1, abs(payment_annualized_data)))) {
       stop(
         "`payment_annualized` is inconsistent with `k * payment`.",
         call. = FALSE
@@ -720,20 +764,13 @@ mc_reserve <- function(
     )
   }
 
-  i_effective <- .mc_effective_rate(
+  interest <- .interest_basis(
     i = i,
     i_type = i_type,
     m = m
   )
 
-  if (!is.finite(i_effective) || i_effective <= -1) {
-    stop(
-      "The annual effective interest rate implied by `i`, `i_type`, and `m` ",
-      "must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
+  i_effective <- interest$effective
   v <- 1 / (1 + i_effective)
 
   Tx <- if (has_T) {
@@ -741,6 +778,7 @@ mc_reserve <- function(
   } else {
     rep(NA_real_, length(Kx))
   }
+  .mc_validate_lifetimes(Kx, Tx)
 
   if (has_T && any(Tx < 0, na.rm = TRUE)) {
     stop("`col_T` must contain nonnegative simulated lifetimes.", call. = FALSE)
@@ -791,23 +829,43 @@ mc_reserve <- function(
     Tx
   )
 
-  issue_pv_benefit <- ifelse(
-    benefit_info$benefit_indicator == 1,
-    benefit * v^benefit_info$benefit_time,
-    ifelse(
-      benefit_info$benefit_indicator == 0,
-      0,
-      NA_real_
-    )
-  )
+  log_discount <- function(times) {
+    out <- numeric(length(times))
+    nonzero <- !is.na(times) & times != 0
+    out[nonzero] <- -interest$growth * times[nonzero]
+    out[is.na(times)] <- NA_real_
+    out
+  }
+  discounted_sum <- function(amount, times, log_amount = log(amount)) {
+    if (anyNA(times)) return(NA_real_)
+    if (!length(times) || log_amount == -Inf) return(0)
+    if (is.finite(amount) && amount >= .Machine$double.xmin)
+      return(.cash_flow_sum(rep(amount, length(times)), log_discount(times)))
+    .cash_flow_sum(rep(1, length(times)), log_amount + log_discount(times))
+  }
+  discounted_benefit <- function(indicator, times, at, before = TRUE) {
+    at <- rep_len(at, length(indicator))
+    out <- numeric(length(indicator))
+    out[is.na(indicator) | (indicator == 1 & is.na(times))] <- NA_real_
+    future <- if (before) times >= at else times > at
+    paid <- which(indicator == 1 & future)
+    out[paid] <- .cash_flow_value(rep(benefit, length(paid)),
+                                  log_discount(times[paid] - at[paid]))
+    out
+  }
+  issue_pv_benefit <- discounted_benefit(benefit_info$benefit_indicator,
+                                         benefit_info$benefit_time, 0)
 
   issue_pv_annuity <- vapply(
     premium_payment_times,
     function(times) {
-      payment * sum(v^times)
+      discounted_sum(payment, times)
     },
     numeric(1)
   )
+  unknown_premium_life <- if (annuity_type == "certain") rep(FALSE, length(Kx)) else
+    if (k == 1L) is.na(Kx) else is.na(Tx)
+  issue_pv_annuity[unknown_premium_life] <- NA_real_
 
   premium_column <- NULL
   premium_input <- NULL
@@ -872,18 +930,11 @@ mc_reserve <- function(
         )
       }
 
-      mean_Z0 <- mean(issue_pv_benefit[keep_issue])
-      mean_Y0 <- mean(issue_pv_annuity[keep_issue])
-
-      if (!is.finite(mean_Y0) || mean_Y0 <= 0) {
-        stop(
-          "The mean simulated premium annuity present value must be positive ",
-          "when estimating the net premium internally.",
-          call. = FALSE
-        )
-      }
-
-      premium_input <- rep(mean_Z0 / mean_Y0, length(Kx))
+      estimated <- mc_premium(
+        tibble::tibble(pv_benefit = issue_pv_benefit, pv_annuity = issue_pv_annuity),
+        k = k, annuity_payment = payment
+      )
+      premium_input <- estimated$premium_annuity_scale
       premium_column <- "premium_annuity_scale"
       premium_was_estimated <- TRUE
     }
@@ -891,6 +942,7 @@ mc_reserve <- function(
 
   resolved_unit <- premium_unit
 
+  if (premium_was_estimated) resolved_unit <- "annuity_scale"
   if (identical(resolved_unit, "auto")) {
     if (identical(premium_column, "premium_annualized")) {
       resolved_unit <- "annualized"
@@ -904,15 +956,29 @@ mc_reserve <- function(
   if (identical(resolved_unit, "annualized")) {
     premium_annualized <- premium_input
     premium_per_payment <- premium_annualized / k
-    premium_annuity_scale <- premium_per_payment / payment
+    premium_annuity_scale <- .mc_ratio_product(1, premium_input, payment, divisor = k)
+    log_quota <- log(premium_input) - log(k)
   } else if (identical(resolved_unit, "per_payment")) {
     premium_per_payment <- premium_input
     premium_annualized <- k * premium_per_payment
     premium_annuity_scale <- premium_per_payment / payment
+    log_quota <- log(premium_input)
   } else {
     premium_annuity_scale <- premium_input
     premium_per_payment <- premium_annuity_scale * payment
-    premium_annualized <- k * premium_per_payment
+    premium_annualized <- .mc_ratio_product(payment, premium_input, 1, multiplier = k)
+    log_quota <- log(premium_input) + log(payment)
+  }
+  if (premium_was_estimated) {
+    premium_per_payment <- estimated$premium_per_payment
+    premium_annualized <- estimated$premium_annualized
+    log_mean <- function(values) {
+      largest <- max(values)
+      if (largest == 0) return(-Inf)
+      log(largest) + log(mean(values / largest))
+    }
+    log_quota <- rep(log_mean(issue_pv_benefit[keep_issue]) -
+      log_mean(issue_pv_annuity[keep_issue]) + log(payment), length(Kx))
   }
 
   check_premium_column <- function(column, expected) {
@@ -921,10 +987,10 @@ mc_reserve <- function(
 
       if (!is.numeric(observed) ||
           anyNA(observed) ||
-          any(!is.finite(observed)) ||
           any(
-            abs(observed - expected) >
-              tol * pmax(1, abs(expected))
+            observed != expected &
+              (!is.finite(observed) | !is.finite(expected) |
+                 abs(observed - expected) > tol * pmax(1, abs(expected)))
           )) {
         stop(
           "`", column, "` is inconsistent with the resolved premium units.",
@@ -989,25 +1055,15 @@ mc_reserve <- function(
     benefit_time_rep > t_rep
   }
 
-  Z_t <- ifelse(
-    is.na(benefit_indicator_rep) | is.na(include_benefit),
-    NA_real_,
-    ifelse(
-      benefit_indicator_rep == 1 & include_benefit,
-      benefit * v^(benefit_time_rep - t_rep),
-      0
-    )
-  )
+  Z_t <- discounted_benefit(benefit_indicator_rep, benefit_time_rep, t_rep,
+                             reserve_timing == "before_payment")
 
-  Y_t <- vapply(
+  future_payment_times <- lapply(
     seq_along(row_rep),
     function(idx) {
       times <- premium_payment_times[[row_rep[[idx]]]]
 
-      if (length(times) == 0L &&
-          (is.na(Kx_rep[[idx]]) ||
-           (k > 1L && annuity_type != "certain" &&
-            is.na(Tx_rep[[idx]])))) {
+      if (unknown_premium_life[row_rep[[idx]]]) {
         return(NA_real_)
       }
 
@@ -1017,10 +1073,13 @@ mc_reserve <- function(
         times[times > t_rep[[idx]]]
       }
 
-      payment * sum(v^(future_times - t_rep[[idx]]))
-    },
-    numeric(1)
+      future_times - t_rep[[idx]]
+    }
   )
+  Y_t <- vapply(future_payment_times, function(times) discounted_sum(payment, times), 0)
+  future_pv_premiums <- vapply(seq_along(row_rep), function(idx)
+    discounted_sum(premium_per_payment_rep[idx], future_payment_times[[idx]],
+                   log_quota[row_rep[idx]]), 0)
 
   known_not_in_force <- !is.na(in_force) & !in_force
   unknown_in_force <- is.na(in_force)
@@ -1028,16 +1087,27 @@ mc_reserve <- function(
   if (not_in_force == "na") {
     Z_t[known_not_in_force] <- NA_real_
     Y_t[known_not_in_force] <- NA_real_
+    future_pv_premiums[known_not_in_force] <- NA_real_
   } else {
     Z_t[known_not_in_force] <- 0
     Y_t[known_not_in_force] <- 0
+    future_pv_premiums[known_not_in_force] <- 0
   }
 
   Z_t[unknown_in_force] <- NA_real_
   Y_t[unknown_in_force] <- NA_real_
+  future_pv_premiums[unknown_in_force] <- NA_real_
 
-  future_pv_premiums <- premium_annuity_scale_rep * Y_t
   L_t <- Z_t - future_pv_premiums
+  recover_loss <- which(!is.na(in_force) & in_force & !is.na(Z_t) &
+    !is.na(future_pv_premiums) & !is.finite(L_t) & is.finite(premium_per_payment_rep))
+  for (idx in recover_loss) {
+    has_benefit <- isTRUE(benefit_indicator_rep[idx] == 1 && include_benefit[idx])
+    amounts <- c(if (has_benefit) benefit,
+                 rep(-premium_per_payment_rep[idx], length(future_payment_times[[idx]])))
+    times <- c(if (has_benefit) benefit_time_rep[idx] - t_rep[idx], future_payment_times[[idx]])
+    L_t[idx] <- .cash_flow_sum(amounts, log_discount(times))
+  }
 
   out <- expanded |>
     dplyr::mutate(
@@ -1181,7 +1251,7 @@ mc_reserve <- function(
     eligible <- if (timing == "end_of_year") {
       Kx >= n
     } else {
-      Tx >= n
+      Tx > n
     }
 
     benefit_indicator[available] <- as.numeric(eligible[available])

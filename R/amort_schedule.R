@@ -38,7 +38,8 @@
 #'   }
 #' @param adjust Character string. One of \code{"none"}, \code{"term"}, or
 #'   \code{"payment"}.
-#' @param tol Numeric tolerance for zero-balance detection.
+#' @param tol Finite positive numeric tolerance in monetary units for
+#'   zero-balance detection.
 #'
 #' @return A tibble with one row per realized period and columns:
 #' \describe{
@@ -59,6 +60,13 @@
 #' }
 #'
 #' @details
+#' The original log accumulation rate determines the effective period rate
+#' and the level payment, avoiding cancellation near zero and saturation of
+#' the annual equivalent. The periodic rate must remain finite and greater
+#' than -1. The balance tolerance is in monetary units and does not classify
+#' nonzero interest rates as zero. Here \code{n} counts periods, so the
+#' contractual term in years is \code{n / k}.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{i} is the interest rate, \code{i_type} is the
 #' interest-rate type, \code{m} is the conversion frequency for nominal annual
@@ -72,6 +80,25 @@
 #' If the user supplies a custom \code{payment} that is smaller than the
 #' periodic interest, principal repayment will be negative (negative
 #' amortization). This is permitted but the user should be aware.
+#'
+#' Named extra payments must identify exact integer periods; repeated names
+#' are summed. On a payoff row, requested extra principal has priority and
+#' the regular payment is reduced to the remaining amount due. Interest
+#' still follows the selected timing, and no rows follow full payoff.
+#' The general schedule uses a different allocation priority; see
+#' \code{\link{amort_schedule_general}}.
+#'
+#' With \code{adjust = "payment"}, the payment is recalculated after every
+#' realized period for the remaining contractual periods, even if no extra
+#' payment occurred. A supplied \code{payment} is the initial payment.
+#' The \code{"none"} and \code{"term"} policies keep the regular amount;
+#' both stop when the debt is repaid and may realize fewer than \code{n} rows.
+#' A requested loan below \code{tol} may produce an empty schedule.
+#' Calculated payments for active balances must be representable and positive;
+#' non-finite monetary ledger entries cause an explicit error. This does not
+#' require a representable displayed annual effective equivalent.
+#' The schedule allocates up to \code{n} rows; feasible terms are limited by
+#' integer indexing and available memory.
 #'
 #' @seealso \code{\link{a_angle}}, \code{\link{present_value}},
 #'   \code{\link{pv_flow}}, \code{\link{standardize_interest}}
@@ -160,18 +187,19 @@ amort_schedule <- function(
   }
   k <- as.integer(k)
 
-  if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || tol <= 0) {
-    stop("`tol` must be a single positive numeric value.", call. = FALSE)
+  if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || !is.finite(tol) || tol <= 0) {
+    stop("`tol` must be a single finite positive numeric value.", call. = FALSE)
   }
 
   # --- Rate conversion ---
-  i_effective_annual <- standardize_interest(
-    type = i_type,
-    rate = i,
+  basis <- .interest_basis(
+    i_type = i_type,
+    i = i,
     m = m
   )
-
-  i_effective_period <- (1 + i_effective_annual)^(1 / k) - 1
+  i_effective_annual <- basis$effective
+  period_growth <- basis$growth / k
+  i_effective_period <- expm1(period_growth)
 
   if (!is.finite(i_effective_period) || i_effective_period <= -1) {
     stop(
@@ -181,20 +209,17 @@ amort_schedule <- function(
   }
 
   # --- Helper: compute level payment for a given balance / remaining term ---
-  level_payment <- function(balance, n_remaining, i_p, timing, tol) {
+  level_payment <- function(balance, n_remaining, growth, timing) {
     if (n_remaining <= 0) return(0)
 
-    if (abs(i_p) < tol) {
-      return(balance / n_remaining)
+    log_factor <- .annuity_log_sum(-growth, n_remaining) -
+      if (timing == "immediate") growth else 0
+    value <- .cash_flow_value(balance, -log_factor)
+    if (balance > tol && (!is.finite(value) || value <= 0)) {
+      stop("Calculated level payment is outside the finite positive monetary range.",
+        call. = FALSE)
     }
-
-    a_n <- (1 - (1 + i_p)^(-n_remaining)) / i_p
-
-    if (timing == "immediate") {
-      balance / a_n
-    } else {
-      balance / ((1 + i_p) * a_n)
-    }
+    value
   }
 
   # --- Determine initial regular payment ---
@@ -202,9 +227,8 @@ amort_schedule <- function(
     current_payment <- level_payment(
       balance = principal,
       n_remaining = n,
-      i_p = i_effective_period,
-      timing = timing,
-      tol = tol
+      growth = period_growth,
+      timing = timing
     )
   } else {
     if (!is.numeric(payment) || length(payment) != 1L || is.na(payment) ||
@@ -236,13 +260,14 @@ amort_schedule <- function(
       extra_vec <- as.numeric(extra_principal)
 
     } else {
-      idx <- suppressWarnings(as.integer(names(extra_principal)))
-      if (any(is.na(idx)) || any(idx < 1L) || any(idx > n)) {
+      idx <- suppressWarnings(as.numeric(names(extra_principal)))
+      if (any(!is.finite(idx)) || any(idx != floor(idx)) || any(idx < 1L) || any(idx > n)) {
         stop(
           "Names of `extra_principal` must be integers between 1 and `n`.",
           call. = FALSE
         )
       }
+      idx <- as.integer(idx)
 
       tmp <- tapply(as.numeric(extra_principal), idx, sum)
       extra_vec[as.integer(names(tmp))] <- as.numeric(tmp)
@@ -279,7 +304,7 @@ amort_schedule <- function(
       ob_new <- ob + interest_period - cashflow_period
 
       # Cap at zero if overpaid
-      if (ob_new <= tol) {
+      if (!is.na(ob_new) && ob_new <= tol) {
         total_needed <- ob + interest_period
         extra_used <- min(extra_req, total_needed)
         payment_period <- total_needed - extra_used
@@ -315,6 +340,12 @@ amort_schedule <- function(
       }
     }
 
+    if (any(!is.finite(c(interest_period, payment_period, extra_req,
+                        principal_reg_period, total_principal_period,
+                        cashflow_period, ob_new)))) {
+      stop("The amortization schedule exceeds the finite monetary range.", call. = FALSE)
+    }
+
     out_period[period_idx]     <- period_idx
     out_ob_start[period_idx]   <- ob
     out_interest[period_idx]   <- interest_period
@@ -337,9 +368,8 @@ amort_schedule <- function(
       current_payment <- level_payment(
         balance = ob,
         n_remaining = remaining_periods,
-        i_p = i_effective_period,
-        timing = timing,
-        tol = tol
+        growth = period_growth,
+        timing = timing
       )
     }
   }

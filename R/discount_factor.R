@@ -50,6 +50,10 @@
 #'
 #' @details
 #' Exactly one of \code{i}, \code{a}, or \code{delta} must be supplied.
+#' The requested discount factor is evaluated from the log accumulation,
+#' without requiring its reciprocal to be representable. It must be positive
+#' and finite. In tidy output, an unrepresentable intermediate accumulation
+#' factor may be Inf or zero; the discount factor is computed independently.
 #'
 #' Numeric arguments may have length 1 or a common length. Scalars are
 #' recycled over the remaining scenarios, making the function suitable for
@@ -131,7 +135,7 @@ discount_factor <- function(
     rel.tol = 1e-8,
     tidy = FALSE
 ) {
-  accumulation_out <- accumulation_factor(
+  .interval_factor(
     s = s,
     t = t,
     i = i,
@@ -141,15 +145,7 @@ discount_factor <- function(
     delta = delta,
     subdivisions = subdivisions,
     rel.tol = rel.tol,
-    tidy = tidy
+    tidy = tidy,
+    discount = TRUE
   )
-
-  if (!tidy) {
-    return(1 / accumulation_out)
-  }
-
-  accumulation_out |>
-    dplyr::mutate(
-      discount_factor = 1 / .data[["accumulation_factor"]]
-    )
 }

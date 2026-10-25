@@ -62,6 +62,13 @@
 #' For streams containing both positive and negative cash flows, duration
 #' remains a yield-sensitivity measure, but it may not have the usual
 #' interpretation as a weighted-average payment time.
+#' Relative contributions are computed without first forming a monetary
+#' duration numerator. Representable products can be recovered when a standalone
+#' discount factor underflows; its audit column can then be zero while present
+#' value is positive. Discount factors, present values, their total/absolute sum,
+#' and the selected contributions/result must remain finite. A signed stream
+#' is rejected when absolute total value is at most
+#' `sqrt(.Machine$double.eps)` times the sum of absolute present values.
 #'
 #' @examples
 #' duration_cash_flow(
@@ -189,8 +196,8 @@ duration_cash_flow <- function(
     -remaining_time * log1p(rate)
   )
 
-  present_value <- future_cash_flow *
-    discount_factor
+  present_value <- .cash_flow_value(
+    future_cash_flow, -remaining_time * log1p(rate))
 
   if (
     any(!is.finite(discount_factor)) ||
@@ -237,44 +244,15 @@ duration_cash_flow <- function(
     )
   }
 
-  weighted_present_value <- remaining_time *
-    present_value
+  # Form each relative moment directly: neither a monetary numerator nor
+  # a separately rounded PV/total weight is needed.
+  log_weight <- log(remaining_time) - log(abs(total_present_value))
+  if (duration == "modified") log_weight <- log_weight - log1p(rate)
+  duration_contribution <- sign(total_present_value) *
+    .cash_flow_value(present_value, log_weight)
+  duration_value <- sum(duration_contribution)
 
-  if (any(!is.finite(weighted_present_value))) {
-    stop(
-      paste0(
-        "The duration numerator is non-finite. Check the magnitude ",
-        "of `cf`, `t`, and `valuation_time`."
-      ),
-      call. = FALSE
-    )
-  }
-
-  duration_numerator <- sum(weighted_present_value)
-
-  if (!is.finite(duration_numerator)) {
-    stop(
-      paste0(
-        "Aggregating the duration contributions produced a non-finite ",
-        "result. Check the magnitude of `cf`, `t`, and `valuation_time`."
-      ),
-      call. = FALSE
-    )
-  }
-
-  macaulay_duration <- duration_numerator /
-    total_present_value
-
-  modified_duration <- macaulay_duration /
-    (1 + rate)
-
-  duration_value <- switch(
-    duration,
-    macaulay = macaulay_duration,
-    modified = modified_duration
-  )
-
-  if (!is.finite(duration_value)) {
+  if (any(!is.finite(duration_contribution)) || !is.finite(duration_value)) {
     stop(
       paste0(
         "The selected duration is non-finite. Check the supplied ",
@@ -287,14 +265,6 @@ duration_cash_flow <- function(
   if (output == "value") {
     return(as.numeric(duration_value))
   }
-
-  duration_contribution <- switch(
-    duration,
-    macaulay = weighted_present_value /
-      total_present_value,
-    modified = weighted_present_value /
-      ((1 + rate) * total_present_value)
-  )
 
   tibble::tibble(
     time = future_time,

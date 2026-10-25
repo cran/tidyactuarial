@@ -31,6 +31,11 @@
 #' }
 #'
 #' Input vectors must have length 1 or a common length.
+#' Conversions use log1p and expm1 to retain precision near zero.
+#' A missing rate type produces a missing equivalent rate.
+#' At extreme inputs, an annual equivalent can round to -1 or overflow to
+#' Inf. This is a limit of its numeric representation; interval factors and
+#' basic cash-flow valuations retain the original log accumulation rate.
 #'
 #' @seealso \code{\link{interest_equivalents}},
 #'   \code{\link{discount_factor_spot}}
@@ -157,10 +162,10 @@ standardize_interest <- function(
     stop("`i` must contain only finite numeric values or NA.", call. = FALSE)
   }
 
-  idx_nom_i <- i_type == "nominal_interest"
-  idx_nom_d <- i_type == "nominal_discount"
-  idx_eff   <- i_type == "effective"
-  idx_force <- i_type == "force"
+  idx_nom_i <- !is.na(i_type) & i_type == "nominal_interest"
+  idx_nom_d <- !is.na(i_type) & i_type == "nominal_discount"
+  idx_eff   <- !is.na(i_type) & i_type == "effective"
+  idx_force <- !is.na(i_type) & i_type == "force"
   idx_nom   <- idx_nom_i | idx_nom_d
 
   missing_m <- idx_nom & is.na(m)
@@ -206,13 +211,68 @@ standardize_interest <- function(
   out[ok_eff] <- i[ok_eff]
 
   ok_nom_i <- idx_nom_i & !is.na(i)
-  out[ok_nom_i] <- (1 + i[ok_nom_i] / m[ok_nom_i])^m[ok_nom_i] - 1
+  out[ok_nom_i] <- expm1(m[ok_nom_i] * log1p(i[ok_nom_i] / m[ok_nom_i]))
 
   ok_nom_d <- idx_nom_d & !is.na(i)
-  out[ok_nom_d] <- (1 - i[ok_nom_d] / m[ok_nom_d])^(-m[ok_nom_d]) - 1
+  out[ok_nom_d] <- expm1(-m[ok_nom_d] * log1p(-i[ok_nom_d] / m[ok_nom_d]))
 
   ok_force <- idx_force & !is.na(i)
-  out[ok_force] <- exp(i[ok_force]) - 1
+  out[ok_force] <- expm1(i[ok_force])
 
   out
+}
+
+# Keep the log accumulation rate from the original specification: converting
+# through an annual effective rate can round to -1 or overflow to Inf.
+# standardize_interest remains the single source of input validation.
+.interest_basis <- function(i_type, i, m) {
+  effective <- standardize_interest(i_type = i_type, i = i, m = m)
+  size <- length(effective)
+  type <- rep_len(tolower(i_type), size)
+  rate <- rep_len(i, size)
+  frequency <- rep_len(m, size)
+  growth <- log1p(effective)
+  nominal_i <- !is.na(type) & type == "nominal_interest"
+  nominal_d <- !is.na(type) & type == "nominal_discount"
+  force <- !is.na(type) & type == "force"
+  growth[nominal_i] <- frequency[nominal_i] *
+    log1p(rate[nominal_i] / frequency[nominal_i])
+  growth[nominal_d] <- -frequency[nominal_d] *
+    log1p(-rate[nominal_d] / frequency[nominal_d])
+  growth[force] <- rate[force]
+  list(effective = effective, growth = growth)
+}
+
+# Preserve ordinary multiplication and recover only products whose separate
+# factor loses range or becomes subnormal. Inputs have been validated by callers.
+.cash_flow_value <- function(amount, log_factor) {
+  factor <- exp(log_factor)
+  out <- amount * factor
+  known <- !is.na(amount) & !is.na(log_factor)
+  zero <- known & amount == 0
+  out[zero] <- 0
+  recover <- known & amount != 0 &
+    (!is.finite(out) | out == 0 | factor < .Machine$double.xmin)
+  out[recover] <- sign(amount[recover]) *
+    exp(log(abs(amount[recover])) + log_factor[recover])
+  out
+}
+
+# Recover cancellation under an exactly common finite log factor. Keep the
+# ordinary sum when representable; summing raw amounts first can itself overflow.
+.cash_flow_sum <- function(amount, log_factor) {
+  values <- .cash_flow_value(amount, log_factor)
+  total <- sum(values)
+  if (is.finite(total)) return(total)
+
+  recover <- !is.finite(values) & is.finite(log_factor)
+  for (g in unique(log_factor[recover])) {
+    idx <- which(log_factor == g)
+    net <- sum(amount[idx])
+    if (is.finite(net)) {
+      values[idx] <- 0
+      values[idx[1L]] <- .cash_flow_value(net, g)
+    }
+  }
+  sum(values)
 }

@@ -17,7 +17,8 @@ annuity_multi(
   cohort = c("first", "last"),
   alpha = NULL,
   timing = c("immediate", "due"),
-  woolhouse = c("none", "first", "second")
+  woolhouse = c("none", "first", "second"),
+  frac = c("UDD", "CF", "CML", "Balducci")
 )
 }
 \arguments{
@@ -64,6 +65,9 @@ matches joint-life; \code{alpha = 1} matches last-survivor.}
 \item{timing}{\code{"immediate"} or \code{"due"}.}
 
 \item{woolhouse}{\code{"none"}, \code{"first"}, or \code{"second"}.}
+
+\item{frac}{Fractional-age assumption for exact payments: \code{"UDD"}
+(default), \code{"CF"}, \code{"CML"} (alias of CF), or \code{"Balducci"}.}
 }
 \value{
 A single numeric value representing the APV.
@@ -77,9 +81,10 @@ This implementation supports up to three lives, which covers the most common
 practical multi-life arrangements.
 
 Supports status-based annuities (joint-life / last-survivor) and a
-joint-and-survivor style annuity (\code{"reversionary"}) that pays 1 while all
+joint-and-survivor style annuity (`"reversionary"`) that pays 1 while all
 lives are alive and then pays a fraction \eqn{\alpha} while at least one life
 remains alive.
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{i} is the interest rate, \code{i_type} is the
@@ -90,16 +95,38 @@ payment frequency.
 Under the assumption of independent future lifetimes, the survival
 probability for the status is calculated as:
 \itemize{
-\item \strong{Joint-life (first-death):}
-\eqn{{}_t p_{x_1 x_2 \dots x_n} = \prod_{j=1}^n {}_t p_{x_j}}
-\item \strong{Last-survivor:}
-\eqn{{}_t p_{\overline{x_1 x_2 \dots x_n}} = 1 - \prod_{j=1}^n (1 - {}_t p_{x_j})}
+  \item \strong{Joint-life (first-death):}
+    \eqn{{}_t p_{x_1 x_2 \dots x_n} = \prod_{j=1}^n {}_t p_{x_j}}
+  \item \strong{Last-survivor:}
+    \eqn{{}_t p_{\overline{x_1 x_2 \dots x_n}} = 1 - \prod_{j=1}^n (1 - {}_t p_{x_j})}
 }
 
 For \code{annuity = "reversionary"}, the APV is a weighted combination of
 the two statuses:
 \deqn{APV = APV(\text{joint-life}) +
 \alpha [APV(\text{last-survivor}) - APV(\text{joint-life})].}
+
+All values are measured at issue, conditional on the stated lives being
+alive at issue. Ages identify lives within one policy, not policy scenarios.
+A k-thly payment is \eqn{1/k} of an annual unit: exact valuation sums
+\eqn{F(h+j/k)/k}, with \eqn{F(t)=e^{-\delta t}w(t)} and the expected payment
+weight \eqn{w(t)} defined above. Due uses \eqn{j=0,\ldots,nk-1}; immediate
+uses \eqn{j=1,\ldots,nk}. The historical name \code{"reversionary"} means
+joint-and-survivor payments; it does not mean payments only after a death.
+
+For \code{k > 1}, \code{woolhouse = "none"} uses the actual fractional
+payment grid. First-order Woolhouse subtracts
+\eqn{(1-1/k)[F(h)-F(h+n)]/2} from the annual due value. Second-order also
+subtracts \eqn{(1-1/k^2)[(\delta+\eta_h)F(h)-
+(\delta+\eta_{h+n})F(h+n)]/12}. Here
+\eqn{\eta_t=-\log(w(t+1)/w(t))} is an annual forward estimate of the
+logarithmic decay of the payment weight, not an exact instantaneous force.
+Positive supported weights at both borders and the following year are
+required for second-order approximation. This is a smoothness approximation,
+not exact fractional valuation under \code{frac}; negative approximations
+produce a warning. Immediate subtracts \eqn{[F(h)-F(h+n)]/k} from due.
+Exact valuation requires consecutive annual ages and retains the documented
+conservative common-age horizon; it does not extrapolate unobserved lives.
 }
 \examples{
 lt <- data.frame(
@@ -116,6 +143,10 @@ annuity_multi(
   timing = "due"
 )
 
+# Half-yearly payments, each equal to half an annual unit, under UDD
+annuity_multi(lt, ages = c(60, 62), i = 0.05, n = 5, k = 2,
+              timing = "due", frac = "UDD")
+
 annuity_multi(
   lt = lt,
   ages = c(60, 62),
@@ -128,23 +159,23 @@ annuity_multi(
 }
 \seealso{
 \code{\link{annuity_x}} for single-life annuities,
-\code{\link{t_px}} for survival probabilities.
+  \code{\link{t_px}} for survival probabilities.
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

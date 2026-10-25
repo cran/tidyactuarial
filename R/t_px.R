@@ -36,8 +36,17 @@
 #'     \eqn{{}_s p_y = \frac{p_y}{1 - (1 - s) \times q_y}}
 #' }
 #'
+#' Missing annual survival probabilities are derived directly from adjacent
+#' survivor counts, avoiding cancellation in \eqn{1-q_y}. CF and Balducci
+#' retain logarithmic survival when that count ratio underflows. Supplied
+#' \code{px} values remain in use; input columns should describe a consistent
+#' annual life table.
+#'
 #' If \eqn{x + t > \omega} (the terminal age), the function returns 0
-#' since no survival is possible beyond the table's limiting age.
+#' by the established table-horizon convention, including open tables.
+#' This is truncation, not inference about survival beyond observed ages;
+#' extend the table before evaluating a longer horizon. Interval tables with
+#' nonannual widths from \code{km_lifetable} require annual conversion first.
 #'
 #' @return Numeric vector of \eqn{{}_t p_x}, or a tibble if
 #'   \code{tidy = TRUE}.
@@ -51,6 +60,14 @@ t_px <- function(
     check = TRUE,
     tol = 1e-10
 ) {
+
+  for (name in c("check", "tidy")) {
+    value <- get(name, inherits = FALSE)
+    if (!is.logical(value) || length(value) != 1L || is.na(value))
+      stop("`", name, "` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0)
+    stop("`tol` must be a single finite nonnegative number.", call. = FALSE)
 
   # --- inherit frac from lifetable attribute if not supplied ---
   if (missing(frac)) {
@@ -76,6 +93,8 @@ t_px <- function(
 
   if (check) {
     if (any(!is.finite(x)) || any(!is.finite(t))) stop("`x` and `t` must be finite.")
+    if (any(abs(x) > .Machine$integer.max))
+      stop("`x` must be representable as integer ages.", call. = FALSE)
     if (any(abs(x - round(x)) > tol)) stop("`x` must be integer ages.")
     if (any(t < 0)) stop("`t` must be nonnegative.")
   }
@@ -92,6 +111,11 @@ t_px <- function(
   if (nt == 1L && n > 1L) t <- rep(t, n)
 
   # --- extract table vectors ---
+  if (check && (!is.numeric(lt$x) || any(!is.finite(lt$x)) ||
+      any(abs(lt$x - round(lt$x)) > tol) ||
+      any(abs(lt$x) > .Machine$integer.max) || anyDuplicated(lt$x) ||
+      any(diff(sort(round(lt$x))) != 1)))
+    stop("`lt` must contain consecutive annual integer ages.", call. = FALSE)
   ages <- as.integer(lt$x)
   lx   <- as.numeric(lt$lx)
   omega <- max(ages)
@@ -125,9 +149,9 @@ t_px <- function(
   x_todo <- x[todo]
 
   i0 <- match(x_todo, ages)
-  i1 <- match(x_todo + as.integer(n_int), ages)
+  i1 <- match(as.numeric(x_todo) + n_int, ages)
 
-  ok <- !is.na(i0) & !is.na(i1) & (lx[i0] > 0)
+  ok <- !is.na(i0) & !is.na(i1) & !is.na(lx[i0]) & !is.na(lx[i1]) & (lx[i0] > 0)
 
   # Integer survival part: n_p_x = l_{x+n} / l_x
   p_int <- rep(NA_real_, length(todo))
@@ -135,7 +159,7 @@ t_px <- function(
 
   # --- fractional part: s_p_{x+n} ---
   # Get q_y and p_y at y = x + n_int
-  y  <- x_todo + as.integer(n_int)
+  y  <- as.numeric(x_todo) + n_int
   iy <- match(y, ages)
 
   qy <- py <- rep(NA_real_, length(todo))
@@ -143,14 +167,25 @@ t_px <- function(
   if (!is.null(qx_col)) qy[ok] <- qx_col[iy[ok]]
   if (!is.null(px_col)) py[ok] <- px_col[iy[ok]]
 
-  # Derive qy from lx if not available
+  # Derive missing probabilities directly: 1-q loses small survival.
+  log_py <- log(py)
+  iy1 <- match(y + 1L, ages)
+  derive_p <- ok & is.na(py) & !is.na(iy1) & lx[iy] > 0
+  if (any(derive_p)) {
+    py[derive_p] <- lx[iy1[derive_p]] / lx[iy[derive_p]]
+    log_py[derive_p] <- log(py[derive_p])
+    under <- derive_p & !is.na(py) & py == 0 & lx[iy1] > 0
+    log_py[under] <- log(lx[iy1[under]]) - log(lx[iy[under]])
+  }
   need <- ok & is.na(qy)
   if (any(need)) {
     iy1 <- match(y + 1L, ages)
     good <- need & !is.na(iy1)
     qy[good] <- (lx[iy[good]] - lx[iy1[good]]) / lx[iy[good]]
   }
-  py[is.na(py)] <- 1 - qy[is.na(py)]
+  need <- is.na(py)
+  py[need] <- 1 - qy[need]
+  log_py[need] <- log(py[need])
 
   # Compute fractional survival (Finan, Section 24)
   ps <- rep(NA_real_, length(todo))
@@ -168,14 +203,30 @@ t_px <- function(
       # Sec. 24.2: s_p_y = p_y^s
       ps[ok2] <- py_ok^s_ok
     } else if (frac == "Balducci") {
-      # Sec. 24.3: s_p_y = p_y / (1 - (1-s) * q_y)
-      denom <- 1 - (1 - s_ok) * qy_ok
+      # Equivalent denominator avoids cancellation when q rounds to one.
+      denom <- py_ok + s_ok * qy_ok
       ps[ok2] <- ifelse(denom > 0, py_ok / denom, 0)
     }
   }
 
   # Combine integer and fractional parts
   result <- p_int * ps
+  # A ratio may underflow although its fractional power is representable.
+  if (frac == "CF") {
+    use <- ok2 & s > 0 & py == 0 & is.finite(log_py)
+    result[use] <- exp(log(lx[i1[use]]) - log(lx[i0[use]]) + s[use]*log_py[use])
+  } else if (frac == "Balducci") {
+    use <- ok2 & s > 0 & py == 0 & is.finite(log_py) & qy >= 0
+    a <- log_py[use]
+    b <- log(s[use]) + log(qy[use])
+    top <- pmax(a, b)
+    log_denom <- top + log1p(exp(-abs(a-b)))
+    result[use] <- exp(log(lx[i1[use]]) - log(lx[i0[use]]) + a - log_denom)
+  }
+  # Integer survival needs only lx, even at the final recorded age.
+  # Once the cohort is extinct, a missing fractional factor cannot revive it.
+  result[ok & s == 0] <- p_int[ok & s == 0]
+  result[ok & p_int == 0] <- 0
   # Clamp to [0, 1]
   result <- pmin(pmax(result, 0), 1)
 

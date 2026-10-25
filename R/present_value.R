@@ -19,6 +19,12 @@
 #'
 #' Internally, all rate specifications are first converted to the equivalent
 #' annual effective interest rate using \code{\link{standardize_interest}}.
+#' Valuation retains the log accumulation rate of the original specification
+#' instead of reconstructing it from a rounded annual equivalent. In tidy
+#' output, extreme annual equivalents may round to -1 or overflow to Inf;
+#' the annual discount factor and present value are calculated independently.
+#' Products with extreme factors are combined in log space when necessary,
+#' so an unrepresentable factor need not invalidate a representable value.
 #'
 #' @param C Numeric vector of future payment amounts or capitals.
 #' @param i Numeric vector of interest-rate values.
@@ -26,7 +32,8 @@
 #'   Allowed values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param m Positive integer vector giving the conversion frequency for nominal
-#'   rates. Ignored for \code{"effective"} and \code{"force"}.
+#'   rates. Observed values are validated as positive integers for all rate
+#'   families; only nominal conversions use their numeric value.
 #' @param t Numeric vector of times in years until payment.
 #' @param tidy Logical scalar. If \code{FALSE}, returns a numeric present
 #'   value. If \code{TRUE}, returns a tibble with intermediate calculations.
@@ -174,16 +181,10 @@ present_value <- function(
   }
 
   # --- Compute equivalent rates ---
-  i_effective <- standardize_interest(i_type = i_type, i = i, m = m)
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  i_effective <- basis$effective
 
-  if (any(!is.na(i_effective) & (!is.finite(i_effective) | i_effective <= -1))) {
-    stop(
-      "The standardized annual effective interest rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  v <- 1 / (1 + i_effective)
+  v <- exp(-basis$growth)
 
   present_value_out <- rep(NA_real_, size)
 
@@ -191,7 +192,7 @@ present_value <- function(
     !is.na(t) &
     !is.na(i_effective)
 
-  present_value_out[ok] <- C[ok] / (1 + i_effective[ok])^t[ok]
+  present_value_out[ok] <- .cash_flow_value(C[ok], -t[ok] * basis$growth[ok])
 
   if (!tidy) {
     return(present_value_out)

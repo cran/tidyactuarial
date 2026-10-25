@@ -15,8 +15,10 @@
 #'   summary is computed separately within each group. If \code{by = NULL} and
 #'   \code{.data} is already grouped with \code{dplyr::group_by()}, the current
 #'   grouping structure is used.
-#' @param probs Numeric vector of probabilities for quantiles.
-#' @param var_probs Numeric vector of probabilities for VaR and TVaR.
+#' @param probs Numeric vector of probabilities for quantiles. Use
+#'   \code{numeric()} to omit these columns.
+#' @param var_probs Numeric vector of probabilities for VaR and TVaR. Use
+#'   \code{numeric()} to omit these columns.
 #' @param na_rm Logical scalar. If \code{TRUE}, missing values are removed
 #'   before computing statistics.
 #' @param ... Transitional compatibility for older calls using
@@ -34,8 +36,39 @@
 #' values, mean, variance, standard deviation, standard error, minimum, maximum,
 #' selected quantiles, empirical VaR, and empirical TVaR.
 #'
-#' TVaR is computed empirically as the mean of simulated values greater than or
-#' equal to the corresponding empirical VaR.
+#' Empirical VaR uses the lower quantile (the inverse empirical CDF; type 1),
+#' without interpolation between observed loss amounts. In contrast, the
+#' descriptive `q...` columns retain the default interpolated quantiles from
+#' [stats::quantile()].
+#'
+#' TVaR uses the mean of the upper `1 - p` fraction of the empirical loss
+#' distribution, with the appropriate fraction of any probability mass at VaR.
+#' Equivalently, for `0 <= p < 1` and `v = VaR_p(X)`,
+#' `TVaR_p(X) = v + E[(X - v)_+] / (1 - p)`.
+#' For `p = 1`, the finite empirical upper-endpoint limit (`max(x)`) is
+#' reported. At `p = 0`, TVaR is the empirical mean. Negative simulated
+#' values are permitted because `summary_mc()` is a generic numeric summary.
+#' TVaR is evaluated from ordered empirical probability masses, avoiding
+#' subtraction of extreme losses. A fractional boundary atom is retained.
+#' Variance, standard deviation and error are evaluated independently in
+#' scaled form when squaring loses range: variance may be zero or infinite
+#' while the deviation or error remains representable. Undefined moments
+#' for nonfinite observations remain missing; extended upper tails can be
+#' infinite. A sample smaller than two has missing variance, deviation and error.
+#'
+#' The column \code{se_mean} is the usual \eqn{s/\sqrt{n}} estimate under
+#' independent, identically distributed observations. It is not a general
+#' Monte Carlo error estimate for antithetic, clustered, weighted or otherwise
+#' dependent samples. A method label alone does not identify independent
+#' sampling units after filtering, grouping or reordering, so pairs are not
+#' inferred automatically. For known independent antithetic pairs, summarise
+#' their pair means instead. An odd unpaired observation or unequal weights
+#' requires an error calculation appropriate to that sampling design.
+#'
+#' Quantile labels retain the existing rounding to thousandths of probability;
+#' probabilities within a selector must yield distinct labels. Empty grouped
+#' inputs retain the statistical columns with zero output rows. An ungrouped
+#' empty effective sample retains one row of counts and missing statistics.
 #'
 #' If \code{na_rm = TRUE}, missing values in \code{col_value} are removed before
 #' computing statistics. If \code{na_rm = FALSE} and missing values are present,
@@ -190,6 +223,7 @@ summary_mc <- function(
   # -------------------------------------------------------------------------
 
   make_prob_name <- function(prefix, p) {
+    if (!length(p)) return(character())
     paste0(prefix, sprintf("%03.0f", p * 1000))
   }
 
@@ -205,6 +239,34 @@ summary_mc <- function(
     }
 
     as.numeric(out)
+  }
+
+  empirical_tail_mean <- function(ordered, p, mean_value = mean(ordered)) {
+    n <- length(ordered)
+    if (p == 0) return(mean_value)
+    if (p == 1 || ordered[1L] == ordered[n]) return(ordered[1L])
+    finite <- all(is.finite(ordered))
+    if (finite && max(abs(ordered)) < .Machine$double.xmin) {
+      # A power-of-two lift keeps subnormal masses until after averaging.
+      return(empirical_tail_mean(ordered * 2^1023, p) / 2^1023)
+    }
+    if (finite && n * p < 1) {
+      # Remove a fraction of the lowest atom without rounding 1-p to 1
+      # before forming the excluded monetary mass.
+      return((mean_value - p * ordered[n]) / (1 - p))
+    }
+    mass <- n * (1 - p)
+    if (mass <= 1) return(ordered[1L])
+    whole <- floor(mass)
+    fraction <- mass - whole
+    values <- ordered[seq_len(whole)]
+    weights <- rep(1 / mass, whole)
+    if (fraction > 0) {
+      values <- c(values, ordered[whole + 1])
+      weights <- c(weights, fraction / mass)
+    }
+    out <- sum(values * weights)
+    if (is.nan(out)) NA_real_ else out
   }
 
   summarise_one <- function(df) {
@@ -249,14 +311,27 @@ summary_mc <- function(
       ))
     }
 
+    variance_value <- safe_numeric_stat(x, stats::var, min_n = 2L)
+    sd_value <- sqrt(variance_value)
+    se_value <- if (n > 1L) sd_value / sqrt(n) else NA_real_
+    if (n > 1L && all(is.finite(x)) && any(x != x[1L]) &&
+        (!is.finite(variance_value) || variance_value < .Machine$double.xmin)) {
+      scale <- max(abs(x))
+      centered <- x - mean(x)
+      normalized <- if (all(is.finite(centered))) centered / scale else x / scale
+      relative_sd <- stats::sd(normalized)
+      sd_value <- scale * relative_sd
+      se_value <- scale * (relative_sd / sqrt(n))
+      variance_value <- .cash_flow_value(scale, log(scale) + 2 * log(relative_sd))
+    }
     base <- tibble::tibble(
       n_sim = n,
       n_total = n_total,
       n_missing = n_missing,
       mean = safe_numeric_stat(x, mean),
-      variance = safe_numeric_stat(x, stats::var, min_n = 2L),
-      sd = safe_numeric_stat(x, stats::sd, min_n = 2L),
-      se_mean = if (n > 1L) stats::sd(x) / sqrt(n) else NA_real_,
+      variance = variance_value,
+      sd = sd_value,
+      se_mean = se_value,
       min = safe_numeric_stat(x, min),
       max = safe_numeric_stat(x, max)
     )
@@ -270,30 +345,24 @@ summary_mc <- function(
 
     names(q_values) <- make_prob_name("q", probs)
 
+    # Actuarial VaR: the lower quantile of the empirical distribution.
+    # Descriptive quantiles above retain the usual type-7 interpolation.
     var_values <- as.numeric(stats::quantile(
       x,
       probs = var_probs,
       na.rm = FALSE,
-      names = FALSE
+      names = FALSE,
+      type = 1L
     ))
 
     names(var_values) <- make_prob_name("VaR_", var_probs)
 
-    tvar_values <- vapply(seq_along(var_probs), function(j) {
-      threshold <- var_values[[j]]
-
-      if (is.na(threshold)) {
-        return(NA_real_)
-      }
-
-      tail_x <- x[x >= threshold]
-
-      if (length(tail_x) == 0L) {
-        return(NA_real_)
-      }
-
-      mean(tail_x)
-    }, numeric(1L))
+    # Empirical TVaR (Expected Shortfall): the required fraction of the
+    # atom at VaR is included, rather than all observations equal to VaR.
+    # At p = 1 the value is its bounded empirical right-endpoint limit.
+    ordered <- if (length(var_probs)) sort(x, decreasing = TRUE) else numeric()
+    tvar_values <- vapply(var_probs, function(p)
+      empirical_tail_mean(ordered, p, base$mean), numeric(1L))
 
     names(tvar_values) <- make_prob_name("TVaR_", var_probs)
 
@@ -323,8 +392,11 @@ summary_mc <- function(
     dplyr::group_by(dplyr::across(dplyr::all_of(active_by))) |>
     dplyr::group_keys()
 
-  res <- lapply(grouped, summarise_one) |>
-    dplyr::bind_rows()
+  res <- if (length(grouped)) {
+    dplyr::bind_rows(lapply(grouped, summarise_one))
+  } else {
+    summarise_one(work[0, , drop = FALSE])[0, , drop = FALSE]
+  }
 
   dplyr::bind_cols(key_tbl, res)
 }

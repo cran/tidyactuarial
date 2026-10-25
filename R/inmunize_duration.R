@@ -80,6 +80,23 @@
 #'
 #' \deqn{b = (PV_L, PV_LD_L)^T.}
 #'
+#' The minimum Euclidean norm is taken over asset units \code{w}, not
+#' portfolio market-value fractions. It is evaluated by singular value
+#' decomposition of the row-scaled constraint matrix, without forming
+#' normal equations. Short positions are allowed. Matching present value
+#' and duration gives a zero value and first derivative of the surplus at
+#' the base yield, but does not ensure nonnegative surplus after rate shifts;
+#' the Redington convexity condition must be checked separately.
+#' Liability values retain the original log accumulation rate, and relative
+#' moments avoid monetary numerator overflow. Payment times include zero:
+#' a liability at time zero contributes value but no duration. Constraints are
+#' scaled by a common monetary magnitude and by moment magnitudes before
+#' products are formed. These are row transformations, preserving the norm over
+#' units; asset columns are not rescaled independently. Final values, weights
+#' and sensitivities must be finite, and nearly cancelled liability value is
+#' rejected. Rank and cancellation tests remain subject to double precision;
+#' reported portfolio moments should be inspected for ill-conditioned systems.
+#'
 #' @seealso \code{\link{immunize_duration_convexity}},
 #'   \code{\link{bond_duration}}, \code{\link{bond_convexity}}
 #'
@@ -206,77 +223,77 @@ immunize_duration <- function(
     stop("`m` must be a single positive integer.", call. = FALSE)
   }
 
-  m <- as.integer(round(m))
-
-  i_effective <- standardize_interest(
-    type = i_type,
-    rate = i,
-    m = m
-  )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
+  m <- round(m)
+  growth <- .interest_basis(i_type, i, m)$growth
+  if (length(growth) != 1L || !is.finite(growth)) {
+    stop("The original log accumulation rate must be finite.", call. = FALSE)
   }
 
   # --- Present value and duration of liabilities ---
-  v <- 1 / (1 + i_effective)
-  pv_L <- sum(L * v^t)
+  discounted <- .cash_flow_value(L, -t * growth)
+  pv_L <- sum(discounted)
+  pv_scale <- sum(abs(discounted))
 
-  if (abs(pv_L) < .Machine$double.eps * 100) {
+  if (!is.finite(pv_L) || !is.finite(pv_scale)) {
+    stop("Discounting liabilities produced non-finite values.", call. = FALSE)
+  }
+  if (pv_scale == 0 || abs(pv_L) <= .Machine$double.eps * 100 * pv_scale) {
     stop("Present value of liabilities is zero; immunization is not meaningful.", call. = FALSE)
   }
 
-  dur_L <- sum(t * L * v^t) / pv_L
+  dur_L <- sign(pv_L) * sum(.cash_flow_value(
+    discounted, log(t) - log(abs(pv_L))))
+  if (!is.finite(dur_L)) {
+    stop("Liability duration is non-finite.", call. = FALSE)
+  }
 
   # --- Build linear system A w = b ---
   # Row 1: PV constraint
   # Row 2: PV * duration constraint
-  A <- rbind(
-    P,
-    P * D
-  )
-  b <- c(pv_L, pv_L * dur_L)
+  price_scale <- max(P, abs(pv_L))
+  duration_scale <- max(abs(D), abs(dur_L))
+  if (duration_scale == 0) duration_scale <- 1
+  scaled_prices <- P / price_scale
+  scaled_durations <- D / duration_scale
+  A <- rbind(scaled_prices, scaled_prices * scaled_durations)
+  b <- (pv_L / price_scale) * c(1, dur_L / duration_scale)
 
   # --- Solve for weights ---
   if (n_assets == 2L) {
     # Closed-form solution for two assets
     P1 <- P[1L]
     P2 <- P[2L]
-    D1 <- D[1L]
-    D2 <- D[2L]
+    D1 <- scaled_durations[1L]
+    D2 <- scaled_durations[2L]
 
-    den <- P1 * (D1 - D2)
-    if (abs(den) < .Machine$double.eps * 100) {
+    den <- D1 - D2
+    if (abs(den) <= .Machine$double.eps * 100 * max(abs(D1), abs(D2))) {
       stop("Degenerate case: assets have equal duration; cannot solve uniquely.", call. = FALSE)
     }
 
-    w1 <- pv_L * (dur_L - D2) / den
-    w2 <- (pv_L - w1 * P1) / P2
-    w <- c(w1, w2)
+    fractions <- c((dur_L / duration_scale - D2) / den,
+                   (D1 - dur_L / duration_scale) / den)
+    w <- .cash_flow_value(sign(fractions) * pv_L,
+                          log(abs(fractions)) - log(c(P1, P2)))
   } else {
-    # Minimum-norm solution for n_assets >= 3:
-    # w = t(A) %*% solve(A %*% t(A), b)
-    At <- t(A)
-    M <- A %*% At
-    M_solve <- tryCatch(
-      solve(M, b),
-      error = function(e) {
-        stop("System matrix is singular; cannot compute minimum-norm solution.", call. = FALSE)
-      }
-    )
-    w <- as.numeric(At %*% M_solve)
+    w <- .immunization_min_norm(A, b)
+  }
+  if (any(!is.finite(w))) {
+    stop("Immunization weights are non-finite. Check input magnitudes.", call. = FALSE)
   }
 
   # --- Check resulting portfolio ---
-  pv_A <- sum(w * P)
-  dur_A <- sum(w * P * D) / pv_A
+  market_scaled <- w * scaled_prices
+  portfolio_scaled <- sum(market_scaled)
+  if (any(!is.finite(market_scaled)) || !is.finite(portfolio_scaled) || portfolio_scaled == 0) {
+    stop("Resulting portfolio present value is zero or non-finite.", call. = FALSE)
+  }
+  pv_A <- .cash_flow_value(portfolio_scaled, log(price_scale))
+  dur_A <- sign(portfolio_scaled) * .cash_flow_value(
+    sum(market_scaled * scaled_durations), log(duration_scale) - log(abs(portfolio_scaled)))
+  if (!is.finite(pv_A) || !is.finite(dur_A)) {
+    stop("Resulting portfolio measures are non-finite.", call. = FALSE)
+  }
 
   tibble::tibble(
     w = w,

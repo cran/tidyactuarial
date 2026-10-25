@@ -38,8 +38,12 @@
 #' discounting with mortality:
 #' \deqn{{}_tE_x = v^t \cdot {}_tp_x.}
 #'
-#' The interest-rate input is converted to an annual effective rate before
-#' applying the discount factor:
+#' Discounted products use the original log accumulation rate, retaining
+#' representable values when the annual effective equivalent loses range.
+#' This is an actuarial present value, not a probability: it can exceed one
+#' with negative interest rates and is not capped. The equivalent rate in
+#' tidy output may round to -1 or overflow, without being used for valuation.
+#' In ordinary notation the discount factor is:
 #' \deqn{v = (1+i_e)^{-1}.}
 #'
 #' Key identities involving \eqn{{}_nE_x}:
@@ -146,12 +150,13 @@ t_Ex <- function(
     stop("`check` must be a logical scalar.", call. = FALSE)
   }
 
-  if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || tol <= 0) {
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol <= 0) {
     stop("`tol` must be a single positive numeric value.", call. = FALSE)
   }
 
   if (check) {
     if (any(!is.finite(x))) stop("`x` must be finite.", call. = FALSE)
+    if (any(abs(x) > .Machine$integer.max)) stop("`x` must be representable as integer ages.")
     if (any(abs(x - round(x)) > tol)) {
       stop("`x` must be integer ages.", call. = FALSE)
     }
@@ -190,7 +195,8 @@ t_Ex <- function(
   }
 
   x <- as.integer(round(x))
-  m <- as.integer(round(m))
+  m <- round(m)
+  if (all(is.finite(m) & abs(m) <= .Machine$integer.max)) m <- as.integer(m)
 
   # --- recycle x, t, i, i_type, m to common length ---
   lengths <- c(length(x), length(t), length(i), length(i_type), length(m))
@@ -209,20 +215,9 @@ t_Ex <- function(
   if (length(i_type) == 1L && n > 1L) i_type <- rep(i_type, n)
   if (length(m) == 1L && n > 1L) m <- rep(m, n)
 
-  i_effective <- standardize_interest(
-    i_type = i_type,
-    i = i,
-    m = m
-  )
-
-  if (any(is.na(i_effective)) ||
-      any(!is.finite(i_effective)) ||
-      any(i_effective <= -1)) {
-    stop(
-      "The standardized annual effective interest rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
+  basis <- .interest_basis(i_type, i, m)
+  i_effective <- basis$effective
+  if (anyNA(basis$growth)) stop("Interest specifications must not be missing.", call. = FALSE)
 
   # --- compute survival probability via t_px ---
   if (missing(frac)) {
@@ -231,7 +226,7 @@ t_Ex <- function(
       x = x,
       t = t,
       tidy = FALSE,
-      check = FALSE,
+      check = check,
       tol = tol
     )
 
@@ -252,17 +247,13 @@ t_Ex <- function(
       t = t,
       frac = frac_used,
       tidy = FALSE,
-      check = FALSE,
+      check = check,
       tol = tol
     )
   }
 
   # --- pure endowment: tEx = v^t * t_px ---
-  v <- (1 + i_effective)^(-t)
-  nEx <- v * tpx
-
-  # Preserve the previous behavior: clamp to [0, 1].
-  nEx <- pmin(pmax(nEx, 0), 1)
+  nEx <- .cash_flow_value(tpx, -basis$growth * t)
 
   if (isTRUE(tidy)) {
     return(tibble::tibble(

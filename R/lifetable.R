@@ -3,7 +3,7 @@
 #' Creates an annual life table with **integer, consecutive ages** and returns a
 #' **tibble** (tidyverse-friendly) with class `"lifetable"`.
 #'
-#' The table can be built from exactly one of:
+#' The table can be built from any one of:
 #' \itemize{
 #'   \item \code{lx} (survivors), or
 #'   \item \code{qx} (one-year death probabilities), or
@@ -30,9 +30,11 @@
 #' \deqn{\ell_x = \ell_0 \cdot s(x), \quad d_x = \ell_x - \ell_{x+1},
 #'       \quad q_x = d_x / \ell_x, \quad p_x = \ell_{x+1} / \ell_x.}
 #'
-#' The central death rate \code{mx} is computed via the discrete approximation
-#' (Finan, Section 23.9):
-#' \deqn{m_x = \frac{q_x}{1 - a_x \cdot q_x}}
+#' With \eqn{a_x} the mean fraction of the year lived by those who die,
+#' exposure is \eqn{L_x = \ell_{x+1} + a_x d_x} and \eqn{m_x = d_x / L_x}.
+#' Consequently,
+#' \deqn{m_x = \frac{q_x}{1 - (1 - a_x) q_x}, \quad
+#'       q_x = \frac{m_x}{1 + (1 - a_x) m_x}}
 #' which under UDD (\code{ax = 0.5}) reduces to the classical formula
 #' \eqn{m_x = q_x / (1 - 0.5 \, q_x)} (Finan, Section 24.1). This arises
 #' because under UDD, \eqn{L_x = \ell_x - \tfrac{1}{2} d_x}, and therefore
@@ -40,8 +42,11 @@
 #'
 #' At the terminal age \eqn{\omega} with \code{close = TRUE}, closure forces
 #' \eqn{q_\omega = 1}, \eqn{p_\omega = 0}, and \eqn{d_\omega = \ell_\omega}.
-#' The corresponding \eqn{m_\omega} equals \eqn{1/(1 - a_x)}, which is 2
-#' under UDD (\code{ax = 0.5}). If \code{ax = 1}, \eqn{m_\omega = \infty}.
+#' For positive terminal survivors, \eqn{L_\omega = a_x \ell_\omega} and
+#' \eqn{m_\omega = 1/a_x}, which is 2 under UDD (\code{ax = 0.5}).
+#' At \code{ax = 0}, the zero-exposure limit is \eqn{m_\omega = \infty};
+#' at \code{ax = 1}, \eqn{m_\omega = 1}. Infinite \code{mx} inputs remain
+#' unsupported; this limit can be obtained from \code{lx} or \code{qx}.
 #'
 #' @param x Numeric vector of ages. Must be **integer** and **consecutive**
 #'   (annual table), e.g. \code{0:110}.
@@ -62,19 +67,23 @@
 #'   table is truncated to \code{omega}. If \code{omega > max(x)}, an error is
 #'   raised (the function will not invent missing ages).
 #' @param close Logical. If \code{TRUE} (default), closes the table at
-#'   \code{omega} (forces terminal conditions).
+#'   \code{omega} (forces terminal conditions). With \code{FALSE} and only
+#'   \code{lx}, the last \code{dx/qx/px/mx} are unknown (\code{NA}); a supplied
+#'   terminal probability is used when available.
 #' @param ax Scalar in \code{[0,1]}. Average fraction of the year lived by
 #'   those who die in the interval \eqn{[x, x+1)}. Under UDD (Finan, Sec. 24.1),
 #'   \code{ax = 0.5}. Under constant force, \eqn{a_x = 1/\mu - 1/(\exp(\mu)-1)}.
 #'   At the terminal age with \code{close = TRUE}, \code{mx} equals
-#'   \eqn{1/(1 - a_x)}, which is 2 for \code{ax = 0.5}. Default is \code{0.5}.
+#'   \eqn{1/a_x}, which is 2 for \code{ax = 0.5}, 1 for \code{ax = 1},
+#'   and \code{Inf} for \code{ax = 0}. Default is \code{0.5}.
 #' @param type Character. \code{"ultimate"} or \code{"select"} (metadata).
 #'   Stored as an attribute and used by downstream functions.
 #' @param frac Character. \code{"UDD"}, \code{"CF"}, or \code{"Balducci"}
 #'   (metadata). Stored as an attribute and used by fractional-age functions
 #'   such as \code{\link{t_px}}.
 #' @param check Logical. If \code{TRUE} (default), performs strict validity
-#'   and consistency checks.
+#'   and consistency checks, including \code{px = 1 - qx} when both are provided.
+#'   Validated ages within tolerance of integers are rounded before truncation.
 #' @param tol Numeric tolerance for integer checks and consistency checks.
 #'
 #' @return A \code{tibble} with class
@@ -87,7 +96,7 @@
 #'   \item \code{px}: probability of survival to \eqn{x+1}
 #'   \item \code{mx}: central death rate (derived using \code{ax}). At the
 #'     terminal age with \code{close = TRUE}, \code{mx} equals
-#'     \eqn{1/(1 - a_x)} and may be \code{Inf} if \code{ax = 1}.
+#'     \eqn{1/a_x} and is \code{Inf} if \code{ax = 0}.
 #' }
 #' Attributes include: \code{radix}, \code{omega}, \code{type}, \code{frac},
 #' \code{closed}, \code{ax}.
@@ -167,26 +176,44 @@ lifetable <- function(
   type <- match.arg(type)
   frac <- match.arg(frac)
 
+  for (name in c("check", "close")) {
+    value <- get(name, inherits = FALSE)
+    if (!is.logical(value) || length(value) != 1L || is.na(value))
+      stop("`", name, "` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0)
+    stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
+
   # --- Basic checks on x ---
   if (missing(x)) stop("`x` is required.")
   if (!is.numeric(x)) stop("`x` must be numeric.")
   x <- as.numeric(x)
+  if (!length(x)) stop("`x` must not be empty.", call. = FALSE)
 
   if (check) {
     if (any(!is.finite(x))) stop("`x` must be finite.")
+    if (any(abs(x) > .Machine$integer.max))
+      stop("`x` must be representable in the R integer range.", call. = FALSE)
     if (any(abs(x - round(x)) > tol)) stop("`x` must contain integer ages (annual table).")
     # Bug fix: use tolerance for consecutive-age check (floating-point safe)
     if (any(abs(diff(x) - 1) > tol)) stop("`x` must be consecutive annual ages (diff(x) == 1).")
   }
 
+  if (check) x <- round(x)
+
   # --- omega handling ---
+  for (name in c("lx", "qx", "px", "mx")) {
+    value <- get(name, inherits = FALSE)
+    if (!is.null(value) && length(value) != length(x))
+      stop("`", name, "` must have the same length as `x`.", call. = FALSE)
+  }
   max_x <- max(x)
   if (is.null(omega)) {
     omega <- max_x
   } else {
     if (!is.numeric(omega) || length(omega) != 1L || !is.finite(omega)) stop("`omega` must be a single finite number.")
     if (abs(omega - round(omega)) > tol) stop("`omega` must be an integer age.")
-    omega <- as.numeric(omega)
+    omega <- round(as.numeric(omega))
 
     if (omega > max_x + tol) {
       stop("`omega` cannot exceed max(x). Provide ages up to omega (or extend the table with a separate function).")
@@ -208,8 +235,8 @@ lifetable <- function(
   # --- ax checks ---
   ax <- as.numeric(ax)
   if (check) {
-    if (!is.finite(ax) || length(ax) != 1L) stop("`ax` must be a single finite number.")
-    if (ax < 0 - tol || ax > 1 + tol) stop("`ax` must be in [0,1].")
+    if (length(ax) != 1L || !is.finite(ax)) stop("`ax` must be a single finite number.")
+    if (ax < 0 || ax > 1) stop("`ax` must be in [0,1].")
   }
 
   # --- Normalize vectors / lengths ---
@@ -221,7 +248,7 @@ lifetable <- function(
 
     if (check) {
       # Allow NA, but reject Inf/NaN
-      bad <- !is.finite(z) & !is.na(z)
+      bad <- is.nan(z) | (!is.finite(z) & !is.na(z))
       if (any(bad)) stop("`", name, "` must not contain Inf/NaN.")
     }
     z
@@ -233,9 +260,14 @@ lifetable <- function(
   mx <- norm_vec(mx, "mx")
 
   # --- Determine radix if needed ---
+  if (check && !is.null(radix) &&
+      (!is.numeric(radix) || length(radix) != 1L || !is.finite(radix) || radix <= 0))
+    stop("`radix` must be a single positive finite number.", call. = FALSE)
   if (is.null(radix)) {
     radix <- if (!is.null(lx)) lx[1] else NA_real_
   }
+  if (check && (!is.numeric(radix) || length(radix) != 1L))
+    stop("`radix` must be a single finite number.", call. = FALSE)
   if (check && !is.na(radix)) {
     if (!is.numeric(radix) || length(radix) != 1L || !is.finite(radix)) stop("`radix` must be a single finite number.")
     if (radix <= 0) stop("`radix` must be positive.")
@@ -247,14 +279,20 @@ lifetable <- function(
     qx <- 1 - px
   }
 
-  # mx -> qx: q = m / (1 + ax*m)   (Finan, Section 23.9 inverse)
+  # mx -> qx from Lx = lx_next + ax*dx: q = m / (1 + (1-ax)*m)
   if (is.null(qx) && !is.null(mx)) {
     if (check && any(mx < -tol, na.rm = TRUE)) stop("`mx` must be nonnegative.")
-    qx <- mx / (1 + ax * mx)
+    qx <- mx / (1 + (1 - ax) * mx)
   }
 
   if (!is.null(qx) && is.null(px)) {
     px <- 1 - qx
+  }
+
+  if (check && !is.null(qx) && !is.null(px)) {
+    idx <- if (close) seq_len(n - 1L) else seq_len(n)
+    if (any(abs(qx[idx] + px[idx] - 1) > 10 * tol, na.rm = TRUE))
+      stop("Inconsistent probabilities: `px` must equal 1 - `qx`.", call. = FALSE)
   }
 
   # --- If lx is missing, build it from qx (needs radix) ---
@@ -279,6 +317,8 @@ lifetable <- function(
   # --- Derive / validate qx from lx for ages < omega ---
   if (is.null(qx)) {
     qx <- dx / lx
+    # Without an observed next survivor count, an open terminal interval is unknown.
+    if (!close) qx[n] <- NA_real_
     px <- 1 - qx
   } else if (check) {
     idx <- which(seq_len(n) < n & lx > 0)
@@ -307,10 +347,11 @@ lifetable <- function(
     }
   }
 
-  # --- Compute mx from qx using ax: m = q / (1 - ax*q) ---
+  # --- Compute mx from qx using ax: m = q / (1 - (1-ax)*q) ---
   # Under UDD (ax=0.5): mx = qx / (1 - 0.5*qx) (Finan, Section 24.1)
-  # At omega with close=TRUE: qx=1, mx = 1/(1-ax). If ax=1, mx=Inf.
-  mx_out <- ifelse(qx == 1 & abs(ax - 1) < tol, Inf, qx / (1 - ax * qx))
+  # For qx=1, use 1/ax directly to avoid cancellation for small positive ax.
+  # At ax=0 this gives the positive-deaths/zero-exposure limit Inf.
+  mx_out <- ifelse(qx == 1, 1 / ax, qx / (1 - (1 - ax) * qx))
 
   out <- tibble::tibble(
     x  = as.integer(round(x)),

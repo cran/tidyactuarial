@@ -47,7 +47,8 @@ while at least one life is alive. Ignored when \code{benefit} is supplied.}
 
 \item{benefit}{Optional list with numeric scalar weights \code{both},
 \code{x_only}, and \code{y_only}. These weights define the payment rate
-according to the survival state of the two lives.}
+according to the survival state of the two lives. Weights may be signed;
+an expected payment is then a benefit weight, not necessarily a probability.}
 
 \item{n}{Term in years. Use \code{Inf} for the maximum horizon allowed by
 the life tables. For exact k-thly valuation
@@ -92,6 +93,7 @@ The function supports joint-life, last-survivor, and state-based
 reversionary-style payments. The life table input may be either one common
 table for both lives or a list of two life tables, one for each life.
 
+
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{lt} is the life table input, \code{x} and
 \code{y} are the two actuarial ages, \code{i} is the interest-rate input,
@@ -117,11 +119,38 @@ so each payment has size \eqn{1/k}. For exact valuation, a fractional term
 is admissible whenever it contains a whole number of payments:
 \deqn{nk \in \mathbb{N}.}
 
-Woolhouse approximations are applied only to the standard joint-life and
-last-survivor statuses. For a deferred annuity, the Woolhouse endpoint
-corrections are multiplied by the issue-date value of the status at the
-beginning of the payment period. This preserves the deferment factor
-\eqn{v^h\,{}_hp_{xy}} or its last-survivor analogue.
+Both lives are alive at issue; both, x_only and y_only refer to occupation
+at each payment date, without restarting both lives after a death.
+A designated reversion to y uses both=0, x_only=0, y_only=1; this differs
+from payments to either sole survivor and from a joint-and-survivor annuity
+paying while both are alive as well.
+
+Exact valuation sums signed state payments on dates h+j/k, with each
+payment equal to its state rate divided by k. Cumulative death probabilities
+use direct survivor-count decrements and fractional interval masses, avoiding
+cancellation in 1-S. Original log interest, probabilities and monetary
+weights are combined before exponentiating when necessary.
+
+Woolhouse approximations apply only to standard joint-life/last-survivor
+statuses. Put F(t)=exp(-g*t)w(t), where w is the status survival from issue
+and g is the input rate's annual log accumulation. First order subtracts
+(1-1/k)(F(h)-F(h+n))/2 from the annual due annuity. Second order also
+subtracts (1-1/k^2)((g+eta(h))F(h)-(g+eta(h+n))F(h+n))/12, with
+eta(t)=-log(w(t+1)/w(t)), a forward annual estimate, not an exact
+instantaneous force. Second order requires positive supported weights
+and the following year at both borders; otherwise use none or first.
+Immediate subtracts (F(h)-F(h+n))/k from the due approximation.
+A negative approximation is reported with a warning, without clipping.
+
+Tables must satisfy the annual consistency requirements of \code{\link{t_pxy}};
+issue ages must have positive lx for nonempty valuations. Payment grids
+must be finite, representable and no larger than R's integer range.
+One call values one contract; benefit vectors describe states, not scenarios.
+The existing table-horizon convention is retained: each marginal survival
+becomes zero beyond its last recorded age. On open tables this is truncation,
+not evidence of death, and may affect last-survivor or reversionary weights
+after the shorter horizon. Extend the tables for those interpretations.
+Infinite n means available horizon, not extrapolated lifetime coverage.
 }
 \examples{
 lt <- data.frame(
@@ -178,23 +207,23 @@ annuity_xy(
 }
 \seealso{
 \code{\link{annuity_x}}, \code{\link{insurance_xy}},
-\code{\link{premium_xy}}, \code{\link{t_pxy}}, \code{\link{t_px}}
+  \code{\link{premium_xy}}, \code{\link{t_pxy}}, \code{\link{t_px}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

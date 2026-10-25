@@ -307,3 +307,21 @@ test_that("simulate_lifetime validates age, columns, and probabilities", {
     "nonnegative integer"
   )
 })
+test_that("CML fractions retain their conditional law for tiny death probabilities", {
+  tab <- data.frame(x = 60, qx = 1e-20)
+  set.seed(731)
+  before <- .Random.seed
+  n_sim <- 12L
+  # Inverse sampling consumes n uniforms for K, then n for the fraction.
+  set.seed(42)
+  invisible(runif(n_sim))
+  u <- runif(n_sim)
+  # Conditional constant-force death times approach Uniform(0,1) as q -> 0;
+  # at q=1e-20 the correction is below double precision.
+  expected <- u
+  assign(".Random.seed", before, envir = .GlobalEnv)
+  expect_warning(out <- simulate_lifetime(tab, 60, n_sim = n_sim,
+    frac = "cml", seed = 42, truncation = "conditional"), "truncated")
+  expect_equal(out$Tx, expected, tolerance = 1e-12)
+  expect_identical(.Random.seed, before)
+})

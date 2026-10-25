@@ -43,7 +43,21 @@
 #' `P` is annualized and the actual installment is `P / k`.
 #'
 #' Reserves are measured immediately before a premium payable at duration
-#' `t`. Pure endowments are valued as endowment APV minus term-insurance APV.
+#' `t`. With immediate premiums this includes the installment scheduled exactly
+#' at `t`, including a last installment at maturity. Future installments use
+#' the selected annuity method; the current installment is an exact `P / k`.
+#' Pure endowments use direct discounted survival to maturity, avoiding a
+#' subtraction of nearly equal insurance values.
+#' Both lives are assumed alive at the valuation duration, under independent
+#' mortality. In particular, `status = "last"` selects the insured event;
+#' it does not condition on an unspecified surviving life. Last-survivor
+#' recursion tracks the both-alive and each single-survivor state separately.
+#' Both recursive statuses use backward conditional transition identities,
+#' direct annual `lx` decrements and the original log interest basis. This
+#' avoids forward cancellation and loss from an effective-rate conversion.
+#' Unreachable transitions contribute exactly zero. The recursion's existing
+#' timing and deferment restrictions are retained. Conditional states whose
+#' reserves themselves overflow double precision are not generally recoverable.
 #'
 #' @return A compact tibble, a named numeric vector, or a long audit tibble.
 #'
@@ -329,10 +343,10 @@ reserve_xy <- function(
 
   if (isTRUE(check)) {
     if (lt_missing) stop("`lt` must be provided.", call. = FALSE)
-    if (x_missing || is.null(x) || !scalar_integer(x)) {
+    if (x_missing || is.null(x) || !scalar_integer(x) || abs(x)>.Machine$integer.max) {
       stop("`x` must be a single integer age.", call. = FALSE)
     }
-    if (y_missing || is.null(y) || !scalar_integer(y)) {
+    if (y_missing || is.null(y) || !scalar_integer(y) || abs(y)>.Machine$integer.max) {
       stop("`y` must be a single integer age.", call. = FALSE)
     }
     if (i_missing || is.null(i) || !is.numeric(i) || length(i) != 1L ||
@@ -367,6 +381,7 @@ reserve_xy <- function(
          n_prem <= 0 ||
          (!is.infinite(n_prem) &&
           (!is.finite(n_prem) ||
+           !is.finite(n_prem*k) ||
            abs(n_prem * k - round(n_prem * k)) > tol)))) {
       stop("`n_prem * k` must be an integer.", call. = FALSE)
     }
@@ -374,10 +389,14 @@ reserve_xy <- function(
 
   x <- as.integer(round(x))
   y <- as.integer(round(y))
-  m <- as.integer(round(m))
-  h <- as.integer(round(h))
-  k <- as.integer(round(k))
-  if (!is.infinite(n)) n <- as.integer(round(n))
+  store_integer<-function(z) {
+    z<-round(z)
+    if(abs(z)<=.Machine$integer.max) as.integer(z) else z
+  }
+  m <- store_integer(m)
+  h <- store_integer(h)
+  k <- store_integer(k)
+  if (!is.infinite(n)) n <- store_integer(n)
   if (!is.null(n_prem) && !is.infinite(n_prem)) {
     n_prem <- round(n_prem * k) / k
   }
@@ -404,6 +423,7 @@ reserve_xy <- function(
       stop("Invalid life table in `", label, "`.", call. = FALSE)
     }
     tab <- tab[order(tab$x), , drop = FALSE]
+    .two_life_table(tab)
     tab$x <- as.integer(round(tab$x))
     tab
   }
@@ -449,7 +469,8 @@ reserve_xy <- function(
     t_vec <- seq.int(0L, contract_horizon)
   } else {
     if (!is.numeric(t) || length(t) < 1L || anyNA(t) ||
-        any(!is.finite(t)) || any(abs(t - round(t)) > tol)) {
+        any(!is.finite(t)) || any(abs(t)>.Machine$integer.max) ||
+        any(abs(t - round(t)) > tol)) {
       stop("`t` must be an integer vector.", call. = FALSE)
     }
     t_vec <- sort(unique(as.integer(round(t))))
@@ -465,11 +486,7 @@ reserve_xy <- function(
       frac = frac_benefit, tidy = FALSE
     )
     if (current_type == "pure_endowment") {
-      args$type <- "endowment"
-      endowment <- do.call(insurance_xy, args)
-      args$type <- "term"
-      value <- endowment - do.call(insurance_xy, args)
-      return(if (value < 0 && abs(value) <= tol) 0 else value)
+      return(.two_life_pure_endowment(table_use,cx,cy,nn,hh,benefit,i,i_type,m,status))
     }
     args$type <- current_type
     do.call(insurance_xy, args)
@@ -549,62 +566,61 @@ reserve_xy <- function(
   }
 
   apv_benefits <- vapply(t_vec, future_benefit_apv, numeric(1L))
-  premium_factors <- vapply(t_vec, future_premium_factor, numeric(1L))
-  apv_premiums <- P * premium_factors
+  premium_factors <- if (P==0) rep(0,length(t_vec)) else
+    vapply(t_vec, future_premium_factor, numeric(1L))
+  # C16: prospective values are BEFORE any premium scheduled exactly at t.
+  premium_now <- timing=="immediate" & t_vec>premium_start_time &
+    t_vec<=premium_end_time
+  apv_premiums <- if (P==0) rep(0,length(t_vec)) else
+    P*premium_factors+(P/k)*premium_now
   prospective <- apv_benefits - apv_premiums
 
   if (method == "prospective") {
     reserves <- prospective
   } else {
-    i_effective <- standardize_interest(i_type = i_type, i = i, m = m)
-
-    one_year_status_p <- function(tt) {
-      value <- t_pxy(
-        lt = table_use, x = x + tt, y = y + tt, t = 1,
-        frac = frac_benefit, status = status
-      )
-      if (is.na(value)) stop("Cannot compute status continuation.", call. = FALSE)
-      value
+    # Backward conditional reserves: last retains 11,10,01; joint stays in 11.
+    growth <- .interest_basis(i_type,i,m)$growth
+    full_t <- seq.int(0L,contract_horizon)
+    both <- only_x <- only_y <- numeric(length(full_t))
+    terminal <- if (type %in% c("endowment","pure_endowment")) benefit else 0
+    both[length(both)] <- only_x[length(only_x)] <- only_y[length(only_y)] <- terminal
+    probabilities <- function(tab,age) {
+      j <- match(age,tab$x)
+      if (is.na(j)) {
+        if (age>max(tab$x) && tail(tab$lx,1)==0) return(c(p=-Inf,q=0))
+        stop("Cannot compute single-life continuation from the life table.",call.=FALSE)
+      }
+      if (tab$lx[j]==0) return(c(p=-Inf,q=0))
+      next_j <- match(as.double(age)+1,tab$x)
+      if (is.na(next_j))
+        stop("Cannot compute single-life continuation from the life table.",call.=FALSE)
+      c(p=.single_life_log_ratio(tab$lx[next_j],tab$lx[j]),
+        q=.single_life_log_ratio(tab$lx[j]-tab$lx[next_j],tab$lx[j]))
     }
-
-    full_t <- seq.int(0L, contract_horizon)
-    full_reserves <- numeric(length(full_t))
-    full_reserves[[1L]] <- future_benefit_apv(0) - P * future_premium_factor(0)
-
-    if (length(full_t) > 1L) {
-      for (idx in seq_len(length(full_t) - 1L)) {
-        tt <- full_t[[idx]]
-        p_status <- one_year_status_p(tt)
-
-        if (p_status <= 0) {
-          full_reserves[(idx + 1L):length(full_reserves)] <- 0
-          break
-        }
-
-        premium_due <- if (tt >= premium_start_time &&
-                           tt < premium_end_time) P else 0
-
-        death_benefit <- if (type == "pure_endowment") {
-          0
-        } else if (type == "whole" || tt < n) {
-          benefit
-        } else {
-          0
-        }
-
-        full_reserves[[idx + 1L]] <- (
-          (full_reserves[[idx]] + premium_due) * (1 + i_effective) -
-            death_benefit * (1 - p_status)
-        ) / p_status
+    weighted <- function(amount,log_probability) {
+      keep <- log_probability != -Inf
+      if (!any(keep)) return(0)
+      .cash_flow_sum(amount[keep],log_probability[keep]-growth)
+    }
+    if (contract_horizon>0) for (tt in rev(seq_len(contract_horizon)-1L)) {
+      idx <- tt+1L
+      px <- probabilities(table_x,as.double(x)+tt)
+      py <- probabilities(table_y,as.double(y)+tt)
+      premium_due <- if (tt>=premium_start_time && tt<premium_end_time) P else 0
+      death_benefit <- if (type=="pure_endowment") 0 else benefit
+      if (status=="last") {
+        only_x[idx] <- weighted(c(only_x[idx+1L],death_benefit),px)-premium_due
+        only_y[idx] <- weighted(c(only_y[idx+1L],death_benefit),py)-premium_due
+        both[idx] <- weighted(c(both[idx+1L],only_x[idx+1L],only_y[idx+1L],death_benefit),
+                             c(px["p"]+py["p"],px["p"]+py["q"],
+                               px["q"]+py["p"],px["q"]+py["q"]))-premium_due
+      } else {
+        # Disjoint first-death routes, avoiding 1-p_joint and forward cancellation.
+        both[idx] <- weighted(c(both[idx+1L],death_benefit,death_benefit),
+                             c(px["p"]+py["p"],px["q"],px["p"]+py["q"]))-premium_due
       }
     }
-
-    if (type %in% c("endowment", "pure_endowment")) {
-      full_reserves[[contract_horizon + 1L]] <- benefit
-    }
-    if (type == "term") full_reserves[[contract_horizon + 1L]] <- 0
-
-    reserves <- full_reserves[match(t_vec, full_t)]
+    reserves <- both[match(t_vec,full_t)]
   }
 
   names(reserves) <- paste0("t=", t_vec)

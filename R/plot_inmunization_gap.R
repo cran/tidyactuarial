@@ -1,7 +1,7 @@
 #' Plot immunization performance under interest-rate shifts
 #'
-#' Computes and plots the difference between the present value of liabilities
-#' and the present value of an immunized asset portfolio under small interest
+#' Computes and plots asset present value minus liability present value
+#' for an immunized portfolio under small interest
 #' rate changes. This allows visual evaluation of duration or
 #' duration-convexity immunization quality.
 #'
@@ -21,7 +21,8 @@
 #'   from \code{i_effective - delta} to \code{i_effective + delta}, where
 #'   \code{i_effective} is the annual effective rate equivalent to
 #'   \code{i}, \code{i_type}, and \code{m}.
-#' @param n_grid Number of rate values to evaluate.
+#' @param n_grid Number of rate values to evaluate. Integer from 2 through
+#'   \code{.Machine$integer.max}, with sufficient memory for the requested grid.
 #'
 #' @return A \code{ggplot2} object showing the PV difference curve
 #'   \eqn{PV_A(i) - PV_L(i)}{PV_A(i) - PV_L(i)} and a zero reference line.
@@ -45,6 +46,18 @@
 #' illustrates immunization robustness. Under perfect duration immunization,
 #' this curve is tangent to zero at the base rate and non-negative nearby if
 #' the convexity condition is also met.
+#' The grid is expressed in annual effective yields and clipped, when needed,
+#' to the nearest representable value strictly above -1. Its base annual
+#' effective equivalent and grid endpoints must be finite and representable.
+#' Gap values combine signed weighted cash flows using log discounts, rather
+#' than subtracting separately overflowed portfolio values. Zero-weight assets
+#' contribute zero after validation. A nonfinite gap causes an explicit error.
+#' Recovery is limited by double precision and by cancellation already lost
+#' in input data; arbitrary extreme signed cancellation is not guaranteed.
+#' The graph reprices the supplied cash flows. Their consistency with the
+#' prices and sensitivities used to solve for weights remains the caller's
+#' responsibility. Matching convexity gives zero second derivative at the base
+#' yield and does not by itself ensure a positive surplus on either side.
 #'
 #' @seealso \code{\link{immunize_duration}},
 #'   \code{\link{immunize_duration_convexity}},
@@ -148,7 +161,7 @@ plot_immunization_gap <- function(
     stop("`m` must be a single positive integer.", call. = FALSE)
   }
 
-  m <- as.integer(round(m))
+  m <- round(m)
 
   if (!is.numeric(delta) || length(delta) != 1L || is.na(delta) ||
       !is.finite(delta) || delta <= 0) {
@@ -156,7 +169,8 @@ plot_immunization_gap <- function(
   }
 
   if (!is.numeric(n_grid) || length(n_grid) != 1L || is.na(n_grid) ||
-      !is.finite(n_grid) || n_grid < 2 || abs(n_grid - round(n_grid)) > 1e-10) {
+      !is.finite(n_grid) || n_grid < 2 || n_grid > .Machine$integer.max ||
+      abs(n_grid - round(n_grid)) > 1e-10) {
     stop("`n_grid` must be a single integer greater than or equal to 2.", call. = FALSE)
   }
 
@@ -179,21 +193,20 @@ plot_immunization_gap <- function(
     )
   }
 
-  lower <- max(-0.999999, i_effective - delta)
+  lower <- max(-1 + .Machine$double.eps / 2, i_effective - delta)
   upper <- i_effective + delta
 
-  if (upper <= lower) {
-    stop("The interest-rate grid is invalid. Reduce `delta`.", call. = FALSE)
+  if (!is.finite(upper) || upper <= lower) {
+    stop("The interest-rate grid is invalid. Choose a finite representable `delta`.", call. = FALSE)
   }
 
   i_grid <- seq(lower, upper, length.out = n_grid)
 
-  pv_liab <- function(rate) {
-    v <- 1 / (1 + rate)
-    sum(L * v^t)
-  }
-
-  pv_asset_j <- function(asset_cf, rate) {
+  asset_amounts <- numeric(0)
+  asset_times <- numeric(0)
+  asset_log_weights <- numeric(0)
+  for (j in seq_along(asset_cashflows)) {
+    asset_cf <- asset_cashflows[[j]]
     if (!is.list(asset_cf) ||
         !all(c("cf", "t") %in% names(asset_cf))) {
       stop("Each element of `asset_cashflows` must contain components `cf` and `t`.",
@@ -214,19 +227,22 @@ plot_immunization_gap <- function(
            call. = FALSE)
     }
 
-    v <- 1 / (1 + rate)
-    sum(cf_j * v^t_j)
+    if (w[j] != 0) {
+      asset_amounts <- c(asset_amounts, sign(w[j]) * cf_j)
+      asset_times <- c(asset_times, t_j)
+      asset_log_weights <- c(asset_log_weights, rep(log(abs(w[j])), length(cf_j)))
+    }
   }
 
-  pv_portfolio <- function(rate) {
-    sum(vapply(seq_along(asset_cashflows), function(j) {
-      w[j] * pv_asset_j(asset_cashflows[[j]], rate)
-    }, numeric(1L)))
+  gap_amounts <- c(asset_amounts, -L)
+  gap_times <- c(asset_times, t)
+  gap_log_weights <- c(asset_log_weights, rep(0, length(L)))
+  GAP <- vapply(i_grid, function(rate) {
+    .cash_flow_sum(gap_amounts, gap_log_weights - gap_times * log1p(rate))
+  }, numeric(1L))
+  if (any(!is.finite(GAP))) {
+    stop("Immunization gap is non-finite at the requested rate grid.", call. = FALSE)
   }
-
-  PV_L <- vapply(i_grid, pv_liab, numeric(1L))
-  PV_A <- vapply(i_grid, pv_portfolio, numeric(1L))
-  GAP  <- PV_A - PV_L
 
   df <- data.frame(i = i_grid, gap = GAP)
 

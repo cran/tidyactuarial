@@ -41,15 +41,16 @@ from \code{i_effective - delta} to \code{i_effective + delta}, where
 \code{i_effective} is the annual effective rate equivalent to
 \code{i}, \code{i_type}, and \code{m}.}
 
-\item{n_grid}{Number of rate values to evaluate.}
+\item{n_grid}{Number of rate values to evaluate. Integer from 2 through
+\code{.Machine$integer.max}, with sufficient memory for the requested grid.}
 }
 \value{
 A \code{ggplot2} object showing the PV difference curve
-\eqn{PV_A(i) - PV_L(i)}{PV_A(i) - PV_L(i)} and a zero reference line.
+  \eqn{PV_A(i) - PV_L(i)}{PV_A(i) - PV_L(i)} and a zero reference line.
 }
 \description{
-Computes and plots the difference between the present value of liabilities
-and the present value of an immunized asset portfolio under small interest
+Computes and plots asset present value minus liability present value
+for an immunized portfolio under small interest
 rate changes. This allows visual evaluation of duration or
 duration-convexity immunization quality.
 }
@@ -72,6 +73,18 @@ The curve \eqn{\Delta(i) = PV_A(i) - PV_L(i)}{Delta(i) = PV_A(i) - PV_L(i)}
 illustrates immunization robustness. Under perfect duration immunization,
 this curve is tangent to zero at the base rate and non-negative nearby if
 the convexity condition is also met.
+The grid is expressed in annual effective yields and clipped, when needed,
+to the nearest representable value strictly above -1. Its base annual
+effective equivalent and grid endpoints must be finite and representable.
+Gap values combine signed weighted cash flows using log discounts, rather
+than subtracting separately overflowed portfolio values. Zero-weight assets
+contribute zero after validation. A nonfinite gap causes an explicit error.
+Recovery is limited by double precision and by cancellation already lost
+in input data; arbitrary extreme signed cancellation is not guaranteed.
+The graph reprices the supplied cash flows. Their consistency with the
+prices and sensitivities used to solve for weights remains the caller's
+responsibility. Matching convexity gives zero second derivative at the base
+yield and does not by itself ensure a positive surplus on either side.
 }
 \examples{
 # Two-asset duration immunization gap
@@ -90,11 +103,11 @@ plot_immunization_gap(
 }
 \seealso{
 \code{\link{immunize_duration}},
-\code{\link{immunize_duration_convexity}},
-\code{\link{bond_duration}}, \code{\link{bond_convexity}}
+  \code{\link{immunize_duration_convexity}},
+  \code{\link{bond_duration}}, \code{\link{bond_convexity}}
 
-Other immunization: 
-\code{\link{immunize_duration}()},
-\code{\link{immunize_duration_convexity}()}
+Other immunization:
+\code{\link[=immunize_duration]{immunize_duration()}},
+\code{\link[=immunize_duration_convexity]{immunize_duration_convexity()}}
 }
 \concept{immunization}

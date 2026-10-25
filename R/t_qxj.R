@@ -70,6 +70,13 @@ t_qxj <- function(
   if (missing(t))  stop("`t` is required.")
   if (missing(cause)) stop("`cause` is required.")
 
+  for (name in c("check", "tidy")) {
+    value <- get(name, inherits = FALSE)
+    if (!is.logical(value) || length(value) != 1L || is.na(value))
+      stop("`", name, "` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0)
+    stop("`tol` must be finite and nonnegative.", call. = FALSE)
   if (check) {
     if (!is.data.frame(md)) stop("`md` must be a data.frame/tibble.", call. = FALSE)
     if (!all(c("x", "p_total", "q_total") %in% names(md))) {
@@ -80,6 +87,8 @@ t_qxj <- function(
     }
     if (!cause %in% names(md)) stop("`cause` not found in `md`.", call. = FALSE)
     if (!is.numeric(x) || !is.numeric(t)) stop("`x` and `t` must be numeric.", call. = FALSE)
+    if (any(!is.finite(x)) || any(!is.finite(t))) stop("`x` and `t` must be finite.")
+    if (any(abs(x) > .Machine$integer.max)) stop("`x` must be representable as integer ages.")
     if (any(t < -tol, na.rm = TRUE)) stop("`t` must be >= 0.", call. = FALSE)
 
     if (is.null(frac)) {
@@ -136,12 +145,12 @@ t_qxj <- function(
     pt <- 1 - qt
 
     if (frac == "CF") {
-      q_tau_s <- 1 - (pt^s)
+      q_tau_s <- -expm1(s * log1p(-qt))
       return(wj * q_tau_s)
     }
 
     # Balducci
-    denom <- 1 - (1 - s) * qt
+    denom <- pt + s * qt
     q_tau_s <- (s * qt) / denom
     return(wj * q_tau_s)
   }
@@ -155,6 +164,8 @@ t_qxj <- function(
     idx0 <- match(xi, ages)
     if (is.na(idx0)) stop("Starting age not found in `md$x`.", call. = FALSE)
 
+    if (ti > length(ages) - idx0 + 1 + tol)
+      stop("Horizon exceeds the available ages in `md`.", call. = FALSE)
     if (is.null(frac)) {
       n <- as.integer(round(ti))
       idx_end <- idx0 + n - 1L

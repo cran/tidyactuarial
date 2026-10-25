@@ -1,0 +1,742 @@
+---
+title: "Loans, Amortization, and General Payment Schedules"
+author: "Julian Mauricio Fajardo"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Loans, Amortization, and General Payment Schedules}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+
+library(tidyactuarial)
+```
+
+## Introduction
+
+Loan amortization is a direct application of equations of value and annuities.
+A loan is not merely an initial debt followed by periodic payments. Actuarially,
+it is a cash-flow system that must remain consistent with an interest-rate
+basis, a payment frequency, and a rule for reducing the outstanding balance.
+
+The central object is therefore not the amortization table itself, but the
+financial identity that each row must satisfy.
+
+If $B_{t-1}$ is the outstanding balance at the beginning of period $t$, $I_t$
+the interest charged during the period, $R_t$ the regular payment, $E_t$ an
+extra principal payment, and $B_t$ the ending balance, then
+
+$$
+B_t
+=
+B_{t-1}+I_t-R_t-E_t.
+$$
+
+If $i_t$ is the effective rate for period $t$,
+
+$$
+I_t=i_tB_{t-1},
+$$
+
+so
+
+$$
+\boxed{
+B_t
+=
+B_{t-1}(1+i_t)-R_t-E_t
+}.
+$$
+
+This recurrence is the basis of every schedule developed in this vignette.
+`tidyactuarial` is used after the financial structure has been established, so
+that the schedule remains an auditable sequence of equations rather than an
+automatic table.
+
+## A level-payment loan
+
+Suppose a loan of amount $L$ is repaid by $n$ equal end-of-period payments $R$
+at effective rate $i$ per payment period.
+
+At origination,
+
+$$
+L
+=
+R\,a_{\overline{n}|i},
+$$
+
+hence
+
+$$
+\boxed{
+R
+=
+\frac{L}{a_{\overline{n}|i}}
+=
+L
+\frac{
+i
+}{
+1-(1+i)^{-n}
+}
+}.
+$$
+
+Consider a loan of 50,000 repaid monthly over five years. The contractual rate
+is a nominal annual interest rate of $12\%$ convertible monthly.
+
+The effective monthly rate is
+
+$$
+i_p
+=
+\frac{0.12}{12}
+=
+0.01,
+$$
+
+and the number of payments is
+
+$$
+n=5(12)=60.
+$$
+
+Therefore,
+
+$$
+50{,}000
+=
+R\,a_{\overline{60}|0.01},
+$$
+
+and
+
+$$
+R
+\approx
+1{,}112.22.
+$$
+
+The annuity factor can be reproduced directly:
+
+```{r level-payment}
+loan_principal <- 50000
+loan_term_years <- 5
+payments_per_year <- 12
+nominal_rate <- 0.12
+number_payments <- 60
+
+annuity_factor <-
+  a_angle(
+    n = loan_term_years,
+    k = payments_per_year,
+    i = nominal_rate,
+    i_type = "nominal_interest",
+    m = 12,
+    timing = "immediate"
+  )
+
+level_payment <-
+  loan_principal /
+  annuity_factor
+
+level_payment
+```
+
+The payment is determined by the equation of value. The schedule comes later.
+
+## Interest, principal repayment, and the balance recurrence
+
+For a level-payment loan without extra principal payments,
+
+$$
+B_t
+=
+B_{t-1}(1+i)-R.
+$$
+
+The interest charged in period $t$ is
+
+$$
+I_t
+=
+iB_{t-1},
+$$
+
+while the principal repaid through the regular payment is
+
+$$
+A_t
+=
+R-I_t.
+$$
+
+Therefore,
+
+$$
+B_t
+=
+B_{t-1}-A_t.
+$$
+
+For the first month of the loan above,
+
+$$
+I_1
+=
+50{,}000(0.01)
+=
+500,
+$$
+
+so
+
+$$
+A_1
+=
+1{,}112.22-500
+=
+612.22,
+$$
+
+and
+
+$$
+B_1
+=
+50{,}000-612.22
+=
+49{,}387.78.
+$$
+
+In the second month, interest is calculated on the new outstanding balance,
+not on the original principal.
+
+The regular payment remains constant, but its composition changes through time:
+interest decreases while principal repayment increases.
+
+## Prospective and retrospective balances
+
+The outstanding balance after $t$ payments can be obtained prospectively by
+valuing the remaining payments:
+
+$$
+\boxed{
+B_t
+=
+R\,a_{\overline{n-t}|i}
+}.
+$$
+
+The same balance can be obtained retrospectively by accumulating the original
+loan and subtracting the accumulated value of the payments already made:
+
+$$
+\boxed{
+B_t
+=
+L(1+i)^t
+-
+R\,s_{\overline{t}|i}
+}.
+$$
+
+For the 50,000 loan, after 12 monthly payments,
+
+$$
+B_{12}
+\approx
+42{,}235.49.
+$$
+
+These two formulas are not different valuation methods. They are two views of
+the same financial position.
+
+The computational schedule provides a third audit:
+
+```{r level-schedule}
+level_schedule <-
+  amort_schedule(
+    principal = loan_principal,
+    n = number_payments,
+    i = nominal_rate,
+    i_type = "nominal_interest",
+    m = 12,
+    k = payments_per_year,
+    timing = "immediate"
+  )
+
+level_schedule |>
+  dplyr::filter(
+    period %in% c(1, 2, 12, 24, 60)
+  ) |>
+  dplyr::select(
+    period,
+    ob_start,
+    interest,
+    payment,
+    principal,
+    ob_end
+  )
+```
+
+Each row should satisfy
+
+$$
+B_t
+=
+B_{t-1}+I_t-R_t.
+$$
+
+That identity is the primary audit of the schedule.
+
+## Extra principal payments
+
+An extra principal payment changes the outstanding balance immediately.
+
+If an extra payment $E_t$ is made together with the regular payment,
+
+$$
+B_t
+=
+B_{t-1}(1+i)-R_t-E_t.
+$$
+
+Once the balance has been reduced, there are at least two common policies:
+
+- keep the regular payment and shorten the remaining term;
+- keep the contractual term and recalculate the future regular payment.
+
+Consider the same 50,000 loan with extra principal payments of 5,000 at month
+12 and 3,000 at month 24.
+
+```{r extra-principal}
+extra_principal <- c(
+  "12" = 5000,
+  "24" = 3000
+)
+
+schedule_term <-
+  amort_schedule(
+    principal = loan_principal,
+    n = number_payments,
+    i = nominal_rate,
+    i_type = "nominal_interest",
+    m = 12,
+    k = payments_per_year,
+    timing = "immediate",
+    extra_principal = extra_principal,
+    adjust = "term"
+  )
+
+schedule_payment <-
+  amort_schedule(
+    principal = loan_principal,
+    n = number_payments,
+    i = nominal_rate,
+    i_type = "nominal_interest",
+    m = 12,
+    k = payments_per_year,
+    timing = "immediate",
+    extra_principal = extra_principal,
+    adjust = "payment"
+  )
+```
+
+Under `adjust = "term"`, the regular payment is maintained and the loan ends
+earlier.
+
+Under `adjust = "payment"`, the contractual horizon is maintained and the
+future payment is recalculated after each extra principal payment.
+
+For this example, the main financial results are approximately:
+
+| Scenario | Number of payments | Total interest | Total paid |
+|---|---:|---:|---:|
+| No extra principal | 60 | 16,733.34 | 66,733.34 |
+| Shorter term | 50 | 12,961.91 | 62,961.91 |
+| Lower payment | 60 | 14,826.08 | 64,826.08 |
+
+Both policies reduce total interest relative to the original schedule. The
+shorter-term policy generates the larger interest saving because the balance
+remains exposed to interest for less time. The lower-payment policy has a
+different objective: it reduces the borrower's future cash-flow burden.
+
+The choice is therefore not only an arithmetic comparison. It may also be a
+liquidity and risk-management decision.
+
+A compact audit can be produced directly from the schedules:
+
+```{r extra-principal-summary}
+summary_original <-
+  level_schedule |>
+  dplyr::summarise(
+    scenario = "No extra principal",
+    number_payments = dplyr::n(),
+    total_interest = sum(interest),
+    total_paid = sum(cashflow),
+    ending_balance = dplyr::last(ob_end)
+  )
+
+summary_term <-
+  schedule_term |>
+  dplyr::summarise(
+    scenario = "Shorter term",
+    number_payments = dplyr::n(),
+    total_interest = sum(interest),
+    total_paid = sum(cashflow),
+    ending_balance = dplyr::last(ob_end)
+  )
+
+summary_payment <-
+  schedule_payment |>
+  dplyr::summarise(
+    scenario = "Lower payment",
+    number_payments = dplyr::n(),
+    total_interest = sum(interest),
+    total_paid = sum(cashflow),
+    ending_balance = dplyr::last(ob_end)
+  )
+
+dplyr::bind_rows(
+  summary_original,
+  summary_term,
+  summary_payment
+)
+```
+
+## General payment schedules
+
+The level-payment model is only one possible structure.
+
+More generally, a loan may have:
+
+- period-specific interest rates;
+- non-level regular payments;
+- extra principal payments that vary by period;
+- payment rules that depend on the current outstanding balance.
+
+The recurrence remains
+
+$$
+\boxed{
+B_t
+=
+B_{t-1}(1+i_t)-R_t-E_t
+}.
+$$
+
+What changes is the rule used to define $i_t$, $R_t$, and $E_t$.
+
+`amort_schedule_general()` represents this broader problem directly. In
+`tidyactuarial`, the interest-rate input may be a scalar or a vector with
+one rate specification per period, while `payment` may be calculated
+automatically, supplied as a scalar or vector, or defined as a function of the
+current loan state.
+
+## A loan with changing interest rates
+
+Suppose a six-year loan of 120,000 is repaid by equal annual payments, but the
+annual effective interest rate changes each year:
+
+$$
+4\%,\;5\%,\;6\%,\;7\%,\;8\%,\;9\%.
+$$
+
+The usual level-annuity formula cannot be applied with a single rate. Instead,
+the payment $R$ must satisfy
+
+$$
+120{,}000
+=
+R
+\sum_{t=1}^{6}
+\prod_{h=1}^{t}
+(1+i_h)^{-1}.
+$$
+
+For these rates, the sum of discount factors is approximately
+
+$$
+4.982057,
+$$
+
+so
+
+$$
+R
+\approx
+24{,}086.43.
+$$
+
+The changing-rate schedule can be built directly:
+
+```{r variable-rates}
+variable_rates <- c(
+  0.04,
+  0.05,
+  0.06,
+  0.07,
+  0.08,
+  0.09
+)
+
+variable_rate_schedule <-
+  amort_schedule_general(
+    principal = 120000,
+    n = 6,
+    i = variable_rates,
+    i_type = "effective",
+    k = 1,
+    payment = NULL,
+    timing = "immediate"
+  )
+
+variable_rate_schedule |>
+  dplyr::select(
+    period,
+    ob_start,
+    interest,
+    payment,
+    principal,
+    ob_end
+  )
+```
+
+The software is useful here because the financial structure is no longer a
+single geometric annuity. Each payment is discounted through the sequence of
+rates that precedes it.
+
+## A payment rule that depends on the outstanding balance
+
+A particularly useful case is a constant-principal amortization system.
+
+Let a loan of principal $L$ be repaid over $n$ periods with the same amount of
+principal repaid each period:
+
+$$
+A
+=
+\frac{L}{n}.
+$$
+
+At period $t$,
+
+$$
+R_t
+=
+A+i_tB_{t-1}.
+$$
+
+Thus the regular payment is not level. It is a rule that depends on the current
+outstanding balance.
+
+For the 50,000 loan over 60 months at a monthly effective rate of $1\%$,
+
+$$
+A
+=
+\frac{50{,}000}{60}
+=
+833.33.
+$$
+
+The first payment is
+
+$$
+R_1
+=
+833.33+0.01(50{,}000)
+=
+1{,}333.33,
+$$
+
+while the final payment is approximately
+
+$$
+R_{60}
+=
+841.67.
+$$
+
+This structure can be expressed directly as a payment function:
+
+```{r constant-principal-rule}
+fixed_principal <-
+  loan_principal /
+  number_payments
+
+constant_principal_rule <- function(
+  period,
+  ob_start,
+  i_effective_period
+) {
+  fixed_principal +
+    i_effective_period * ob_start
+}
+
+constant_principal_schedule <-
+  amort_schedule_general(
+    principal = loan_principal,
+    n = number_payments,
+    i = nominal_rate,
+    i_type = "nominal_interest",
+    m = 12,
+    k = payments_per_year,
+    payment = constant_principal_rule,
+    timing = "immediate"
+  )
+
+constant_principal_schedule |>
+  dplyr::filter(
+    period %in% c(1, 2, 12, 24, 60)
+  ) |>
+  dplyr::select(
+    period,
+    ob_start,
+    interest,
+    payment,
+    principal,
+    ob_end
+  )
+```
+
+This example is important because the code states the financial rule directly:
+
+$$
+\text{payment}
+=
+\text{fixed principal}
++
+\text{interest on current balance}.
+$$
+
+The schedule is generated from the definition of the system rather than from a
+precalculated vector of payments.
+
+## Level payment versus constant principal
+
+The two amortization systems repay the same original principal under the same
+interest-rate basis, but the timing of principal repayment differs.
+
+Under level payments, principal repayment begins relatively slowly and
+increases through time.
+
+Under constant principal, the same amount of principal is repaid every period,
+so the outstanding balance decreases linearly and interest falls more quickly.
+
+For the 50,000 loan considered above, total interest under the level-payment
+system is approximately
+
+$$
+16{,}733.34,
+$$
+
+while total interest under constant principal is
+
+$$
+15{,}250.00.
+$$
+
+The difference is approximately
+
+$$
+1{,}483.34.
+$$
+
+The reason is not the name of the repayment system. It is the time profile of
+the outstanding balance: faster principal reduction produces a smaller balance
+on which future interest is calculated.
+
+## Negative amortization
+
+The recurrence also identifies when a payment is insufficient to cover the
+interest charged.
+
+If
+
+$$
+R_t<i_tB_{t-1},
+$$
+
+then
+
+$$
+A_t
+=
+R_t-i_tB_{t-1}
+<
+0
+$$
+
+and
+
+$$
+B_t>B_{t-1}.
+$$
+
+The unpaid portion of interest is added to the outstanding balance. This is
+negative amortization.
+
+`amort_schedule_general()` permits this situation when the supplied payment
+rule or payment vector produces payments below the interest charged. The
+financial interpretation should remain explicit: the loan balance is growing
+because the contractual cash outflow is insufficient to cover current
+interest.
+
+Negative amortization is therefore not a software anomaly. It follows directly
+from the balance recurrence.
+
+## Final actuarial reading
+
+Loan amortization can be summarized through a single dynamic identity:
+
+$$
+B_t
+=
+B_{t-1}(1+i_t)-R_t-E_t.
+$$
+
+The familiar level-payment loan is obtained when $i_t=i$, $R_t=R$, and
+$E_t=0$.
+
+Extra principal payments modify $E_t$ and may lead either to a shorter term or
+to a lower future payment.
+
+Variable-rate loans replace the single interest rate by a sequence
+$i_1,\ldots,i_n$.
+
+General payment systems replace the constant payment by a rule
+$R_t=R(t,B_{t-1},i_t)$.
+
+The progression is therefore
+
+$$
+\text{equation of value}
+\longrightarrow
+\text{balance recurrence}
+\longrightarrow
+\text{level schedule}
+\longrightarrow
+\text{prepayment policy}
+\longrightarrow
+\text{general payment rule}.
+$$
+
+`amort_schedule()` is appropriate when the rate specification is fixed and the
+main extension is an extra-principal policy.
+
+`amort_schedule_general()` becomes useful when rates, payments, or payment
+rules vary through time.
+
+The package does not replace the loan equation. It makes the recurrence
+reproducible when the schedule becomes too complex to reconstruct manually
+period by period.

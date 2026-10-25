@@ -20,14 +20,15 @@
 #'   values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param m Positive integer vector giving the conversion frequency for nominal
-#'   interest-rate inputs. Ignored for \code{"effective"} and \code{"force"}.
+#'   interest-rate inputs. Observed values are validated for every rate family,
+#'   although only nominal conversions use this frequency.
 #' @param g Numeric vector of annual growth-rate values for the payments.
 #' @param g_type Character vector indicating the growth-rate type. Allowed
 #'   values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param g_m Positive integer vector giving the conversion frequency for
-#'   nominal growth-rate inputs. Ignored for \code{"effective"} and
-#'   \code{"force"}.
+#'   nominal growth-rate inputs. Observed values are validated for every rate
+#'   family, although only nominal conversions use this frequency.
 #' @param h Numeric vector of deferment times in years. Must be greater than or
 #'   equal to 0. For present values, the deferment discounts the payment block.
 #'   For accumulated values, it is recorded but does not change the factor under
@@ -78,6 +79,32 @@
 #'
 #' For annuities-due, the corresponding immediate factor is multiplied by
 #' \eqn{1+i_p}.
+#'
+#' Valuation retains the original annual log rates \eqn{\delta_i} and
+#' \eqn{\delta_g}. Let \eqn{r=\delta_i/k}, \eqn{s=\delta_g/k},
+#' \eqn{H=hk}, and \eqn{b=0} for immediate or \eqn{b=1} for due payments.
+#' With \eqn{G_N(z)=\sum_{j=0}^{N-1}\exp(zj)}, the finite present value is
+#' \deqn{P_1\exp[-r(H+1-b)]G_N(s-r).}
+#' The accumulated value at \eqn{h+n} years is
+#' \deqn{P_1\exp[br+(N-1)\max(r,s)]G_N(-|s-r|).}
+#' Stable logarithmic sums avoid subtracting nearly equal effective rates or
+#' accumulation levels. The spread is computed before period conversion as
+#' \eqn{(\delta_g-\delta_i)/k}; no nonzero spread is replaced by zero.
+#' For matching effective rates or nominal rates with equal conversion
+#' frequencies, log-ratio identities preserve close input differences before
+#' taking logarithms. Widely separated ratios that lose range fall back to
+#' the original log rates. Different rate families retain the accuracy limits
+#' of their separate conversions.
+#'
+#' A perpetuity requires \eqn{\delta_i>\delta_g}, without an arbitrary
+#' numerical gap. Its value is
+#' \eqn{P_1\exp[-r(H+1-b)]/[1-\exp(s-r)]}.
+#' Missing finite terms propagate missing values. Signed and zero first
+#' payments retain their meaning. Standalone audit rates may saturate, while
+#' monetary values combine the first payment with log factors before declaring
+#' range loss. No arbitrary precision or universal extreme-range guarantee is
+#' implied. Unlike \code{g} in \code{annuity_arith}, this \code{g} is an annual
+#' growth-rate specification and not a monetary increment per payment.
 #'
 #' @seealso \code{\link{a_angle}}, \code{\link{s_angle}},
 #'   \code{\link{annuity_arith}}, \code{\link{standardize_interest}}
@@ -292,22 +319,10 @@ annuity_geom <- function(
   }
 
   # --- Convert rates ---
-  i_effective <- standardize_interest(i_type = i_type, i = i, m = m)
-  g_effective <- standardize_interest(i_type = g_type, i = g, m = g_m)
-
-  if (any(!is.na(i_effective) & (!is.finite(i_effective) | i_effective <= -1))) {
-    stop(
-      "The standardized annual effective interest rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  if (any(!is.na(g_effective) & (!is.finite(g_effective) | g_effective <= -1))) {
-    stop(
-      "The standardized annual effective growth rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
+  interest_basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  growth_basis <- .interest_basis(i_type = g_type, i = g, m = g_m)
+  i_effective <- interest_basis$effective
+  g_effective <- growth_basis$effective
 
   present_value_factor <- rep(NA_real_, size)
   accumulated_value_factor <- rep(NA_real_, size)
@@ -319,9 +334,8 @@ annuity_geom <- function(
   n_periods <- rep(NA_real_, size)
   h_periods <- rep(NA_real_, size)
 
-  eps <- 1e-12
-
-  is_na_elem <- is.na(i) |
+  is_na_elem <- (!perpetuity & is.na(n)) |
+    is.na(i) |
     is.na(g) |
     is.na(i_effective) |
     is.na(g_effective) |
@@ -350,26 +364,41 @@ annuity_geom <- function(
       )
     }
 
-    i_period[idx] <- (1 + i_effective[idx])^(1 / kk) - 1
-    g_period[idx] <- (1 + g_effective[idx])^(1 / kk) - 1
-    v_period[idx] <- 1 / (1 + i_period[idx])
+    r <- interest_basis$growth[idx] / kk
+    s <- growth_basis$growth[idx] / kk
+    # Preserve the annual spread before period conversion. For matching rate
+    # families, log-ratio identities avoid cancellation of rounded logarithms.
+    annual_spread <- growth_basis$growth[idx] - interest_basis$growth[idx]
+    candidate_spread <- annual_spread
+    if (tolower(i_type[idx]) == tolower(g_type[idx])) {
+      if (tolower(i_type[idx]) == "effective") {
+        candidate_spread <- log1p((g[idx] - i[idx]) / (1 + i[idx]))
+      } else if (tolower(i_type[idx]) == "nominal_interest" && m[idx] == g_m[idx] &&
+                 is.finite(m[idx] + i[idx])) {
+        candidate_spread <- m[idx] * log1p((g[idx] - i[idx]) / (m[idx] + i[idx]))
+      } else if (tolower(i_type[idx]) == "nominal_discount" && m[idx] == g_m[idx] &&
+                 is.finite(m[idx] - i[idx])) {
+        candidate_spread <- -m[idx] * log1p((i[idx] - g[idx]) / (m[idx] - i[idx]))
+      }
+    }
+    if (is.finite(candidate_spread)) annual_spread <- candidate_spread
+    spread <- annual_spread / kk
+    i_period[idx] <- expm1(r)
+    g_period[idx] <- expm1(s)
+    v_period[idx] <- exp(-r)
     h_periods[idx] <- H
+    payment_shift <- H + as.integer(timing[idx] == "immediate")
 
     if (perpetuity[idx]) {
-      if (i_period[idx] <= g_period[idx] + eps) {
+      if (annual_spread >= 0) {
         stop(
           "For a geometric perpetuity, the per-period interest rate must be strictly greater than the per-period growth rate.",
           call. = FALSE
         )
       }
 
-      base_pv <- 1 / (i_period[idx] - g_period[idx])
-
-      if (timing[idx] == "due") {
-        base_pv <- (1 + i_period[idx]) * base_pv
-      }
-
-      present_value_factor[idx] <- P1[idx] * base_pv * v_period[idx]^H
+      log_pv <- -r * payment_shift - log(-expm1(spread))
+      present_value_factor[idx] <- .cash_flow_value(P1[idx], log_pv)
       selected_factor[idx] <- present_value_factor[idx]
       next
     }
@@ -386,25 +415,16 @@ annuity_geom <- function(
 
     n_periods[idx] <- N
 
-    if (abs(i_period[idx] - g_period[idx]) < eps) {
-      base_pv <- N / (1 + i_period[idx])
-      base_av <- N * (1 + i_period[idx])^(N - 1)
-    } else {
-      q <- (1 + g_period[idx]) / (1 + i_period[idx])
+    # One payment has no growth exponent. Anchor accumulated terms at the
+    # larger rate to avoid subtracting two overflowing accumulation levels.
+    log_pv_sum <- if (N == 1) 0 else .annuity_log_sum(spread, N)
+    log_fv_sum <- if (N == 1) 0 else .annuity_log_sum(-abs(spread), N)
+    log_pv <- log_pv_sum - r * payment_shift
+    log_fv <- log_fv_sum + max(r, s) * (N - 1) +
+      if (timing[idx] == "due") r else 0
 
-      base_pv <- (1 - q^N) / (i_period[idx] - g_period[idx])
-
-      base_av <- ((1 + i_period[idx])^N - (1 + g_period[idx])^N) /
-        (i_period[idx] - g_period[idx])
-    }
-
-    if (timing[idx] == "due") {
-      base_pv <- (1 + i_period[idx]) * base_pv
-      base_av <- (1 + i_period[idx]) * base_av
-    }
-
-    present_value_factor[idx] <- P1[idx] * base_pv * v_period[idx]^H
-    accumulated_value_factor[idx] <- P1[idx] * base_av
+    present_value_factor[idx] <- .cash_flow_value(P1[idx], log_pv)
+    accumulated_value_factor[idx] <- .cash_flow_value(P1[idx], log_fv)
 
     selected_factor[idx] <- if (valuation == "present") {
       present_value_factor[idx]

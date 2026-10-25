@@ -69,8 +69,19 @@
 #' contributes only if both \code{col_Z} and \code{col_Y} are observed. This
 #' prevents the numerator and denominator from being estimated from different
 #' simulated samples.
+#' Monetary premium amounts retain the ratio before intermediate overflow or
+#' underflow. A displayed annuity-scale coefficient may still be zero or
+#' infinite when the coefficient itself is outside double precision, while
+#' the per-payment and annualized amounts remain representable. The
+#' equivalence residual uses the ratio before that loss of range.
+#' Positive subnormal observations are retained using scaled means when an
+#' ordinary mean rounds to zero. A genuinely zero annuity exposure is rejected.
+#' A positive infinite \code{payment_annualized} metadata value is accepted
+#' only when it agrees with the product of a finite payment basis and finite
+#' frequency. The payment basis cannot be inferred from that infinite value
+#' alone; retain \code{payment_per_payment} or supply \code{annuity_payment}.
 #'
-#' @return A tibble containing the original simulations and standardized
+#' @return A data frame or tibble containing the original simulations and standardized
 #' premium columns:
 #' \describe{
 #'   \item{premium_annualized}{Estimated annualized premium
@@ -87,6 +98,7 @@
 #' \code{premium_annuity_scale} for backward compatibility. Unless
 #' \code{col_P = "premium"}, a compatibility column \code{premium} is also
 #' created with the same scale coefficient.
+#' Existing grouping is used for estimation and removed from the result.
 #'
 #' @seealso
 #' \code{\link{mc_insurance}}, \code{\link{mc_annuity}},
@@ -307,14 +319,14 @@ mc_premium <- function(
   payments_per_year <- rep(NA_integer_, n_rows)
   mc_equivalence_residual <- rep(NA_real_, n_rows)
 
-  constant_in_group <- function(data, column) {
+  constant_in_group <- function(data, column, allow_inf = FALSE) {
     values <- data[[column]]
 
     if (!is.numeric(values)) {
       stop("`", column, "` must be numeric.", call. = FALSE)
     }
 
-    if (anyNA(values) || any(!is.finite(values))) {
+    if (anyNA(values) || any(!is.finite(values) & !(allow_inf & values == Inf))) {
       stop(
         "`", column, "` must contain finite nonmissing metadata within ",
         "each premium group.",
@@ -344,7 +356,7 @@ mc_premium <- function(
       stop("`k` must be a single positive integer.", call. = FALSE)
     }
 
-    as.integer(round(value))
+    if (value <= .Machine$integer.max) as.integer(round(value)) else round(value)
   }
 
   if (!is.null(k)) {
@@ -470,11 +482,13 @@ mc_premium <- function(
     if ("payment_annualized" %in% names(data_group)) {
       annualized_basis <- constant_in_group(
         data_group,
-        "payment_annualized"
+        "payment_annualized", allow_inf = TRUE
       )
 
-      if (abs(annualized_basis - k_group * payment_group) >
-          tol * max(1, abs(annualized_basis))) {
+      expected_basis <- k_group * payment_group
+      if (annualized_basis != expected_basis &&
+          (!is.finite(annualized_basis) || !is.finite(expected_basis) ||
+           abs(annualized_basis - expected_basis) > tol * max(1, abs(annualized_basis)))) {
         stop(
           "`payment_annualized` is inconsistent with the payment ",
           "frequency and per-payment amount.",
@@ -517,7 +531,7 @@ mc_premium <- function(
       )
     }
 
-    if (!is.finite(mean_Y) || mean_Y <= 0) {
+    if (!is.finite(mean_Y) || !any(Y > 0)) {
       stop(
         "The mean simulated premium annuity present value must be ",
         "positive.",
@@ -526,9 +540,38 @@ mc_premium <- function(
     }
 
     scale_group <- mean_Z / mean_Y
-    per_payment_group <- scale_group * payment_group
-    annualized_group <- k_group * per_payment_group
-    residual_group <- mean_Z - scale_group * mean_Y
+    log_ratio <- log(mean_Z) - log(mean_Y)
+    ratio_Z <- mean_Z
+    ratio_Y <- mean_Y
+    lost_mean <- mean_Y < .Machine$double.xmin ||
+      (mean_Z < .Machine$double.xmin && any(Z > 0))
+    if (lost_mean) {
+      log_mean <- function(values) {
+        largest <- max(values)
+        if (largest == 0) return(-Inf)
+        log(largest) + log(mean(values / largest))
+      }
+      log_Y <- log_mean(Y)
+      log_ratio <- log_mean(Z) - log_Y
+      sum_Z <- sum(Z)
+      sum_Y <- sum(Y)
+      if (is.finite(sum_Z) && is.finite(sum_Y)) {
+        ratio_Z <- sum_Z
+        ratio_Y <- sum_Y
+        log_ratio <- log(sum_Z) - log(sum_Y)
+      } else {
+        ratio_Z <- exp(log_ratio)
+        ratio_Y <- 1
+      }
+      scale_group <- ratio_Z / ratio_Y
+    }
+    per_payment_group <- .mc_ratio_product(payment_group, ratio_Z, ratio_Y,
+                                          log_ratio = log_ratio)
+    annualized_group <- .mc_ratio_product(payment_group, ratio_Z, ratio_Y,
+                                          multiplier = k_group, log_ratio = log_ratio)
+    premium_mean <- if (lost_mean) .cash_flow_value(1, log_Y + log_ratio) else
+      .mc_ratio_product(mean_Y, mean_Z, mean_Y, log_ratio = log_ratio)
+    residual_group <- mean_Z - premium_mean
 
     premium_annuity_scale[rows] <- scale_group
     premium_per_payment[rows] <- per_payment_group

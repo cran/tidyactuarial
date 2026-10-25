@@ -47,8 +47,12 @@
 #' rate, \code{i_type} denotes the interest-rate type, and \code{m} denotes the
 #' conversion frequency for nominal spot rates.
 #'
-#' The spot-rate input is converted to annual effective form through
-#' \code{\link{standardize_interest}} before discount factors are computed.
+#' Discount factors use the original log accumulation rate under the supplied
+#' convention. The reported annual effective equivalent may round to -1 or
+#' overflow to Inf while a finite discount factor remains recoverable.
+#' Final factors remain subject to double precision range. With
+#' \code{.na = "propagate"}, an incomplete row keeps its position and has a
+#' \code{NULL} plot entry when plotting is requested.
 #'
 #' @seealso \code{\link{forward_rate}},
 #'   \code{\link{discount_factor_spot}}, \code{\link{standardize_interest}}
@@ -354,24 +358,25 @@ yield_curve <- function(
       out_i_effective[[row_idx]] <- rep(NA_real_, length(tt))
 
       if (plot) {
-        out_plot_list[[row_idx]] <- NULL
+        out_plot_list[row_idx] <- list(NULL)
       }
     } else {
-      ii_eff <- standardize_interest(
+      basis <- .interest_basis(
         i_type = rep_len(i_type, length(ii)),
         i = ii,
         m = rep_len(m, length(ii))
       )
 
-      if (any(!is.finite(ii_eff) | ii_eff <= -1)) {
+      ii_eff <- basis$effective
+      if (any(!is.finite(basis$growth))) {
         abort(paste0(
-          "The standardized annual effective spot rates must be greater than -1. ",
+          "The original spot log growth rates must be finite. ",
           "Problem at row ", row_idx, "."
         ))
       }
 
       out_i_effective[[row_idx]] <- ii_eff
-      out_discount[[row_idx]] <- (1 + ii_eff)^(-tt)
+      out_discount[[row_idx]] <- exp(-tt * basis$growth)
 
       if (plot) {
         out_plot_list[[row_idx]] <- make_plot(tt, ii_eff)
@@ -385,7 +390,7 @@ yield_curve <- function(
   } else if (.keep == "used") {
     out <- data_in[, c(t_name, i_name), drop = FALSE]
   } else {
-    out <- tibble::tibble()
+    out <- tibble::tibble(.rows = n_rows)
   }
 
   out[[.out]] <- out_discount

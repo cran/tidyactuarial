@@ -43,20 +43,20 @@ One of \code{"act/365"} or \code{"act/360"}.}
 \value{
 A tibble with one row per detected IRR and columns:
 \describe{
-\item{root_id}{Root index.}
-\item{irr}{Detected IRR as an annual effective rate.}
-\item{i_effective_annual}{Same as \code{irr}, reported explicitly.}
-\item{j_nominal_interest}{Equivalent nominal annual interest rate
-convertible \code{m} times.}
-\item{delta}{Equivalent force of interest.}
-\item{npv}{NPV evaluated at the detected root, approximately zero.}
-\item{interval_left}{Left endpoint of the local search bracket.}
-\item{interval_right}{Right endpoint of the local search bracket.}
-\item{n_cashflows}{Length of \code{cf}.}
-\item{has_both_signs}{Whether the cash flow has at least one positive
-and one negative value.}
-\item{n_sign_changes_cashflow}{Number of sign changes in the nonzero
-cash-flow sequence.}
+  \item{root_id}{Root index.}
+  \item{irr}{Detected IRR as an annual effective rate.}
+  \item{i_effective_annual}{Same as \code{irr}, reported explicitly.}
+  \item{j_nominal_interest}{Equivalent nominal annual interest rate
+    convertible \code{m} times.}
+  \item{delta}{Equivalent force of interest.}
+  \item{npv}{NPV evaluated at the detected root, approximately zero.}
+  \item{interval_left}{Left endpoint of the local search bracket.}
+  \item{interval_right}{Right endpoint of the local search bracket.}
+  \item{n_cashflows}{Length of \code{cf}.}
+  \item{has_both_signs}{Whether the cash flow has at least one positive
+    and one negative value.}
+  \item{n_sign_changes_cashflow}{Number of sign changes in the nonzero
+    cash-flow sequence.}
 }
 
 If no roots are detected, the function returns a tibble with zero rows.
@@ -70,7 +70,7 @@ present value (NPV) function, using compact actuarial notation.
 This function is intended for cash flows with multiple sign changes, where
 more than one IRR may exist. It evaluates the NPV on a fine grid over the
 search interval, identifies subintervals with sign changes (and grid points
-where the NPV is approximately zero), and applies
+where the scaled NPV evaluates to zero), and applies
 \code{\link[stats]{uniroot}} to each candidate interval.
 
 The IRRs returned are interpreted as annual effective rates.
@@ -78,6 +78,14 @@ The IRRs returned are interpreted as annual effective rates.
 Timing can be supplied either through \code{t} (in years) or \code{date}
 (calendar dates). If \code{date} is supplied, the earliest date is treated
 as time 0.
+
+
+Cash flows are divided by their largest absolute amount during the search;
+reported NPVs remain in the original currency. Scaling that would erase a
+nonzero amount through underflow is rejected. Only exact computed grid
+zeros and sign-changing brackets generate candidates: an absolutely small
+monetary NPV is not by itself evidence of a root. Grid detection remains
+heuristic, including for tangential or very close roots.
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
@@ -87,10 +95,10 @@ nominal annual interest rate.
 This function detects roots numerically over a finite search interval.
 It may miss roots if:
 \itemize{
-\item the grid is too coarse,
-\item two roots are extremely close,
-\item the NPV touches zero without changing sign,
-\item or the root lies outside the search interval.
+  \item the grid is too coarse,
+  \item two roots are extremely close,
+  \item the NPV touches zero without changing sign,
+  \item or the root lies outside the search interval.
 }
 
 For a single-IRR workflow, use \code{\link{irr_flow}}.
@@ -120,15 +128,15 @@ irr_flow_multi(
 \seealso{
 \code{\link{irr_flow}}, \code{\link{pv_flow}}
 
-Other time-value: 
-\code{\link{accumulation_factor}()},
-\code{\link{discount_factor}()},
-\code{\link{future_value}()},
-\code{\link{fv_flow}()},
-\code{\link{irr_flow}()},
-\code{\link{plot_cash_flow}()},
-\code{\link{present_value}()},
-\code{\link{pv_flow}()},
-\code{\link{solve_value}()}
+Other time-value:
+\code{\link[=accumulation_factor]{accumulation_factor()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=future_value]{future_value()}},
+\code{\link[=fv_flow]{fv_flow()}},
+\code{\link[=irr_flow]{irr_flow()}},
+\code{\link[=plot_cash_flow]{plot_cash_flow()}},
+\code{\link[=present_value]{present_value()}},
+\code{\link[=pv_flow]{pv_flow()}},
+\code{\link[=solve_value]{solve_value()}}
 }
 \concept{time-value}

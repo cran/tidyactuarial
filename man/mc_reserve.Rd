@@ -38,7 +38,10 @@ mc_reserve(
 }
 \arguments{
 \item{.data}{A data frame or tibble containing simulated curtate future
-lifetimes and, when required, complete future lifetimes.}
+lifetimes and, when required, complete future lifetimes.
+Observed curtate lifetimes must be finite nonnegative integers and
+observed complete lifetimes finite and nonnegative. Paired observations
+must satisfy \eqn{K_x \le T_x < K_x+1}; missing values remain missing.}
 
 \item{t}{Nonnegative numeric vector of valuation durations.}
 
@@ -118,15 +121,15 @@ formal argument because otherwise R partially matches it against
 }
 \value{
 A tibble with one row per simulation and requested duration. Important
-standardized columns include:
+  standardized columns include:
 \describe{
-\item{Z_t}{Future benefit present value at duration \code{t}.}
-\item{Y_t}{Future premium-annuity basis present value.}
-\item{future_pv_premiums}{Actual future premium present value.}
-\item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
-\item{premium_per_payment}{Premium paid at each date.}
-\item{premium_annuity_scale}{Coefficient multiplying \code{Y_t}.}
-\item{L_t}{Prospective loss, or the name supplied through \code{col_L}.}
+  \item{Z_t}{Future benefit present value at duration \code{t}.}
+  \item{Y_t}{Future premium-annuity basis present value.}
+  \item{future_pv_premiums}{Actual future premium present value.}
+  \item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
+  \item{premium_per_payment}{Premium paid at each date.}
+  \item{premium_annuity_scale}{Coefficient multiplying \code{Y_t}.}
+  \item{L_t}{Prospective loss, or the name supplied through \code{col_L}.}
 }
 }
 \description{
@@ -165,11 +168,45 @@ coefficient from complete benefit-annuity simulation pairs:
 }
 This makes the sample mean issue loss equal to zero, up to numerical error,
 when \code{reserve_timing = "before_payment"}.
+In this case \code{premium_unit} does not reinterpret the estimated
+coefficient: the selected unit only describes a supplied premium input.
+Missing issue annuities are excluded jointly with missing benefits.
 
 The column \code{Y_t} is the present value of the premium-annuity basis,
 including the amount supplied through \code{payment}. The column
 \code{future_pv_premiums} is the actual simulated present value of premium
 income, equal to \code{premium_annuity_scale * Y_t}.
+This identity is mathematical: the actual cash flows are valued directly
+using the original log interest rate, so a rounded or overflowing displayed
+coefficient or annuity basis need not destroy representable premium income.
+A supplied annuity-scale coefficient is interpreted as received; lost
+information is not inferred from an explicitly rounded coefficient.
+
+For \code{type = "pure_endowment"} and
+\code{timing = "moment_of_death"}, survival requires \eqn{T_x > n}.
+Death at exactly \code{n} belongs to the term component, so term and
+pure-endowment benefits form a disjoint partition of the endowment.
+The annual convention retains \eqn{K_x < n} and \eqn{K_x \ge n}.
+
+These are scenario-specific prospective losses, not conditional expected
+reserves. The existing in-force filter takes precedence over payment-date
+inclusion: complete lifetimes require \eqn{T_x > t}, and curtate lifetimes
+require \eqn{K_x \ge t}. Thus a complete lifetime dying exactly at \code{t}
+is not in force even for a before-payment calculation. The chosen
+\code{not_in_force} policy applies afterwards; unknown lifetimes stay missing.
+Known scenarios without a covered benefit have zero benefit value.
+
+At extreme rates, effective-rate and discount-factor metadata can lose
+range. The function retains the original rate and monetary amounts for
+valuation. Exactly coincident finite monetary flows can cancel even if
+their separate present values overflow. General cancellation between
+unrepresentable flows is not guaranteed. Internal premium estimation
+requires representable observed issue present values. Nonfinite converted
+premium metadata are accepted only when they match a conversion from the
+resolved premium; directly supplied premiums must remain finite.
+Positive infinite annualized annuity-basis metadata are likewise accepted
+only if they agree with the product of a finite payment basis and frequency.
+That infinite annualized value alone cannot identify the payment basis.
 }
 \examples{
 simulated <- tibble::tibble(
@@ -190,17 +227,17 @@ simulated |>
 }
 \seealso{
 \code{\link{mc_annuity}}, \code{\link{mc_insurance}},
-\code{\link{mc_premium}}, \code{\link{mc_loss}},
-\code{\link{reserve_x}}, \code{\link{reserve_xy}}
+  \code{\link{mc_premium}}, \code{\link{mc_loss}},
+  \code{\link{reserve_x}}, \code{\link{reserve_xy}}
 
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_loss}()},
-\code{\link{mc_multilife_status}()},
-\code{\link{mc_premium}()},
-\code{\link{simulate_lifetime}()},
-\code{\link{simulate_lifetimes}()},
-\code{\link{summary_mc}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_loss]{mc_loss()}},
+\code{\link[=mc_multilife_status]{mc_multilife_status()}},
+\code{\link[=mc_premium]{mc_premium()}},
+\code{\link[=simulate_lifetime]{simulate_lifetime()}},
+\code{\link[=simulate_lifetimes]{simulate_lifetimes()}},
+\code{\link[=summary_mc]{summary_mc()}}
 }
 \concept{monte-carlo}

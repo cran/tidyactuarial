@@ -25,8 +25,9 @@ fv_flow(
 \code{"nominal_discount"}, or \code{"force"}.
 May have length 1 or the same length as \code{cf}.}
 
-\item{m}{Positive integer vector giving the conversion frequency for nominal
-rates. May have length 1 or the same length as \code{cf}.}
+\item{m}{Conversion frequency for nominal rates. Must contain positive
+integers for nominal conversions and is ignored by other rate families.
+May have length 1 or the same length as \code{cf}.}
 
 \item{t}{Optional numeric vector of cash-flow times in years.}
 
@@ -45,8 +46,8 @@ latest cash-flow time.
 \description{
 Computes the future value of a cash-flow vector under either:
 \itemize{
-\item a constant interest-rate specification, or
-\item a term structure of spot rates, one rate per cash flow.
+  \item a constant interest-rate specification, or
+  \item a term structure of spot rates, one rate per cash flow.
 }
 }
 \details{
@@ -58,24 +59,36 @@ The future value is accumulated to the latest payment time or latest date.
 
 Interest-rate input:
 \itemize{
-\item If \code{i} has length 1, the same rate is used for all cash flows.
-\item If \code{i} has the same length as \code{cf}, each rate is
-interpreted as the annual effective spot rate associated with the
-corresponding cash-flow time.
+  \item If \code{i} has length 1, the same rate is used for all cash flows.
+  \item If \code{i} has the same length as \code{cf}, each rate is
+        interpreted as the annual effective spot rate associated with the
+        corresponding cash-flow time.
 }
 
 Rate types may be supplied in FM-style notation:
 \itemize{
-\item annual effective rate \eqn{i},
-\item nominal annual interest rate \eqn{j^{(m)}}{j(m)},
-\item nominal annual discount rate \eqn{d^{(m)}}{d(m)},
-\item force of interest \eqn{\delta}{delta}.
+  \item annual effective rate \eqn{i},
+  \item nominal annual interest rate \eqn{j^{(m)}}{j(m)},
+  \item nominal annual discount rate \eqn{d^{(m)}}{d(m)},
+  \item force of interest \eqn{\delta}{delta}.
 }
 
 Internally, all supplied rates are converted to annual effective rates using
 \code{\link{standardize_interest}}. When \code{i} is a vector, the
 accumulation uses the implied discount-factor ratio under the spot-rate
 interpretation.
+The ratio is evaluated from log accumulation rates, avoiding overflow of
+its separate numerator and denominator. If a horizon annual equivalent
+rounds to -1 or overflows to Inf, tied horizon flows must have exactly
+equal log accumulation rates; otherwise the existing annual-rate tolerance
+applies.
+
+
+Products are evaluated in log space when separate factors lose range or
+precision; original cash-flow signs and known zero amounts are preserved.
+If individual values overflow, amounts with exactly equal finite log
+factors are netted before valuation. Cancellation between unequal factors
+is not recovered by this rule and may still produce non-finite results.
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
@@ -129,17 +142,17 @@ fv_flow(
 }
 \seealso{
 \code{\link{pv_flow}}, \code{\link{future_value}},
-\code{\link{standardize_interest}}
+  \code{\link{standardize_interest}}
 
-Other time-value: 
-\code{\link{accumulation_factor}()},
-\code{\link{discount_factor}()},
-\code{\link{future_value}()},
-\code{\link{irr_flow}()},
-\code{\link{irr_flow_multi}()},
-\code{\link{plot_cash_flow}()},
-\code{\link{present_value}()},
-\code{\link{pv_flow}()},
-\code{\link{solve_value}()}
+Other time-value:
+\code{\link[=accumulation_factor]{accumulation_factor()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=future_value]{future_value()}},
+\code{\link[=irr_flow]{irr_flow()}},
+\code{\link[=irr_flow_multi]{irr_flow_multi()}},
+\code{\link[=plot_cash_flow]{plot_cash_flow()}},
+\code{\link[=present_value]{present_value()}},
+\code{\link[=pv_flow]{pv_flow()}},
+\code{\link[=solve_value]{solve_value()}}
 }
 \concept{time-value}

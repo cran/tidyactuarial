@@ -50,7 +50,7 @@ attribute, that value is used.}
 }
 \value{
 Numeric vector of \eqn{{}_tE_x}, or a tibble if
-\code{tidy = TRUE}.
+  \code{tidy = TRUE}.
 }
 \description{
 Computes the actuarial present value of a pure endowment, i.e., the expected
@@ -70,19 +70,23 @@ mathematics. It serves as the actuarial discount factor, combining financial
 discounting with mortality:
 \deqn{{}_tE_x = v^t \cdot {}_tp_x.}
 
-The interest-rate input is converted to an annual effective rate before
-applying the discount factor:
+Discounted products use the original log accumulation rate, retaining
+representable values when the annual effective equivalent loses range.
+This is an actuarial present value, not a probability: it can exceed one
+with negative interest rates and is not capped. The equivalent rate in
+tidy output may round to -1 or overflow, without being used for valuation.
+In ordinary notation the discount factor is:
 \deqn{v = (1+i_e)^{-1}.}
 
 Key identities involving \eqn{{}_nE_x}:
 \itemize{
-\item Actuarial accumulated value:
-\eqn{\ddot{s}_{x:\overline{n}|} = \ddot{a}_{x:\overline{n}|} /
+  \item Actuarial accumulated value:
+    \eqn{\ddot{s}_{x:\overline{n}|} = \ddot{a}_{x:\overline{n}|} /
     {}_nE_x}.
-\item Endowment insurance decomposition:
-\eqn{A_{x:\overline{n}|} = A^1_{x:\overline{n}|} + {}_nE_x}.
-\item Deferred annuity:
-\eqn{{}_{n|}\ddot{a}_x = {}_nE_x \cdot \ddot{a}_{x+n}}.
+  \item Endowment insurance decomposition:
+    \eqn{A_{x:\overline{n}|} = A^1_{x:\overline{n}|} + {}_nE_x}.
+  \item Deferred annuity:
+    \eqn{{}_{n|}\ddot{a}_x = {}_nE_x \cdot \ddot{a}_{x+n}}.
 }
 
 For a constant force of mortality \eqn{\mu} and force of interest
@@ -136,6 +140,6 @@ if (requireNamespace("dplyr", quietly = TRUE)) {
 }
 \seealso{
 \code{\link{t_px}} for survival probabilities without discounting,
-\code{\link{insurance_x}} for insurance APVs, \code{\link{annuity_x}} for
-life annuity APVs.
+  \code{\link{insurance_x}} for insurance APVs, \code{\link{annuity_x}} for
+  life annuity APVs.
 }

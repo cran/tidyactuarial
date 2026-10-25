@@ -35,8 +35,8 @@
 #'         \code{y}, \code{y_type}, and \code{y_m}, and is interpreted as the
 #'         effective yield per coupon period.
 #'   \item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
-#'         yield specification, which is converted first to annual effective
-#'         yield and then to effective yield per coupon period.
+#'         yield specification. Scenario prices retain its original log
+#'         accumulation rate even if a reported equivalent loses numeric range.
 #' }
 #'
 #' @param face Numeric scalar. Face or par value of the bond.
@@ -55,7 +55,9 @@
 #' @param y_m Positive integer. Conversion frequency for nominal annual yields.
 #' @param R Numeric scalar. Redemption value at final maturity. If \code{NULL},
 #'   defaults to \code{face}.
-#' @param tol Numeric scalar. Tolerance used in alignment checks.
+#' @param tol Finite positive numeric scalar. Absolute tolerance for alignment
+#'   of \code{n * k} and \code{call_t * k} with integer periods. It is not a
+#'   monetary tolerance and does not define ties between scenario prices.
 #' @param check Logical scalar. If \code{TRUE}, performs input validation.
 #' @param tidy Logical scalar. If \code{FALSE}, returns the worst-case
 #'   callable-bond price. If \code{TRUE}, returns a tibble with all redemption
@@ -66,7 +68,9 @@
 #' consistent with the target yield.
 #'
 #' If \code{tidy = TRUE}, a tibble with one row per redemption scenario,
-#' including scenario prices and the worst-case indicator.
+#' including scenario prices and the worst-case indicator. \code{is_worst_case}
+#' is \code{TRUE} exactly when a computed scenario price equals the computed
+#' minimum, including all exact computed ties. Near ties are not marked.
 #'
 #' @details
 #' This function follows the compact bond notation used in
@@ -87,6 +91,13 @@
 #'
 #' This is the maximum price an investor can pay while still guaranteeing at
 #' least the target yield under the least favorable redemption scenario.
+#' A scenario pays all coupons through its redemption date, including the coupon
+#' on that date, plus its specified redemption value. There is no assumption of
+#' reinvestment at the target yield after early redemption and no stochastic
+#' model of interest rates or the issuer's exercise decision.
+#' Call dates must remain distinct and strictly inside maturity after alignment
+#' to integer coupon periods; two dates cannot represent the same coupon date.
+#' Rows are sorted by time and retain their original \code{scenario_id}.
 #'
 #' @seealso \code{\link{bond_price}}, \code{\link{bond_cash_flows}},
 #'   \code{\link{bond_book_value}}, \code{\link{bond_ytm}}
@@ -257,6 +268,10 @@ bond_callable_price <- function(
   y_m <- as.integer(round(y_m))
 
   N_raw <- n * k
+  if (!is.finite(N_raw) || N_raw <= 0 || round(N_raw) >= .Machine$integer.max) {
+    stop("`n * k` must be finite, positive and below the integer index limit.",
+         call. = FALSE)
+  }
 
   if (abs(N_raw - round(N_raw)) > tol) {
     stop(
@@ -274,6 +289,12 @@ bond_callable_price <- function(
       "(call dates must align with coupon dates).",
       call. = FALSE
     )
+  }
+
+  call_N <- round(call_N_raw)
+  if (any(call_N <= 0 | call_N >= round(N_raw)) || anyDuplicated(call_N)) {
+    stop("Each call must identify a distinct coupon period strictly inside maturity.",
+         call. = FALSE)
   }
 
   # --- Resolve yield ---
@@ -317,7 +338,10 @@ bond_callable_price <- function(
         c = c,
         n = out$t[[j]],
         k = k,
-        y_effective_per_period = ip,
+        y_effective_per_period = y_effective_per_period,
+        y = y,
+        y_type = y_type,
+        y_m = y_m,
         R = out$redemption_value[[j]],
         check = FALSE,
         tol = tol
@@ -328,7 +352,7 @@ bond_callable_price <- function(
 
   worst_price <- min(out$price_at_target_yield)
 
-  out$is_worst_case <- abs(out$price_at_target_yield - worst_price) <= sqrt(tol)
+  out$is_worst_case <- out$price_at_target_yield == worst_price
 
   out$yield_per_period <- ip
   out$yield_effective_annual <- i_annual

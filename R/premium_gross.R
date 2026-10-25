@@ -31,7 +31,9 @@
 #'   \code{output = "summary"} and \code{FALSE} to
 #'   \code{output = "value"}.
 #' @param check Logical scalar. If \code{TRUE}, validates the inputs.
-#' @param tol Nonnegative numeric tolerance used for consistency checks.
+#' @param tol Nonnegative finite numeric tolerance. Monetary consistency is
+#'   checked relatively to the compared amounts, without a one-currency-unit
+#'   floor; frequency and integer checks use absolute tolerance.
 #' @param ... Transitional compatibility. The deprecated argument
 #'   \code{payments_per_year} is mapped to \code{k}.
 #'
@@ -99,6 +101,17 @@
 #'
 #' Legacy premium columns are accepted automatically only when \code{k = 1},
 #' because their unit is ambiguous for subannual premiums.
+#'
+#' When annualized and per-payment premiums are both supplied, both must be
+#' valid and agree in their units. A supplied payment frequency is validated
+#' even if \code{k} is explicit. Acquisition shares and expense products retain
+#' representable values without overflowing \eqn{k a^{(k)}} first. The loading
+#' is evaluated directly from the expense equation; a small positive loading
+#' can be reported even when the rounded gross and net premiums coincide.
+#' The equivalence residual uses the same equation factored in annuity units,
+#' avoiding subtraction of overflowing APVs where possible; it is not forced
+#' to zero. Individual audit APVs may still be infinite. No finite result is
+#' promised when the annualized premium itself is outside numeric range.
 #'
 #' @seealso \code{\link{premium_x}}, \code{\link{premium_xy}},
 #'   \code{\link{annuity_x}}, \code{\link{annuity_xy}}
@@ -243,6 +256,14 @@ premium_gross <- function(
     NULL
   }
 
+  if (isTRUE(check) && !is.null(k_from_prem) &&
+      (!is.numeric(k_from_prem) || length(k_from_prem) != 1L ||
+       !is.finite(k_from_prem) || k_from_prem < 1 ||
+       abs(k_from_prem - round(k_from_prem)) > tol)) {
+    stop("The payment frequency stored in `prem` must be a positive finite integer.",
+         call. = FALSE)
+  }
+
   if (is.null(k)) {
     k <- if (is.null(k_from_prem)) 1L else k_from_prem
   } else if (!is.null(k_from_prem) &&
@@ -268,7 +289,7 @@ premium_gross <- function(
     stop("`k` must be a single positive integer.", call. = FALSE)
   }
 
-  k <- as.integer(round(k))
+  k <- if (k <= .Machine$integer.max) as.integer(round(k)) else round(k)
 
   apv_column <- if ("apv_premium_annuity" %in% names(prem)) {
     "apv_premium_annuity"
@@ -339,16 +360,23 @@ premium_gross <- function(
   }
 
   if (!is.na(annualized_column) && !is.na(per_payment_column)) {
-    P_from_payment <- k * prem[[per_payment_column]][[1L]]
+    stored_payment <- prem[[per_payment_column]][[1L]]
+    if (isTRUE(check) &&
+        (!is.numeric(stored_payment) || length(stored_payment) != 1L ||
+         !is.finite(stored_payment) || stored_payment < 0)) {
+      stop("The premium per payment must be a nonnegative finite number.", call. = FALSE)
+    }
+    P_from_payment <- k * stored_payment
 
     if (is.numeric(P_net_annualized) &&
         is.numeric(P_from_payment) &&
         length(P_net_annualized) == 1L &&
         length(P_from_payment) == 1L &&
         is.finite(P_net_annualized) &&
-        is.finite(P_from_payment) &&
-        abs(P_net_annualized - P_from_payment) >
-          tol * max(1, abs(P_net_annualized))) {
+        (!is.finite(P_from_payment) ||
+         (max(abs(P_net_annualized), abs(P_from_payment)) > 0 &&
+          abs(P_net_annualized / max(abs(P_net_annualized), abs(P_from_payment)) -
+              P_from_payment / max(abs(P_net_annualized), abs(P_from_payment))) > tol))) {
       stop(
         "`premium_annualized` is inconsistent with ",
         "`premium_per_payment * payments_per_year`.",
@@ -408,7 +436,12 @@ premium_gross <- function(
     }
   }
 
-  denominator <- (1 - beta) - alpha / (k * a_premiums)
+  acquisition_share <- alpha / (k * a_premiums)
+  if (!is.finite(k * a_premiums) ||
+      (acquisition_share == 0 && alpha > 0)) {
+    acquisition_share <- .cash_flow_value(alpha, -log(k) - log(a_premiums))
+  }
+  denominator <- (1 - beta) - acquisition_share
 
   if (!is.finite(denominator) || denominator <= 0) {
     stop(
@@ -421,36 +454,45 @@ premium_gross <- function(
   gross_premium_annualized <-
     (P_net_annualized + k * gamma) / denominator
 
-  gross_premium_per_payment <- gross_premium_annualized / k
+  gross_premium_per_payment <- (P_net_annualized / k + gamma) / denominator
   net_premium_per_payment <- P_net_annualized / k
 
-  apv_benefits <- P_net_annualized * a_premiums
-  apv_gross_premiums <- gross_premium_annualized * a_premiums
+  apv_benefits <- .cash_flow_value(P_net_annualized, log(a_premiums))
+  apv_gross_premiums <- .cash_flow_value(gross_premium_annualized, log(a_premiums))
 
   apv_initial_expense <-
-    alpha * gross_premium_per_payment
+    .cash_flow_value(alpha, log(gross_premium_annualized) - log(k))
 
   apv_proportional_expense <-
-    beta * apv_gross_premiums
+    .cash_flow_value(beta, log(gross_premium_annualized) + log(a_premiums))
 
   apv_fixed_per_payment_expense <-
-    gamma * k * a_premiums
+    .cash_flow_value(gamma, log(k) + log(a_premiums))
 
   apv_total_expenses <-
     apv_initial_expense +
     apv_proportional_expense +
     apv_fixed_per_payment_expense
 
-  equivalence_residual <-
-    apv_gross_premiums -
-    apv_benefits -
-    apv_total_expenses
+  # Net the two premiums before the common annuity factor. Keep actual expense
+  # APVs separate: a share rounded out of the denominator may still have a
+  # representable monetary cost, so G == P does not imply a zero residual.
+  equivalence_residual <- .cash_flow_value(
+    gross_premium_annualized - P_net_annualized, log(a_premiums)) - apv_total_expenses
+  if (is.nan(equivalence_residual)) {
+    net_annuity_amount <- sum(c(gross_premium_annualized, -P_net_annualized,
+                               -beta * gross_premium_annualized, -k * gamma))
+    equivalence_residual <- .cash_flow_value(net_annuity_amount, log(a_premiums)) -
+      apv_initial_expense
+  }
 
-  loading_annualized <-
-    gross_premium_annualized - P_net_annualized
+  loading_annualized <- .cash_flow_sum(c(P_net_annualized, alpha, gamma),
+    c(log(beta) - log(denominator),
+      log(P_net_annualized) - log(k) - log(a_premiums) - log(denominator),
+      log(k) - log(denominator)))
 
   loading_per_payment <-
-    gross_premium_per_payment - net_premium_per_payment
+    loading_annualized / k
 
   if (identical(output, "value")) {
     return(gross_premium_annualized)

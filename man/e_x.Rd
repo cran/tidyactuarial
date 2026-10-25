@@ -41,8 +41,8 @@ attribute (set by \code{\link{lifetable}}), that value is used.}
 }
 \value{
 A numeric vector of expected future lifetimes, or a tibble if
-\code{tidy = TRUE} with columns \code{x}, \code{t}, \code{type},
-\code{frac}, \code{ex}.
+  \code{tidy = TRUE} with columns \code{x}, \code{t}, \code{type},
+  \code{frac}, \code{ex}.
 }
 \description{
 Computes the curtate or complete expected future lifetime at integer age
@@ -65,10 +65,19 @@ within-year survival integral \eqn{\int_0^s {}_u p_y \, du} is evaluated
 in closed form under the selected fractional-age assumption
 (Finan, Section 24):
 \itemize{
-\item UDD (Sec. 24.1): \eqn{\int_0^s {}_u p_y \, du = s - \frac{1}{2} s^2 q_y}
-\item CF (Sec. 24.2): \eqn{\int_0^s {}_u p_y \, du = (1 - p_y^s) / (-\ln p_y)}
-\item Balducci (Sec. 24.3): \eqn{\int_0^s {}_u p_y \, du = \frac{p_y}{q_y} \ln \left( \frac{p_y + q_y s}{p_y} \right)}
+  \item UDD (Sec. 24.1): \eqn{\int_0^s {}_u p_y \, du = s - \frac{1}{2} s^2 q_y}
+  \item CF (Sec. 24.2): \eqn{\int_0^s {}_u p_y \, du = (1 - p_y^s) / (-\ln p_y)}
+  \item Balducci (Sec. 24.3): \eqn{\int_0^s {}_u p_y \, du = \frac{p_y}{q_y} \ln \left( \frac{p_y + q_y s}{p_y} \right)}
 }
+
+Integrals use stable exponential/logarithmic increments for small durations.
+Extinct cohorts contribute zero to later intervals, even if their
+conditional probabilities are undefined. The CF/Balducci zero-survival
+interval has integral zero; UDD retains its linear decline.
+Unknown survivor counts propagate as missing expectations.
+When annual probabilities must be derived from survivor counts, survival
+uses the direct count ratio rather than \eqn{1-q_y}. Its logarithm retains
+the CF integral even when the annual ratio is below floating-point range.
 
 Under UDD, the complete expectancy satisfies the well-known approximation
 (Finan, Example 20.24):

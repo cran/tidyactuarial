@@ -54,6 +54,9 @@
 #'
 #' Times must satisfy \eqn{0 \le s \le t}. Missing times propagate as missing
 #' accumulation factors.
+#' Conventional inputs are valued using their original log accumulation rate.
+#' In tidy output, the annual equivalent may round to -1 or overflow to Inf
+#' even when the requested interval factor is positive and finite.
 #'
 #' @seealso \code{\link{standardize_interest}},
 #'   \code{\link{present_value}}, \code{\link{future_value}}
@@ -64,6 +67,13 @@
 #' @examples
 #' # Constant annual effective interest
 #' accumulation_factor(t = 5, i = 0.07)
+#'
+#' # The same financial law in three representations
+#' c(
+#'   rate = accumulation_factor(t = 5, i = 0.03, i_type = "force"),
+#'   accumulation = accumulation_factor(t = 5, a = function(t) exp(0.03 * t)),
+#'   varying_force = accumulation_factor(t = 5, delta = function(t) 0.03)
+#' )
 #'
 #' # One rate recycled over several times
 #' accumulation_factor(
@@ -122,6 +132,16 @@ accumulation_factor <- function(
     subdivisions = 100L,
     rel.tol = 1e-8,
     tidy = FALSE
+) {
+  .interval_factor(s = s, t = t, i = i, i_type = i_type, m = m,
+    a = a, delta = delta, subdivisions = subdivisions,
+    rel.tol = rel.tol, tidy = tidy, discount = FALSE)
+}
+
+# Shared validation and interval model; evaluate the requested factor without
+# requiring its reciprocal to be representable in floating-point arithmetic.
+.interval_factor <- function(
+    s, t, i, i_type, m, a, delta, subdivisions, rel.tol, tidy, discount
 ) {
   if (missing(t)) {
     stop("`t` must be provided.", call. = FALSE)
@@ -276,18 +296,20 @@ accumulation_factor <- function(
   a_t <- rep(NA_real_, size)
   integral_delta <- rep(NA_real_, size)
   accumulation_out <- rep(NA_real_, size)
+  log_factor <- rep(NA_real_, size)
 
   if (identical(model, "interest_rate")) {
-    i_effective <- standardize_interest(
+    basis <- .interest_basis(
       i_type = i_type,
       i = i,
       m = m
     )
+    i_effective <- basis$effective
 
     ok <- !is.na(elapsed_time) & !is.na(i_effective)
 
-    accumulation_out[ok] <-
-      (1 + i_effective[ok])^elapsed_time[ok]
+    log_factor[ok] <- elapsed_time[ok] * basis$growth[ok]
+    accumulation_out[ok] <- exp(log_factor[ok])
   }
 
   if (identical(model, "accumulation_function")) {
@@ -315,6 +337,7 @@ accumulation_factor <- function(
 
     ok <- !is.na(a_s) & !is.na(a_t)
     accumulation_out[ok] <- a_t[ok] / a_s[ok]
+    log_factor[ok] <- log(a_t[ok]) - log(a_s[ok])
   }
 
   if (identical(model, "force_function")) {
@@ -335,23 +358,26 @@ accumulation_factor <- function(
     )
 
     accumulation_out[ok] <- exp(integral_delta[ok])
+    log_factor[ok] <- integral_delta[ok]
   }
 
-  bad_result <- !is.na(accumulation_out) &
-    (!is.finite(accumulation_out) | accumulation_out <= 0)
+  factor_out <- if (discount) exp(-log_factor) else accumulation_out
+  bad_result <- !is.na(factor_out) &
+    (!is.finite(factor_out) | factor_out <= 0)
 
   if (any(bad_result)) {
     stop(
-      "The computed accumulation factors must be positive and finite.",
+      if (discount) "The computed discount factors must be positive and finite."
+      else "The computed accumulation factors must be positive and finite.",
       call. = FALSE
     )
   }
 
   if (!tidy) {
-    return(accumulation_out)
+    return(factor_out)
   }
 
-  tibble::tibble(
+  out <- tibble::tibble(
     s = s,
     t = t,
     elapsed_time = elapsed_time,
@@ -365,6 +391,8 @@ accumulation_factor <- function(
     integral_delta = integral_delta,
     accumulation_factor = accumulation_out
   )
+  if (discount) out$discount_factor <- factor_out
+  out
 }
 
 .evaluate_scalar_time_function <- function(

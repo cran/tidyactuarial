@@ -12,7 +12,7 @@
 \item{arg}{Character string with the argument name.}
 }
 \value{
-Invisibly returns \code{TRUE} if validation is successful.
+Invisibly returns `TRUE` if validation is successful.
 }
 \description{
 Internal helper: validate character scalar

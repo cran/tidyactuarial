@@ -85,7 +85,7 @@ plot_cash_flow(
 
 \item{timeline_size}{Numeric line width for the time axis.}
 
-\item{label_digits}{Integer number of decimal digits for cash-flow labels.}
+\item{label_digits}{Integer between 0 and 50: decimal digits for cash-flow labels.}
 
 \item{label_format}{Character string controlling label notation. Use
 \code{"auto"} to abbreviate values from one million onward,
@@ -112,6 +112,25 @@ Creates a professional cash-flow diagram with arrows representing inflows
 and outflows over time, using compact actuarial notation.
 }
 \details{
+Present values use the original interest specification and combine capital
+and discount factors stably. Opposite amounts with exactly equal finite
+log factors are netted if individual present values overflow.
+Numeric timelines may include negative times; the valuation origin remains
+zero. Dated timelines use the earliest date
+as origin. Non-finite inferred present values or aggregated amounts are
+rejected. Extreme monetary magnitudes use scaled graphical coordinates,
+with the power of ten stated on the axis; raw amounts remain in \code{plot$data$C}.
+Automatic/compact labels use scientific notation beyond the available
+suffixes or when fixed decimals would show a nonzero amount as zero.
+\code{label_format = "full"} retains explicit fixed-decimal formatting.
+Overlapping text labels may be omitted at rendering time; every arrow
+remains. For dense streams, use \code{show_labels = FALSE}. Simultaneous flows
+are netted by default; \code{aggregate = FALSE} keeps their exact positions,
+so arrows at identical times can overlap. No dates are jittered.
+\code{PV} is a supplied annotation when present, not a recalculation or check.
+Date origins and day counts differ from \code{\link[=apv_life_flow]{apv_life_flow()}} and are not
+silently unified. The returned ggplot remains editable with additional layers.
+
 This function uses compact actuarial notation: \code{C} denotes cash-flow amounts,
 \code{t} denotes times in years, \code{i} denotes the interest-rate input, and \code{PV}
 denotes present value.
@@ -151,15 +170,15 @@ plot_cash_flow(
 \seealso{
 \code{pv_flow}, \code{fv_flow}, \code{irr_flow}, \code{standardize_interest}
 
-Other time-value: 
-\code{\link{accumulation_factor}()},
-\code{\link{discount_factor}()},
-\code{\link{future_value}()},
-\code{\link{fv_flow}()},
-\code{\link{irr_flow}()},
-\code{\link{irr_flow_multi}()},
-\code{\link{present_value}()},
-\code{\link{pv_flow}()},
-\code{\link{solve_value}()}
+Other time-value:
+\code{\link[=accumulation_factor]{accumulation_factor()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=future_value]{future_value()}},
+\code{\link[=fv_flow]{fv_flow()}},
+\code{\link[=irr_flow]{irr_flow()}},
+\code{\link[=irr_flow_multi]{irr_flow_multi()}},
+\code{\link[=present_value]{present_value()}},
+\code{\link[=pv_flow]{pv_flow()}},
+\code{\link[=solve_value]{solve_value()}}
 }
 \concept{time-value}

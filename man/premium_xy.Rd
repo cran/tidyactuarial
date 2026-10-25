@@ -116,6 +116,7 @@ For premiums payable \eqn{k} times per year, the function distinguishes
 between the annualized premium \eqn{P^{(k)}} and the amount paid at each
 installment, \eqn{P^{(k)} / k}.
 
+
 Let \eqn{Z} denote the present-value random variable of the two-life
 insurance benefit and let \eqn{Y^{(k)}} denote the present value of the
 contingent premium annuity normalized to an annual payment rate of 1.
@@ -139,8 +140,13 @@ P_{\text{per payment}} = \frac{P^{(k)}}{k}.
 }
 
 Standard whole-life, term, and endowment benefits are valued through
-\code{\link{insurance_xy}}. A pure endowment is obtained as the difference
-between the corresponding endowment and term insurance values.
+\code{\link{insurance_xy}}. A pure endowment is valued directly as the
+discounted benefit times status survival at maturity, retaining the
+issue-age conditioning, including for deferred last-survivor benefits.
+The identity endowment minus term remains a mathematical check, rather
+than the numerical calculation. Tables and horizons are validated without
+inventing terminal mortality. The premium annuity must have a positive
+finite representable APV; the output is one contract, not parallel scenarios.
 
 A contract assembled with pipes may be valued directly:
 
@@ -196,25 +202,25 @@ life_contract(
 }
 \seealso{
 \code{\link{premium_x}}, \code{\link{insurance_xy}},
-\code{\link{annuity_xy}}, \code{\link{reserve_xy}},
-\code{\link{life_contract}}, \code{\link{add_insurance}},
-\code{\link{add_premium_schedule}}
+  \code{\link{annuity_xy}}, \code{\link{reserve_xy}},
+  \code{\link{life_contract}}, \code{\link{add_insurance}},
+  \code{\link{add_premium_schedule}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

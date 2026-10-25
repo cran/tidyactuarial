@@ -7,22 +7,22 @@
 \format{
 A tibble with 35,451 rows and 14 variables:
 \describe{
-\item{country}{Country name.}
-\item{country_code}{Numeric ISO country code.}
-\item{continent}{Continent.}
-\item{region}{Geographic region.}
-\item{year}{Calendar year, from 2015 to 2023.}
-\item{pandemic_period}{Period label: \code{"pre_pandemic"},
-\code{"pre_pandemic_reference"}, \code{"pandemic"}, \code{"transition"},
-or \code{"post_pandemic"}.}
-\item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
-\item{x}{Integer actuarial age, from 0 to 100.}
-\item{mx}{Central death rate at age \code{x}.}
-\item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
-\item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
-\item{lx}{Number of survivors at exact age \code{x}, based on \code{l0 = 100000}.}
-\item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
-\item{source}{Data source.}
+  \item{country}{Country name.}
+  \item{country_code}{Numeric ISO country code.}
+  \item{continent}{Continent.}
+  \item{region}{Geographic region.}
+  \item{year}{Calendar year, from 2015 to 2023.}
+  \item{pandemic_period}{Period label: \code{"pre_pandemic"},
+  \code{"pre_pandemic_reference"}, \code{"pandemic"}, \code{"transition"},
+  or \code{"post_pandemic"}.}
+  \item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
+  \item{x}{Integer actuarial age, from 0 to 100.}
+  \item{mx}{Central death rate at age \code{x}.}
+  \item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
+  \item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
+  \item{lx}{Number of survivors at exact age \code{x}, based on \code{l0 = 100000}.}
+  \item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
+  \item{source}{Data source.}
 }
 }
 \source{

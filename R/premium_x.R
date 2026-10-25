@@ -29,6 +29,9 @@
 #'   numeric value. For \code{type = "variable_k"}, a numeric vector or a
 #'   function of time may be supplied.
 #' @param n Insurance term in years. Use \code{Inf} for whole-life insurance.
+#'   For \code{type = "variable_k"}, fractional terms aligned with the benefit
+#'   frequency are permitted; the default \code{Inf} infers a finite term from
+#'   a numeric benefit schedule.
 #' @param h Nonnegative integer deferment period in years.
 #' @param k Positive integer. Number of premium payments per year.
 #' @param frac Fractional-age assumption. One of \code{"UDD"}, \code{"CF"},
@@ -99,6 +102,16 @@
 #'
 #' Explicit arguments supplied to \code{premium_x()} override values stored in
 #' the contract components.
+#'
+#' For variable benefits the actual coverage term, including a term inferred
+#' from the benefit vector, bounds the premium-paying period and is reported
+#' in audit output. Benefit frequency inherited from an insurance component
+#' can differ from premium frequency. The benefit vector describes payments
+#' within one contract, not independent scenarios. This function retains its
+#' scalar-contract interface; use separate calls for different contracts.
+#' The premium annuity must have a positive finite APV. An undefined or
+#' nonfinite premium-annuity factor is rejected, rather than treating an
+#' indeterminate ratio of two infinite APVs as a premium.
 #'
 #' @seealso \code{\link{life_contract}}, \code{\link{add_insurance}},
 #'   \code{\link{add_premium_schedule}}, \code{\link{insurance_x}},
@@ -486,6 +499,10 @@ premium_x <- function(
     k
   }
 
+  if (!is.logical(check) || length(check) != 1L || is.na(check)) {
+    stop("`check` must be a logical scalar.", call. = FALSE)
+  }
+
   if (isTRUE(check)) {
     if (lt_missing) {
       stop("`lt` must be provided.", call. = FALSE)
@@ -511,7 +528,7 @@ premium_x <- function(
         length(x) != 1L ||
         is.na(x) ||
         !is.finite(x) ||
-        abs(x - round(x)) > 1e-10) {
+        abs(x - round(x)) > 1e-10 || abs(x) > .Machine$integer.max) {
       stop("`x` must be a single integer age.", call. = FALSE)
     }
 
@@ -555,7 +572,7 @@ premium_x <- function(
         is.na(h) ||
         !is.finite(h) ||
         h < 0 ||
-        abs(h - round(h)) > 1e-10) {
+        abs(h - round(h)) > 1e-10 || h > .Machine$integer.max) {
       stop("`h` must be a single nonnegative integer.", call. = FALSE)
     }
 
@@ -582,7 +599,8 @@ premium_x <- function(
         is.na(n) ||
         n <= 0 ||
         (!is.infinite(n) &&
-         (!is.finite(n) || abs(n - round(n)) > 1e-10))) {
+         (!is.finite(n) ||
+          (type != "variable_k" && abs(n - round(n)) > 1e-10)))) {
       stop("`n` must be `Inf` or a single positive integer.", call. = FALSE)
     }
 
@@ -607,6 +625,7 @@ premium_x <- function(
          n_prem <= 0 ||
          (!is.infinite(n_prem) &&
           (!is.finite(n_prem) ||
+           !is.finite(n_prem * k) ||
            abs(n_prem * k - round(n_prem * k)) > 1e-10)))) {
       stop(
         "`n_prem` must be NULL, Inf, or a positive value satisfying ",
@@ -631,13 +650,14 @@ premium_x <- function(
   }
 
   x <- as.integer(round(x))
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
   h <- as.integer(round(h))
-  k <- as.integer(round(k))
-  k_benefit <- as.integer(round(k_benefit))
+  k <- if (k <= .Machine$integer.max) as.integer(round(k)) else round(k)
+  k_benefit <- if (k_benefit <= .Machine$integer.max)
+    as.integer(round(k_benefit)) else round(k_benefit)
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    n <- if (type == "variable_k") n else round(n)
   }
 
   if (!is.null(n_prem) && !is.infinite(n_prem)) {
@@ -661,6 +681,12 @@ premium_x <- function(
       tidy = FALSE,
       check = check
     )
+
+    # The numeric benefit schedule determines a finite coverage horizon even
+    # when the public n default is Inf. Use it for premiums and audit units.
+    if (is.infinite(n) && !is.function(benefit)) {
+      n <- length(benefit) / k_benefit
+    }
 
     if (is.null(n_prem)) {
       if (!is.infinite(n)) {

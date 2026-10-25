@@ -25,9 +25,11 @@ summary is computed separately within each group. If \code{by = NULL} and
 \code{.data} is already grouped with \code{dplyr::group_by()}, the current
 grouping structure is used.}
 
-\item{probs}{Numeric vector of probabilities for quantiles.}
+\item{probs}{Numeric vector of probabilities for quantiles. Use
+\code{numeric()} to omit these columns.}
 
-\item{var_probs}{Numeric vector of probabilities for VaR and TVaR.}
+\item{var_probs}{Numeric vector of probabilities for VaR and TVaR. Use
+\code{numeric()} to omit these columns.}
 
 \item{na_rm}{Logical scalar. If \code{TRUE}, missing values are removed
 before computing statistics.}
@@ -48,6 +50,7 @@ This function is intentionally generic. It can summarise simulated present
 values from annuities, insurances, premiums, reserves, losses, or any other
 numeric actuarial indicator stored in a tidy simulation table.
 
+
 This function follows the compact column-naming convention used throughout
 the Monte Carlo layer of \code{tidyactuarial}: column arguments are prefixed
 with \code{col_}. Thus, \code{col_value} identifies the simulated actuarial
@@ -57,8 +60,39 @@ The function computes the number of simulations used, number of missing
 values, mean, variance, standard deviation, standard error, minimum, maximum,
 selected quantiles, empirical VaR, and empirical TVaR.
 
-TVaR is computed empirically as the mean of simulated values greater than or
-equal to the corresponding empirical VaR.
+Empirical VaR uses the lower quantile (the inverse empirical CDF; type 1),
+without interpolation between observed loss amounts. In contrast, the
+descriptive `q...` columns retain the default interpolated quantiles from
+[stats::quantile()].
+
+TVaR uses the mean of the upper `1 - p` fraction of the empirical loss
+distribution, with the appropriate fraction of any probability mass at VaR.
+Equivalently, for `0 <= p < 1` and `v = VaR_p(X)`,
+`TVaR_p(X) = v + E[(X - v)_+] / (1 - p)`.
+For `p = 1`, the finite empirical upper-endpoint limit (`max(x)`) is
+reported. At `p = 0`, TVaR is the empirical mean. Negative simulated
+values are permitted because `summary_mc()` is a generic numeric summary.
+TVaR is evaluated from ordered empirical probability masses, avoiding
+subtraction of extreme losses. A fractional boundary atom is retained.
+Variance, standard deviation and error are evaluated independently in
+scaled form when squaring loses range: variance may be zero or infinite
+while the deviation or error remains representable. Undefined moments
+for nonfinite observations remain missing; extended upper tails can be
+infinite. A sample smaller than two has missing variance, deviation and error.
+
+The column \code{se_mean} is the usual \eqn{s/\sqrt{n}} estimate under
+independent, identically distributed observations. It is not a general
+Monte Carlo error estimate for antithetic, clustered, weighted or otherwise
+dependent samples. A method label alone does not identify independent
+sampling units after filtering, grouping or reordering, so pairs are not
+inferred automatically. For known independent antithetic pairs, summarise
+their pair means instead. An odd unpaired observation or unequal weights
+requires an error calculation appropriate to that sampling design.
+
+Quantile labels retain the existing rounding to thousandths of probability;
+probabilities within a selector must yield distinct labels. Empty grouped
+inputs retain the statistical columns with zero output rows. An ungrouped
+empty effective sample retains one row of counts and missing statistics.
 
 If \code{na_rm = TRUE}, missing values in \code{col_value} are removed before
 computing statistics. If \code{na_rm = FALSE} and missing values are present,
@@ -80,14 +114,14 @@ summary_mc(sim, value_col = "L_t", group_cols = "t")
 
 }
 \seealso{
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_loss}()},
-\code{\link{mc_multilife_status}()},
-\code{\link{mc_premium}()},
-\code{\link{mc_reserve}()},
-\code{\link{simulate_lifetime}()},
-\code{\link{simulate_lifetimes}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_loss]{mc_loss()}},
+\code{\link[=mc_multilife_status]{mc_multilife_status()}},
+\code{\link[=mc_premium]{mc_premium()}},
+\code{\link[=mc_reserve]{mc_reserve()}},
+\code{\link[=simulate_lifetime]{simulate_lifetime()}},
+\code{\link[=simulate_lifetimes]{simulate_lifetimes()}}
 }
 \concept{monte-carlo}

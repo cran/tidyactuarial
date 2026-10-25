@@ -51,6 +51,18 @@
 #' individual convexities must be expressed on the same basis within each
 #' portfolio. For example, do not mix convexities measured in coupon periods
 #' with convexities measured in years.
+#' All convexities must also use the same yield coordinate; nominal and annual
+#' effective yield convexities generally differ even when both use years.
+#' Values and convexities are finite and nonnegative, and each portfolio
+#' requires a finite positive total value. Zero-value positions remain in the
+#' position count. Relative weights are combined with convexities without
+#' forming monetary convexity products, recovering representable weighted
+#' contributions when separate products or weights lose range.
+#' Under \code{.na = "propagate"}, incomplete known portfolios have missing
+#' results. Positions with missing portfolio identifiers are retained as one
+#' final row with an \code{NA} identifier and missing convexity, total value and
+#' position count. They are not assigned to any known portfolio. \code{"drop"}
+#' removes incomplete positions with a warning; \code{"error"} rejects them.
 #'
 #' @seealso \code{\link{portfolio_duration}},
 #'   \code{\link{bond_convexity}}, \code{\link{bond_duration}}
@@ -347,6 +359,10 @@ portfolio_convexity <- function(
 
   # --- Summarise by portfolio ---
   split_all <- split(data_work, data_work$.portfolio, drop = TRUE)
+  missing_id <- is.na(data_work$.portfolio)
+  if (.na == "propagate" && any(missing_id)) {
+    split_all[length(split_all) + 1L] <- list(data_work[missing_id, , drop = FALSE])
+  }
 
   res_list <- lapply(split_all, function(df_port) {
     has_na_port <- any(df_port$.bad_na)
@@ -371,9 +387,18 @@ portfolio_convexity <- function(
         ))
       }
 
+      weight <- df_ok$.P / P_total
+      log_weight <- log(weight)
+      recover <- df_ok$.P > 0 & weight < .Machine$double.xmin
+      log_weight[recover] <- log(df_ok$.P[recover]) - log(P_total)
+      portfolio_convexity_value <- sum(.cash_flow_value(df_ok$.C, log_weight))
+      if (!is.finite(portfolio_convexity_value)) {
+        abort("The weighted portfolio convexity is not representable.")
+      }
+
       tibble::tibble(
         .portfolio = df_port$.portfolio[[1]],
-        .C_P = sum(df_ok$.P * df_ok$.C) / P_total,
+        .C_P = portfolio_convexity_value,
         .P_total = P_total,
         .n_positions = nrow(df_ok)
       )

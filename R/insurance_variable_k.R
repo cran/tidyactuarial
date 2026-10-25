@@ -19,10 +19,10 @@
 #' @param h Nonnegative deferment period in years. Default is \code{0}.
 #' @param k Positive integer. Number of subperiods per year. Default is
 #'   \code{12}.
-#' @param i_type Character vector indicating the interest-rate type. Allowed
+#' @param i_type Character scalar indicating the interest-rate type. Allowed
 #'   values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
-#' @param m Positive integer vector giving the conversion frequency for nominal
+#' @param m Positive integer scalar giving the conversion frequency for nominal
 #'   interest-rate inputs. Ignored for \code{"effective"} and \code{"force"}.
 #' @param frac Fractional-age assumption used in survival probabilities:
 #'   \code{"UDD"}, \code{"CF"}, \code{"CML"}, or \code{"Balducci"}. If not
@@ -60,8 +60,23 @@
 #' \eqn{n k}. If \code{benefit} is a function, it is evaluated at the end of
 #' each subperiod, at times \eqn{1/k, 2/k, \ldots, n}.
 #'
-#' Fractional survival probabilities are computed via \code{\link{t_px}} under
-#' the selected fractional-age assumption.
+#' Fractional mortality is interpolated under the selected assumption. Death
+#' masses are evaluated directly from annual survivor decrements and stable
+#' fractional formulas, avoiding subtraction of rounded survival probabilities.
+#' The table must have consecutive annual ages and nonincreasing finite `lx`,
+#' with positive exposure at issue and support through `x + h + n`. No extra
+#' terminal death year is invented. A zero annual survival under CF or Balducci
+#' uses the limiting mass at the beginning of that annual interval, consistently
+#' with the package's fractional survival convention.
+#'
+#' This values one policy per call. A benefit vector is a sequence of payments,
+#' not a vector of policy scenarios; signed benefits are supported. Functional
+#' benefits are evaluated at times relative to the start of coverage, excluding
+#' `h`; discounting and death probabilities use absolute times including `h`.
+#' The payment is at the end of the subperiod of death, not at the exact death
+#' time. Full contractual amounts are used, without division by `k`.
+#' `i_effective` is diagnostic and may round to -1 or Inf for an extreme valid
+#' original rate; valuation retains the original log accumulation rate.
 #'
 #' @return A numeric actuarial present value, or a one-row tibble if
 #'   \code{tidy = TRUE}.
@@ -164,7 +179,8 @@ insurance_variable_k <- function(
   if (missing(frac)) {
     lt_frac <- attr(lt, "frac")
 
-    if (!is.null(lt_frac) && lt_frac %in% c("UDD", "CF", "Balducci")) {
+    if (!is.null(lt_frac) && length(lt_frac) == 1L &&
+        !is.na(lt_frac) && lt_frac %in% c("UDD", "CF", "CML", "Balducci")) {
       frac <- lt_frac
     } else {
       frac <- "UDD"
@@ -173,6 +189,7 @@ insurance_variable_k <- function(
     frac <- match.arg(frac, c("UDD", "CF", "CML", "Balducci"))
     if (frac == "CML") frac <- "CF"
   }
+  if (identical(frac, "CML")) frac <- "CF"
 
   if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
     stop("`tidy` must be a logical scalar.", call. = FALSE)
@@ -182,7 +199,7 @@ insurance_variable_k <- function(
     stop("`check` must be a logical scalar.", call. = FALSE)
   }
 
-  if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || tol <= 0) {
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol <= 0) {
     stop("`tol` must be a single positive numeric value.", call. = FALSE)
   }
 
@@ -200,7 +217,7 @@ insurance_variable_k <- function(
         length(x) != 1L ||
         is.na(x) ||
         !is.finite(x) ||
-        abs(x - round(x)) > tol) {
+        abs(x - round(x)) > tol || abs(x) > .Machine$integer.max) {
       stop("`x` must be a single integer age.", call. = FALSE)
     }
 
@@ -274,35 +291,27 @@ insurance_variable_k <- function(
   }
 
   x <- as.integer(round(x))
-  k <- as.integer(round(k))
-  m <- as.integer(round(m))
+  k <- if (k <= .Machine$integer.max) as.integer(round(k)) else round(k)
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
 
   h_raw <- h * k
   h_periods <- round(h_raw)
 
-  if (abs(h_raw - h_periods) > tol) {
+  if (!is.finite(h_raw) || abs(h_raw - h_periods) > tol) {
     stop(
-      "For k-thly insurance, `h * k` must be an integer.",
+      "For k-thly insurance, `h * k` must be a finite integer deferment grid.",
       call. = FALSE
     )
   }
 
-  i_effective <- standardize_interest(
+  basis <- .interest_basis(
     i_type = i_type,
     i = i,
     m = m
   )
 
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
+  i_effective <- basis$effective
+  mortality <- .life_payment_basis(lt, x, tol, require_lx = TRUE)
 
   # --- determine N (total subperiods) ---
   if (is.null(n)) {
@@ -320,9 +329,10 @@ insurance_variable_k <- function(
     N_raw <- n * k
     N <- round(N_raw)
 
-    if (abs(N_raw - N) > tol) {
+    if (!is.finite(N_raw) || N > .Machine$integer.max ||
+        abs(N_raw - N) > tol) {
       stop(
-        "For k-thly insurance, `n * k` must be an integer.",
+        "For k-thly insurance, `n * k` must be a finite integer number of subperiods within R's payment limit.",
         call. = FALSE
       )
     }
@@ -332,6 +342,9 @@ insurance_variable_k <- function(
 
   if (N <= 0L) {
     stop("The total number of subperiods `n * k` must be positive.", call. = FALSE)
+  }
+  if (!is.finite(h + n) || as.double(x) + h + n > mortality$omega) {
+    stop("Life table horizon does not support the requested insurance term.", call. = FALSE)
   }
 
   # --- build benefit vector ---
@@ -363,29 +376,19 @@ insurance_variable_k <- function(
   }
 
   # --- compute APV ---
-  t0_vec <- h + (0:(N - 1L)) / k
-  t1_vec <- h + (1:N) / k
-
-  S_t0 <- t_px(
-    lt = lt,
-    x = x,
-    t = t0_vec,
-    frac = frac,
-    check = FALSE
-  )
-
-  S_t1 <- t_px(
-    lt = lt,
-    x = x,
-    t = t1_vec,
-    frac = frac,
-    check = FALSE
-  )
-
-  dq <- S_t0 - S_t1
-  disc <- (1 + i_effective)^(-t1_vec)
-
-  apv <- sum(bvec * disc * dq)
+  # Build absolute times from integer grid indices to avoid straddling years
+  # through a rounded addition of h and j/k.
+  t0_vec <- (h_periods + (0:(N - 1L))) / k
+  t1_vec <- (h_periods + (1:N)) / k
+  if (any(t1_vec <= t0_vec))
+    stop("Payment grid cannot distinguish successive subperiods.", call. = FALSE)
+  log_mass <- vapply(seq_len(N), function(j)
+    mortality$log_death(t0_vec[j], t1_vec[j], frac), 0)
+  if (anyNA(log_mass))
+    stop("Life table does not support the required death intervals.", call. = FALSE)
+  log_factor <- log_mass - basis$growth * t1_vec
+  log_factor[log_mass == -Inf] <- -Inf
+  apv <- .cash_flow_sum(bvec, log_factor)
 
   if (!isTRUE(tidy)) {
     return(apv)

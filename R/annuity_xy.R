@@ -23,7 +23,8 @@
 #'   while at least one life is alive. Ignored when \code{benefit} is supplied.
 #' @param benefit Optional list with numeric scalar weights \code{both},
 #'   \code{x_only}, and \code{y_only}. These weights define the payment rate
-#'   according to the survival state of the two lives.
+#'   according to the survival state of the two lives. Weights may be signed;
+#'   an expected payment is then a benefit weight, not necessarily a probability.
 #' @param n Term in years. Use \code{Inf} for the maximum horizon allowed by
 #'   the life tables. For exact k-thly valuation
 #'   (\code{woolhouse = "none"}), fractional terms are allowed when
@@ -71,11 +72,38 @@
 #' is admissible whenever it contains a whole number of payments:
 #' \deqn{nk \in \mathbb{N}.}
 #'
-#' Woolhouse approximations are applied only to the standard joint-life and
-#' last-survivor statuses. For a deferred annuity, the Woolhouse endpoint
-#' corrections are multiplied by the issue-date value of the status at the
-#' beginning of the payment period. This preserves the deferment factor
-#' \eqn{v^h\,{}_hp_{xy}} or its last-survivor analogue.
+#' Both lives are alive at issue; both, x_only and y_only refer to occupation
+#' at each payment date, without restarting both lives after a death.
+#' A designated reversion to y uses both=0, x_only=0, y_only=1; this differs
+#' from payments to either sole survivor and from a joint-and-survivor annuity
+#' paying while both are alive as well.
+#'
+#' Exact valuation sums signed state payments on dates h+j/k, with each
+#' payment equal to its state rate divided by k. Cumulative death probabilities
+#' use direct survivor-count decrements and fractional interval masses, avoiding
+#' cancellation in 1-S. Original log interest, probabilities and monetary
+#' weights are combined before exponentiating when necessary.
+#'
+#' Woolhouse approximations apply only to standard joint-life/last-survivor
+#' statuses. Put F(t)=exp(-g*t)w(t), where w is the status survival from issue
+#' and g is the input rate's annual log accumulation. First order subtracts
+#' (1-1/k)(F(h)-F(h+n))/2 from the annual due annuity. Second order also
+#' subtracts (1-1/k^2)((g+eta(h))F(h)-(g+eta(h+n))F(h+n))/12, with
+#' eta(t)=-log(w(t+1)/w(t)), a forward annual estimate, not an exact
+#' instantaneous force. Second order requires positive supported weights
+#' and the following year at both borders; otherwise use none or first.
+#' Immediate subtracts (F(h)-F(h+n))/k from the due approximation.
+#' A negative approximation is reported with a warning, without clipping.
+#'
+#' Tables must satisfy the annual consistency requirements of \code{\link{t_pxy}};
+#' issue ages must have positive lx for nonempty valuations. Payment grids
+#' must be finite, representable and no larger than R's integer range.
+#' One call values one contract; benefit vectors describe states, not scenarios.
+#' The existing table-horizon convention is retained: each marginal survival
+#' becomes zero beyond its last recorded age. On open tables this is truncation,
+#' not evidence of death, and may affect last-survivor or reversionary weights
+#' after the shorter horizon. Extend the tables for those interpretations.
+#' Infinite n means available horizon, not extrapolated lifetime coverage.
 #'
 #' @return
 #' If \code{tidy = FALSE}, a numeric scalar.
@@ -383,6 +411,8 @@ annuity_xy <- function(
       call. = FALSE
     )
   }
+  .two_life_table(lt_x)
+  if (!identical(lt_x,lt_y)) .two_life_table(lt_y)
 
   # -------------------------------------------------------------------------
   # Fractional-age assumption
@@ -465,6 +495,7 @@ annuity_xy <- function(
       length(x) != 1L ||
       is.na(x) ||
       !is.finite(x) ||
+      abs(x) > .Machine$integer.max ||
       abs(x - round(x)) > 1e-10) {
     stop("`x` must be a single integer age.", call. = FALSE)
   }
@@ -474,6 +505,7 @@ annuity_xy <- function(
       length(y) != 1L ||
       is.na(y) ||
       !is.finite(y) ||
+      abs(y) > .Machine$integer.max ||
       abs(y - round(y)) > 1e-10) {
     stop("`y` must be a single integer age.", call. = FALSE)
   }
@@ -542,13 +574,19 @@ annuity_xy <- function(
 
   x <- as.integer(round(x))
   y <- as.integer(round(y))
-  m <- as.integer(round(m))
-  h <- as.integer(round(h))
-  k <- as.integer(round(k))
+  store_integer <- function(z) {
+    z<-round(z)
+    if (abs(z)<=.Machine$integer.max) as.integer(z) else z
+  }
+  m <- store_integer(m)
+  h <- store_integer(h)
+  k <- store_integer(k)
 
   if (!is.infinite(n)) {
     if (identical(woolhouse, "none")) {
       n_payments_check <- n * k
+      if (!is.finite(n_payments_check))
+        stop("The payment grid must contain a finite number of payments.",call.=FALSE)
 
       if (abs(n_payments_check - round(n_payments_check)) > 1e-10) {
         stop(
@@ -567,7 +605,7 @@ annuity_xy <- function(
         )
       }
 
-      n <- as.integer(round(n))
+      n <- store_integer(n)
     }
   }
 
@@ -583,26 +621,12 @@ annuity_xy <- function(
   # Interest conversion
   # -------------------------------------------------------------------------
 
-  i_effective <- standardize_interest(
+  basis <- .interest_basis(
     i_type = i_type,
     i = i,
     m = m
   )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  v_fun <- function(tt) {
-    (1 + i_effective)^(-tt)
-  }
+  i_effective <- basis$effective
 
   # -------------------------------------------------------------------------
   # Horizon and benefit state weights
@@ -611,8 +635,8 @@ annuity_xy <- function(
   omega_x <- max(lt_x$x, na.rm = TRUE)
   omega_y <- max(lt_y$x, na.rm = TRUE)
 
-  horizon_x <- max(0L, as.integer(round(omega_x - x)))
-  horizon_y <- max(0L, as.integer(round(omega_y - y)))
+  horizon_x <- max(0, as.double(omega_x) - x)
+  horizon_y <- max(0, as.double(omega_y) - y)
 
   if (is.null(benefit)) {
     horizon <- if (status == "joint") {
@@ -685,131 +709,61 @@ annuity_xy <- function(
     }
   }
 
-  expected_payment <- function(tt) {
-    px_t <- t_px(
-      lt = lt_x,
-      x = x,
-      t = tt,
-      frac = frac,
-      tidy = FALSE,
-      check = FALSE
-    )
-
-    py_t <- t_px(
-      lt = lt_y,
-      x = y,
-      t = tt,
-      frac = frac,
-      tidy = FALSE,
-      check = FALSE
-    )
-
-    if (is.na(px_t) || is.na(py_t)) {
-      return(NA_real_)
-    }
-
-    p_both <- px_t * py_t
-    p_x_only <- px_t * (1 - py_t)
-    p_y_only <- py_t * (1 - px_t)
-
-    benefit$both * p_both +
-      benefit$x_only * p_x_only +
-      benefit$y_only * p_y_only
+  state_basis <- .two_life_annuity_basis(lt_x,lt_y,x,y,frac)
+  weights <- unlist(benefit[c("both","x_only","y_only")],use.names=FALSE)
+  exact_apv <- function(nn,kk,tim) {
+    size<-nn*kk
+    if (!is.finite(size) || size>.Machine$integer.max ||
+        abs(size-round(size))>1e-10)
+      stop("Number of payments exceeds the supported payment grid.",call.=FALSE)
+    N<-as.integer(round(size))
+    if (N==0L) return(0)
+    j<-if(tim=="due") 0:(N-1L) else seq_len(N)
+    times<-h+j/kk
+    if (any(!is.finite(times)) || anyDuplicated(times))
+      stop("Payment dates cannot be represented on the requested grid.",call.=FALSE)
+    logs<-vapply(times,function(tt) {
+      states<-state_basis$states(tt)
+      values<-states-basis$growth*tt-log(kk)
+      values[states == -Inf]<- -Inf
+      values
+    },c(both=0,x_only=0,y_only=0))
+    if (anyNA(logs)) return(NA_real_)
+    .cash_flow_sum(rep(weights,N),as.vector(logs))
   }
 
-  exact_apv <- function(nn, kk, tim) {
-    N <- as.integer(round(nn * kk))
-
-    if (N == 0L) {
-      return(0)
-    }
-
-    j <- if (tim == "due") {
-      0:(N - 1L)
-    } else {
-      1:N
-    }
-
-    u <- j / kk
-    times <- h + u
-    disc <- v_fun(times)
-    ep <- vapply(times, expected_payment, numeric(1L))
-
-    if (anyNA(ep)) {
-      return(NA_real_)
-    }
-
-    sum((1 / kk) * disc * ep)
-  }
-
-  # -------------------------------------------------------------------------
-  # APV computation
-  # -------------------------------------------------------------------------
-
-  if (k == 1L || woolhouse == "none") {
-    result <- exact_apv(term_used, k, timing)
+  if (k==1L || woolhouse=="none") {
+    result<-exact_apv(term_used,k,timing)
   } else {
-    annual_due <- exact_apv(term_used, 1L, "due")
-
-    ep_start <- expected_payment(h)
-    ep_end <- expected_payment(h + term_used)
-
-    if (is.na(ep_start) || ep_start <= 0) {
-      stop(
-        "The selected status must have positive probability at the start of ",
-        "the deferred payment period for Woolhouse approximation.",
-        call. = FALSE
-      )
+    annual_due<-exact_apv(term_used,1L,"due")
+    log_weight<-function(tt,strict=FALSE) {
+      states<-state_basis$states(tt,strict)
+      if (status=="joint") states[["both"]] else state_basis$add(states)
     }
-
-    if (is.na(ep_end)) {
-      ep_end <- 0
-    }
-
-    endpoint_start <- v_fun(h) * ep_start
-    endpoint_end <- v_fun(h + term_used) * ep_end
-    endpoint_difference <- endpoint_start - endpoint_end
-
-    adj1 <- (k - 1) / (2 * k) * endpoint_difference
-
-    if (woolhouse == "first") {
-      due_k <- annual_due - adj1
-    } else {
-      delta <- log1p(i_effective)
-
-      ep_m1 <- expected_payment(h + 1)
-
-      if (is.na(ep_m1) || ep_m1 <= 0) {
-        mu_start <- 0
-      } else {
-        p_status_1 <- ep_m1 / ep_start
-        mu_start <- if (p_status_1 > 0) -log(p_status_1) else 0
+    start<-log_weight(h)
+    end<-log_weight(h+term_used)
+    if (!is.finite(start))
+      stop("The selected status must have positive probability at the start of the deferred payment period for Woolhouse approximation.",call.=FALSE)
+    if (is.na(end)) stop("Woolhouse endpoint survival is unknown.",call.=FALSE)
+    Flogs<-c(start-basis$growth*h,
+             if(end == -Inf) -Inf else end-basis$growth*(h+term_used))
+    loss<-.cash_flow_sum(c(1,-1),Flogs)
+    due_k<-annual_due-(1-1/k)/2*loss
+    if (woolhouse=="second") {
+      force<-function(tt) {
+        a<-log_weight(tt,TRUE)
+        b<-log_weight(tt+1,TRUE)
+        if (!is.finite(a) || !is.finite(b))
+          stop("Second-order Woolhouse requires supported positive border survival and a following year; use `none` or `first`.",call.=FALSE)
+        -(b-a)
       }
-
-      ep_n1 <- expected_payment(h + term_used + 1)
-
-      if (is.na(ep_n1) || ep_end <= 0 || ep_n1 <= 0) {
-        mu_end <- 0
-      } else {
-        p_status_n1 <- ep_n1 / ep_end
-        mu_end <- if (p_status_n1 > 0) -log(p_status_n1) else 0
-      }
-
-      adj2 <- (k^2 - 1) /
-        (12 * k^2) *
-        (
-          endpoint_start * (delta + mu_start) -
-            endpoint_end * (delta + mu_end)
-        )
-
-      due_k <- annual_due - adj1 - adj2
+      correction<-.cash_flow_sum(c(basis$growth+force(h),
+                                   -(basis$growth+force(h+term_used))),Flogs)
+      due_k<-due_k-(1-1/k^2)/12*correction
     }
-
-    result <- if (timing == "due") {
-      due_k
-    } else {
-      due_k - (1 / k) * endpoint_difference
-    }
+    result<-if(timing=="due") due_k else due_k-loss/k
+    if (!is.na(result) && result<0)
+      warning("Woolhouse approximation is negative; use `none`.",call.=FALSE)
   }
 
   if (!is.finite(result) && !is.na(result)) {

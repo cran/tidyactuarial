@@ -21,8 +21,10 @@
 #' @param tol Numeric tolerance for integer checks on \code{x}.
 #'
 #' @details
-#' This is a thin wrapper around \code{\link{t_px}}:
+#' Uses \code{\link{t_px}} for input and horizon conventions; the identity is:
 #' \deqn{{}_t q_x = 1 - {}_t p_x.}
+#' Small fractional losses are formed directly before subtracting from one,
+#' preserving probabilities whose survival rounds to one.
 #'
 #' The identity \eqn{{}_tq_x = {}_td_x / \ell_x} (Finan, Section 22) holds
 #' for integer \eqn{t}, where \eqn{{}_td_x = \ell_x - \ell_{x+t}} is the
@@ -92,6 +94,8 @@ t_qx <- function(
     check = TRUE,
     tol = 1e-10
 ) {
+  if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy))
+    stop("`tidy` must be TRUE or FALSE.", call. = FALSE)
 
   # --- delegate frac resolution entirely to t_px ---
   # If frac was not supplied, t_px will inherit from lt attribute
@@ -118,6 +122,34 @@ t_qx <- function(
 
   # tqx = 1 - tpx, clamped to [0, 1]
   tqx <- pmin(pmax(1 - tpx, 0), 1)
+
+  # Form loss before complementing a survival rounded to one.
+  xx <- round(rep_len(as.numeric(x), length(tqx)))
+  tt <- rep_len(as.numeric(t), length(tqx))
+  for (j in seq_along(tqx)) {
+    if (is.na(tqx[j]) || tt[j] <= 0 || xx[j] + tt[j] > max(lt$x) + tol) next
+    k <- floor(tt[j]); s <- tt[j] - k
+    i0 <- match(xx[j], lt$x); iy <- match(xx[j] + k, lt$x)
+    if (is.na(i0) || is.na(iy) || is.na(lt$lx[i0]) || lt$lx[i0] <= 0) next
+    p_int <- lt$lx[iy] / lt$lx[i0]
+    q_int <- (lt$lx[i0] - lt$lx[iy]) / lt$lx[i0]
+    if (s == 0 || p_int == 0) {
+      tqx[j] <- q_int
+      next
+    }
+    q <- if ("qx" %in% names(lt)) lt$qx[iy] else NA_real_
+    p <- if ("px" %in% names(lt)) lt$px[iy] else NA_real_
+    if (is.na(q)) {
+      iy1 <- match(xx[j] + k + 1, lt$x)
+      if (is.na(iy1) || lt$lx[iy] <= 0) next
+      q <- (lt$lx[iy] - lt$lx[iy1]) / lt$lx[iy]
+    }
+    if (is.na(p)) p <- 1 - q
+    loss <- switch(frac_used, UDD = s*q,
+      CF = if (q < .5) -expm1(s*log1p(-q)) else -expm1(s*log(p)),
+      Balducci = s*q/(p+s*q))
+    tqx[j] <- pmin(pmax(q_int + p_int*loss,0),1)
+  }
 
   if (isTRUE(tidy)) {
     # Recycle x, t to match output length (same logic t_px uses internally)

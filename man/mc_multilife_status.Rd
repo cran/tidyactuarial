@@ -22,7 +22,9 @@ mc_multilife_status(
 \code{"last_survivor"}. The aliases \code{"joint_life"},
 \code{"last"}, and \code{"last_survivor_life"} are accepted.}
 
-\item{col_sim}{Character scalar naming the simulation identifier column.}
+\item{col_sim}{Character scalar naming the simulation identifier column.
+It must not collide with the output fields \code{K_status},
+\code{T_status}, \code{n_lives}, or \code{status}.}
 
 \item{col_life}{Character scalar naming the life identifier column. The
 default is \code{"life_id"}. Supply \code{NULL} only when no life
@@ -33,19 +35,19 @@ across simulations but cannot detect duplicated or substituted lives.}
 
 \item{col_T}{Character scalar naming the complete future lifetime column.}
 
-\item{tol}{Nonnegative numeric tolerance used when checking that each
-complete future lifetime is compatible with its curtate lifetime.}
+\item{tol}{Nonnegative numeric tolerance for checking whole-number curtate
+lifetimes. It does not relax the interval \eqn{K \le T < K+1}.}
 }
 \value{
 A tibble with one row per simulation and:
 \describe{
-\item{sim_id}{Standard simulation identifier.}
-\item{sim}{Compatibility alias for the simulation identifier.}
-\item{K_status}{Curtate future lifetime of the status.}
-\item{T_status}{Complete future lifetime of the status.}
-\item{n_lives}{Number of lives represented in each simulation.}
-\item{status}{Canonical status: \code{"joint"} or
-\code{"last_survivor"}.}
+  \item{sim_id}{Standard simulation identifier.}
+  \item{sim}{Compatibility alias for the simulation identifier.}
+  \item{K_status}{Curtate future lifetime of the status.}
+  \item{T_status}{Complete future lifetime of the status.}
+  \item{n_lives}{Number of lives represented in each simulation.}
+  \item{status}{Canonical status: \code{"joint"} or
+  \code{"last_survivor"}.}
 }
 
 If \code{col_sim} is neither \code{"sim_id"} nor \code{"sim"}, that
@@ -72,6 +74,10 @@ The corresponding curtate future lifetime is obtained with the same minimum
 or maximum operation on \eqn{K_1,\ldots,K_r}. Because the function validates
 \eqn{K_j \le T_j < K_j+1}, the returned values satisfy the same
 curtate-complete relationship.
+Each complete lifetime must satisfy this interval exactly after the
+existing whole-number check and rounding of \code{K}. Incompatible
+complete lifetimes are rejected, not rounded or repaired. Ordinary
+curtate outputs use integer storage; larger values retain numeric storage.
 
 When \code{col_life} is available, every simulation must contain exactly one
 row for every life and the same set of lives must appear in every
@@ -95,16 +101,16 @@ simulated |>
 }
 \seealso{
 \code{\link{simulate_lifetimes}}, \code{\link{mc_insurance}},
-\code{\link{mc_annuity}}, \code{\link{mc_reserve}}
+  \code{\link{mc_annuity}}, \code{\link{mc_reserve}}
 
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_loss}()},
-\code{\link{mc_premium}()},
-\code{\link{mc_reserve}()},
-\code{\link{simulate_lifetime}()},
-\code{\link{simulate_lifetimes}()},
-\code{\link{summary_mc}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_loss]{mc_loss()}},
+\code{\link[=mc_premium]{mc_premium()}},
+\code{\link[=mc_reserve]{mc_reserve()}},
+\code{\link[=simulate_lifetime]{simulate_lifetime()}},
+\code{\link[=simulate_lifetimes]{simulate_lifetimes()}},
+\code{\link[=summary_mc]{summary_mc()}}
 }
 \concept{monte-carlo}

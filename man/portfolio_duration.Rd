@@ -57,7 +57,7 @@ used in the calculation.}
 }
 \value{
 A tibble with one row per portfolio and columns for portfolio
-duration, total portfolio value, and number of positions used.
+  duration, total portfolio value, and number of positions used.
 }
 \description{
 Computes portfolio duration from individual position durations using present
@@ -77,6 +77,7 @@ The portfolio duration is computed as:
 where \eqn{P_j} is the present value, price, or market value of position
 \eqn{j}, and \eqn{D_j} is its duration.
 
+
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{P} denotes price, present value, or market value,
 and \code{D} denotes duration.
@@ -85,6 +86,18 @@ The function is deliberately agnostic about the duration convention, but all
 individual durations must be expressed on the same basis within each
 portfolio. For example, do not mix Macaulay durations in years with
 durations measured in coupon periods.
+All measures must refer to the same yield coordinate as well as the same
+time units for an interpretation as price sensitivity to a common shift.
+Values and durations are finite and nonnegative, and each portfolio requires
+a finite positive total value. Zero-value positions remain in the position
+count. Relative weights are combined with durations without forming monetary
+duration products, recovering representable weighted contributions when
+separate products or weights lose range.
+Under \code{.na = "propagate"}, incomplete known portfolios have missing
+results. Positions with missing portfolio identifiers are retained as one
+final row with an \code{NA} identifier and missing duration, total value and
+position count. They are not assigned to any known portfolio. \code{"drop"}
+removes incomplete positions with a warning; \code{"error"} rejects them.
 }
 \examples{
 # Simple example: one portfolio
@@ -118,15 +131,16 @@ Duration, Convexity and Immunization.
 }
 \seealso{
 \code{\link{portfolio_convexity}},
-\code{\link{bond_duration}}, \code{\link{bond_convexity}}
+  \code{\link{bond_duration}}, \code{\link{bond_convexity}}
 
-Other bonds: 
-\code{\link{bond_book_value}()},
-\code{\link{bond_callable_price}()},
-\code{\link{bond_convexity}()},
-\code{\link{bond_duration}()},
-\code{\link{bond_price}()},
-\code{\link{bond_ytm}()},
-\code{\link{portfolio_convexity}()}
+Other bonds:
+\code{\link[=accrued_interest]{accrued_interest()}},
+\code{\link[=bond_book_value]{bond_book_value()}},
+\code{\link[=bond_callable_price]{bond_callable_price()}},
+\code{\link[=bond_convexity]{bond_convexity()}},
+\code{\link[=bond_duration]{bond_duration()}},
+\code{\link[=bond_price]{bond_price()}},
+\code{\link[=bond_ytm]{bond_ytm()}},
+\code{\link[=portfolio_convexity]{portfolio_convexity()}}
 }
 \concept{bonds}

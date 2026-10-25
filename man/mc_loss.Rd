@@ -61,14 +61,14 @@ amount used to construct \code{col_Y}. It is normally inferred from
 \code{loss_col}, and \code{premium}.}
 }
 \value{
-A tibble containing the original simulation and standardized columns:
+A data frame or tibble containing the original simulation and standardized columns:
 \describe{
-\item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
-\item{premium_per_payment}{Amount collected at each premium date.}
-\item{payments_per_year}{Premium payment frequency \code{k}.}
-\item{premium_annuity_scale}{Coefficient multiplying \code{col_Y}.}
-\item{pv_premiums}{Simulated present value of premium income.}
-\item{L}{Simulated loss, or the name supplied through \code{col_L}.}
+  \item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
+  \item{premium_per_payment}{Amount collected at each premium date.}
+  \item{payments_per_year}{Premium payment frequency \code{k}.}
+  \item{premium_annuity_scale}{Coefficient multiplying \code{col_Y}.}
+  \item{pv_premiums}{Simulated present value of premium income.}
+  \item{L}{Simulated loss, or the name supplied through \code{col_L}.}
 }
 
 A compatibility column \code{loss} is synchronized with \code{col_L}.
@@ -118,6 +118,18 @@ P_{\mathrm{per\ payment}} = q c,
 \qquad
 P^{(k)} = k q c.
 }
+For annualized or per-payment inputs, monetary income retains the original
+premium amount and frequency until it is combined with the annuity present
+value. This avoids losing a representable income when an intermediate
+annuity-scale coefficient underflows or overflows. Displayed converted
+amounts may still be zero or infinite if they themselves do not fit in
+double precision. An explicitly supplied annuity-scale coefficient is used
+as supplied; a rounded zero or nonfinite coefficient cannot reconstruct
+information that has already been lost. Select a representable monetary
+premium column when passing extreme results from \code{\link{mc_premium}}.
+Positive infinite annualized annuity-basis metadata are accepted only when
+they agree with the product of the finite per-payment basis and frequency;
+they cannot be used alone to infer the payment basis.
 }
 \examples{
 simulated <- tibble::tibble(
@@ -158,14 +170,14 @@ Society of Actuaries.
 \code{\link{mc_premium}}, \code{\link{mc_reserve}},
 \code{\link{premium_x}}, \code{\link{premium_xy}}
 
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_multilife_status}()},
-\code{\link{mc_premium}()},
-\code{\link{mc_reserve}()},
-\code{\link{simulate_lifetime}()},
-\code{\link{simulate_lifetimes}()},
-\code{\link{summary_mc}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_multilife_status]{mc_multilife_status()}},
+\code{\link[=mc_premium]{mc_premium()}},
+\code{\link[=mc_reserve]{mc_reserve()}},
+\code{\link[=simulate_lifetime]{simulate_lifetime()}},
+\code{\link[=simulate_lifetimes]{simulate_lifetimes()}},
+\code{\link[=summary_mc]{summary_mc()}}
 }
 \concept{monte-carlo}

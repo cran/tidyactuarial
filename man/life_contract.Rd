@@ -18,35 +18,35 @@ life_contract(
 \arguments{
 \item{lt}{A life table or a list of two life tables. For single-life
 contracts, provide one data frame or tibble. For two-life contracts,
-provide either one data frame used for both lives, or \code{list(lt_x, lt_y)}
-with one table for each life. Each life table must contain columns \code{x}
-and \code{lx}.}
+provide either one data frame used for both lives, or `list(lt_x, lt_y)`
+with one table for each life. Each life table must contain columns `x`
+and `lx`.}
 
-\item{lives}{Character string. Use \code{"single"} for a single-life contract,
-\code{"joint"} for a joint-life two-life contract, or \code{"last_survivor"} for a
+\item{lives}{Character string. Use `"single"` for a single-life contract,
+`"joint"` for a joint-life two-life contract, or `"last_survivor"` for a
 last-survivor two-life contract.}
 
 \item{x}{Numeric scalar. Age of the single life, or age of the first life in
 a two-life contract.}
 
 \item{y}{Numeric scalar. Age of the second life in a two-life contract.
-Required when \code{lives} is \code{"joint"} or \code{"last_survivor"}.}
+Required when `lives` is `"joint"` or `"last_survivor"`.}
 
 \item{i}{Numeric scalar. Annual interest-rate input.}
 
 \item{i_type}{Character string indicating the interest-rate type. Allowed
-values are \code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"},
-and \code{"force"}.}
+values are `"effective"`, `"nominal_interest"`, `"nominal_discount"`,
+and `"force"`.}
 
 \item{m}{Positive integer. Conversion frequency for nominal rates. Ignored
-for \code{i_type = "effective"} and \code{i_type = "force"}.}
+for `i_type = "effective"` and `i_type = "force"`.}
 
 \item{...}{Reserved for future extensions. Deprecated argument names such as
-\code{mortality_table}, \code{age}, \code{age_x}, \code{age_y}, \code{rate}, and \code{rate_type} are
+`mortality_table`, `age`, `age_x`, `age_y`, `rate`, and `rate_type` are
 not accepted.}
 }
 \value{
-An object of class \code{"tidyact_life_contract"}.
+An object of class `"tidyact_life_contract"`.
 }
 \description{
 Creates a lightweight actuarial contract object that stores common
@@ -55,26 +55,35 @@ life-contingency inputs for use in pipe workflows.
 \details{
 This function does not compute actuarial values. It validates and stores
 common actuarial inputs such as the life table, life status, ages, and
-interest-rate specification. Calculation functions such as \code{\link[=annuity_x]{annuity_x()}},
-\code{\link[=insurance_x]{insurance_x()}}, \code{\link[=premium_x]{premium_x()}}, \code{\link[=reserve_x]{reserve_x()}}, \code{\link[=annuity_xy]{annuity_xy()}},
-\code{\link[=insurance_xy]{insurance_xy()}}, \code{\link[=premium_xy]{premium_xy()}}, \code{\link[=reserve_xy]{reserve_xy()}}, and simulation functions
+interest-rate specification. Calculation functions such as [annuity_x()],
+[insurance_x()], [premium_x()], [reserve_x()], [annuity_xy()],
+[insurance_xy()], [premium_xy()], [reserve_xy()], and simulation functions
 can then consume this object.
 
-\code{life_contract()} follows the compact actuarial notation used throughout
-\code{tidyactuarial}:
-\itemize{
-\item \code{lt}: life table;
-\item \code{x}: age of the first or single life;
-\item \code{y}: age of the second life;
-\item \code{i}: interest rate;
-\item \code{i_type}: type of interest rate;
-\item \code{m}: conversion frequency for nominal rates.
-}
+
+`life_contract()` follows the compact actuarial notation used throughout
+`tidyactuarial`:
+
+* `lt`: life table;
+* `x`: age of the first or single life;
+* `y`: age of the second life;
+* `i`: interest rate;
+* `i_type`: type of interest rate;
+* `m`: conversion frequency for nominal rates.
 
 The object stores actuarial fields using the compact names above. During the
 0.1.4 API transition, it also stores internal compatibility fields so that
 functions not yet migrated can continue to read the contract. These internal
 fields are not part of the preferred user-facing notation.
+
+The original rate and table are retained, without converting the stored
+rate to an annual effective rate or altering the table. Rate domains require
+`i > -1` for effective rates, `1 + i/m > 0` for nominal interest and
+`1 - i/m > 0` for nominal discount; any finite force is allowed.
+Table validation here checks structure and numeric `x`/`lx` columns.
+Valuation functions additionally check mortality consistency, supported ages,
+horizons and payment grids for their particular models. Integer-valued
+specifications outside R's integer range are stored as doubles, never `NA`.
 }
 \examples{
 lt <- data.frame(
@@ -100,21 +109,21 @@ life_contract(
 
 }
 \seealso{
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

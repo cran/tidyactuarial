@@ -52,6 +52,18 @@
 #' individual durations must be expressed on the same basis within each
 #' portfolio. For example, do not mix Macaulay durations in years with
 #' durations measured in coupon periods.
+#' All measures must refer to the same yield coordinate as well as the same
+#' time units for an interpretation as price sensitivity to a common shift.
+#' Values and durations are finite and nonnegative, and each portfolio requires
+#' a finite positive total value. Zero-value positions remain in the position
+#' count. Relative weights are combined with durations without forming monetary
+#' duration products, recovering representable weighted contributions when
+#' separate products or weights lose range.
+#' Under \code{.na = "propagate"}, incomplete known portfolios have missing
+#' results. Positions with missing portfolio identifiers are retained as one
+#' final row with an \code{NA} identifier and missing duration, total value and
+#' position count. They are not assigned to any known portfolio. \code{"drop"}
+#' removes incomplete positions with a warning; \code{"error"} rejects them.
 #'
 #' @seealso \code{\link{portfolio_convexity}},
 #'   \code{\link{bond_duration}}, \code{\link{bond_convexity}}
@@ -348,6 +360,10 @@ portfolio_duration <- function(
 
   # --- Summarise by portfolio ---
   split_all <- split(data_work, data_work$.portfolio, drop = TRUE)
+  missing_id <- is.na(data_work$.portfolio)
+  if (.na == "propagate" && any(missing_id)) {
+    split_all[length(split_all) + 1L] <- list(data_work[missing_id, , drop = FALSE])
+  }
 
   res_list <- lapply(split_all, function(df_port) {
     has_na_port <- any(df_port$.bad_na)
@@ -372,9 +388,18 @@ portfolio_duration <- function(
         ))
       }
 
+      weight <- df_ok$.P / P_total
+      log_weight <- log(weight)
+      recover <- df_ok$.P > 0 & weight < .Machine$double.xmin
+      log_weight[recover] <- log(df_ok$.P[recover]) - log(P_total)
+      portfolio_duration_value <- sum(.cash_flow_value(df_ok$.D, log_weight))
+      if (!is.finite(portfolio_duration_value)) {
+        abort("The weighted portfolio duration is not representable.")
+      }
+
       tibble::tibble(
         .portfolio = df_port$.portfolio[[1]],
-        .D_P = sum(df_ok$.P * df_ok$.D) / P_total,
+        .D_P = portfolio_duration_value,
         .P_total = P_total,
         .n_positions = nrow(df_ok)
       )

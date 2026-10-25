@@ -18,8 +18,11 @@ assets, evaluated on the same yield basis.}
 \item{D}{Numeric vector with the Macaulay duration of each asset, expressed
 in the same time units as \code{t}.}
 
-\item{C}{Numeric vector with the discrete convexity of each asset, expressed
-in the same time units as \code{t}.}
+\item{C}{Numeric vector with each asset's relative second derivative
+\eqn{P_j''(i_e)/P_j(i_e)} with respect to the annual effective yield
+\eqn{i_e}, using the same time units as \code{t}. A coupon-period
+convexity divided by squared coupon frequency generally uses a different
+yield variable and must be converted before use here.}
 
 \item{i}{Numeric scalar. Interest-rate input used to discount the
 liabilities.}
@@ -34,28 +37,29 @@ for \code{i_type = "effective"} and \code{i_type = "force"}.}
 \value{
 A tibble with:
 \describe{
-\item{w}{Numeric vector of asset weights or units.}
-\item{PV_L}{Present value of the liabilities.}
-\item{D_L}{Macaulay duration of the liabilities.}
-\item{C_L}{Discrete convexity of the liabilities.}
-\item{PV_A}{Present value of the asset portfolio.}
-\item{D_A}{Macaulay duration of the asset portfolio.}
-\item{C_A}{Discrete convexity of the asset portfolio.}
-\item{n_assets}{Number of assets used.}
+  \item{w}{Numeric vector of asset weights or units.}
+  \item{PV_L}{Present value of the liabilities.}
+  \item{D_L}{Macaulay duration of the liabilities.}
+  \item{C_L}{Discrete convexity of the liabilities.}
+  \item{PV_A}{Present value of the asset portfolio.}
+  \item{D_A}{Macaulay duration of the asset portfolio.}
+  \item{C_A}{Discrete convexity of the asset portfolio.}
+  \item{n_assets}{Number of assets used.}
 }
 }
 \description{
 Computes asset weights that immunize a stream of liabilities using three or
 more assets, enforcing:
 \enumerate{
-\item present value of assets = present value of liabilities;
-\item Macaulay duration of assets = Macaulay duration of liabilities;
-\item convexity of assets = convexity of liabilities.
+  \item present value of assets = present value of liabilities;
+  \item Macaulay duration of assets = Macaulay duration of liabilities;
+  \item convexity of assets = convexity of liabilities.
 }
 }
 \details{
 For exactly three assets, the system is solved directly. For four or more
 assets, a minimum-norm solution is computed by linear algebra.
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{L} denotes liabilities, \code{t} denotes payment
@@ -91,6 +95,32 @@ assets, the minimum-norm solution
 w = A^T(AA^T)^{-1}b
 }
 is computed.
+It is evaluated by singular value decomposition of the row-scaled
+constraint matrix, without forming normal equations. The norm is over
+asset units \code{w}, not market-value fractions; short positions are allowed.
+
+All asset sensitivities must use the same annual effective yield as the
+liabilities, even when \code{i_type} specifies a nominal rate or a force.
+For coupon frequency \eqn{k}, let \eqn{j=(1+i_e)^{1/k}-1}. If
+\eqn{C_j=P''(j)/P} and \eqn{D_j^*=-P'(j)/P}, the required convexity is
+\deqn{C_{i_e}=C_j[j'(i_e)]^2-D_j^*j''(i_e).}
+The outputs \code{discrete_convexity_periods} from \code{bond_convexity()}
+and \code{modified_duration_periods_j} from \code{bond_duration()} give
+\eqn{C_j} and \eqn{D_j^*}. Alternatively, use \code{convexity_cash_flow()}
+on the asset cash flows at the annual effective yield.
+
+Matching convexity makes the surplus's second derivative zero at the
+base yield. This differs from Redington's strict positive-curvature
+condition and does not guarantee a nonnegative surplus after rate shifts.
+Liability values retain the original log accumulation rate; convexity is
+still with respect to the annual effective yield. Relative moments and row
+scaling before monetary products prevent avoidable overflow. Scaling uses
+common monetary and moment magnitudes, preserving the minimum norm over
+asset units, without rescaling asset columns independently. Time-zero
+liabilities contribute value but zero duration and convexity. Final values,
+weights and sensitivities must be finite; nearly cancelled liability values
+are rejected. Rank and cancellation tests remain subject to double precision;
+reported portfolio moments should be inspected for ill-conditioned systems.
 }
 \examples{
 # Three-asset immunization
@@ -99,7 +129,7 @@ immunize_duration_convexity(
   t = c(3, 5, 7),
   P = c(100, 150, 200),
   D = c(2, 5, 8),
-  C = c(6, 30, 72),
+  C = c(6, 30, 72) / (1.05)^2,
   i = 0.05
 )
 
@@ -109,7 +139,7 @@ immunize_duration_convexity(
   t = c(3, 5, 7),
   P = c(100, 120, 150, 200),
   D = c(2, 4, 6, 8),
-  C = c(6, 20, 42, 72),
+  C = c(6, 20, 42, 72) / (1.05)^2,
   i = 0.05
 )
 
@@ -119,7 +149,7 @@ immunize_duration_convexity(
   t = c(3, 5, 7),
   P = c(100, 150, 200),
   D = c(2, 5, 8),
-  C = c(6, 30, 72),
+  C = c(6, 30, 72) / (1 + 0.06 / 12)^(2 * 12),
   i = 0.06,
   i_type = "nominal_interest",
   m = 12
@@ -128,10 +158,10 @@ immunize_duration_convexity(
 }
 \seealso{
 \code{\link{immunize_duration}}, \code{\link{bond_duration}},
-\code{\link{bond_convexity}}
+  \code{\link{bond_convexity}}
 
-Other immunization: 
-\code{\link{immunize_duration}()},
-\code{\link{plot_immunization_gap}()}
+Other immunization:
+\code{\link[=immunize_duration]{immunize_duration()}},
+\code{\link[=plot_immunization_gap]{plot_immunization_gap()}}
 }
 \concept{immunization}

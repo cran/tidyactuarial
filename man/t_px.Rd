@@ -29,7 +29,7 @@ attribute (set by \code{\link{lifetable}}), that value is used.}
 }
 \value{
 Numeric vector of \eqn{{}_t p_x}, or a tibble if
-\code{tidy = TRUE}.
+  \code{tidy = TRUE}.
 }
 \description{
 Computes the t-year survival probability
@@ -48,12 +48,21 @@ and \eqn{s \in [0,1)}. Then (Finan, Section 24):
 
 The fractional-year factor \eqn{{}_s p_y} depends on the assumption:
 \itemize{
-\item UDD (Finan, Sec. 24.1): \eqn{{}_s p_y = 1 - s \times q_y}
-\item CF (Finan, Sec. 24.2): \eqn{{}_s p_y = (p_y)^s}
-\item Balducci (Finan, Sec. 24.3):
-\eqn{{}_s p_y = \frac{p_y}{1 - (1 - s) \times q_y}}
+  \item UDD (Finan, Sec. 24.1): \eqn{{}_s p_y = 1 - s \times q_y}
+  \item CF (Finan, Sec. 24.2): \eqn{{}_s p_y = (p_y)^s}
+  \item Balducci (Finan, Sec. 24.3):
+    \eqn{{}_s p_y = \frac{p_y}{1 - (1 - s) \times q_y}}
 }
 
+Missing annual survival probabilities are derived directly from adjacent
+survivor counts, avoiding cancellation in \eqn{1-q_y}. CF and Balducci
+retain logarithmic survival when that count ratio underflows. Supplied
+\code{px} values remain in use; input columns should describe a consistent
+annual life table.
+
 If \eqn{x + t > \omega} (the terminal age), the function returns 0
-since no survival is possible beyond the table's limiting age.
+by the established table-horizon convention, including open tables.
+This is truncation, not inference about survival beyond observed ages;
+extend the table before evaluating a longer horizon. Interval tables with
+nonannual widths from \code{km_lifetable} require annual conversion first.
 }

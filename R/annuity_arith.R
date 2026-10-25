@@ -29,7 +29,8 @@
 #'   values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param m Positive integer vector giving the conversion frequency for nominal
-#'   rates. Ignored for \code{"effective"} and \code{"force"}.
+#'   rates. Observed values are validated for every rate family, although only
+#'   nominal conversions use this frequency.
 #' @param h Numeric vector of deferment times in years. Must be greater than or
 #'   equal to 0.
 #' @param timing Character vector. One of \code{"immediate"} or \code{"due"}.
@@ -58,8 +59,9 @@
 #' interest-rate type, \code{m} is the conversion frequency for nominal rates,
 #' and \code{h} is the deferment period.
 #'
-#' The function first converts the supplied rate to the equivalent annual
-#' effective interest rate using \code{\link{standardize_interest}}.
+#' Rate validation uses \code{\link{standardize_interest}}. Valuation retains
+#' the original log accumulation rate, even if the displayed annual effective
+#' equivalent rounds to -1 or overflows.
 #'
 #' For each scenario, the total number of payments is
 #' \deqn{N = n k.}
@@ -68,6 +70,18 @@
 #' accumulated value is computed at the end of the annuity term. Under this
 #' convention, \code{h} affects the present value factor but not the
 #' accumulated value factor.
+#'
+#' Let \eqn{b=0} for immediate payments and \eqn{b=1} for due payments,
+#' \eqn{r=\delta/k}, and \eqn{H=hk}. The present value is
+#' \eqn{\sum_{j=1}^N P_j\exp[-r(H+j-b)]}; the value at \eqn{h+n}
+#' years is \eqn{\sum_{j=1}^N P_j\exp[r(N-j+b)]}.
+#' In a custom stream, \code{g} is an increment in currency per payment,
+#' not an annual growth rate. Signed and zero payments are supported.
+#'
+#' Payments are enumerated explicitly, so memory grows with \eqn{N}.
+#' Capital-factor products are evaluated stably using the shared cash-flow
+#' rules. Those rules do not recover arbitrary extreme signed cancellation
+#' across different factors, or payments already outside the numeric range.
 #'
 #' @seealso \code{\link{a_angle}}, \code{\link{s_angle}},
 #'   \code{\link{standardize_interest}}
@@ -255,14 +269,8 @@ annuity_arith <- function(
   }
 
   # --- Convert to effective annual rate ---
-  i_effective <- standardize_interest(i_type = i_type, i = i, m = m)
-
-  if (any(!is.na(i_effective) & (!is.finite(i_effective) | i_effective <= -1))) {
-    stop(
-      "The standardized annual effective interest rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  i_effective <- basis$effective
 
   present_value_factor <- rep(NA_real_, size)
   accumulated_value_factor <- rep(NA_real_, size)
@@ -314,8 +322,9 @@ annuity_arith <- function(
       )
     }
 
-    i_period[idx] <- (1 + i_effective[idx])^(1 / kk) - 1
-    v_period[idx] <- 1 / (1 + i_period[idx])
+    period_growth <- basis$growth[idx] / kk
+    i_period[idx] <- expm1(period_growth)
+    v_period[idx] <- exp(-period_growth)
     n_periods[idx] <- N
     h_periods[idx] <- H
 
@@ -349,10 +358,12 @@ annuity_arith <- function(
       payment_index - 1
     }
 
-    present_value_factor[idx] <- sum(payments * v_period[idx]^(H + local_times))
+    present_value_factor[idx] <- .cash_flow_sum(
+      payments, -period_growth * (H + local_times)
+    )
 
-    accumulated_value_factor[idx] <- sum(
-      payments * (1 + i_period[idx])^(N - local_times)
+    accumulated_value_factor[idx] <- .cash_flow_sum(
+      payments, period_growth * (N - local_times)
     )
 
     selected_factor[idx] <- if (valuation == "present") {

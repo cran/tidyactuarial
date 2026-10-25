@@ -7,24 +7,24 @@
 \format{
 A tibble with 4 rows and 7 variables:
 \describe{
-\item{loan_id}{Loan identifier.}
-\item{L}{Initial loan principal.}
-\item{i}{Annual effective interest rate.}
-\item{n_months}{Loan term in months.}
-\item{k}{Number of payments per year.}
-\item{loan_type}{Short loan type label.}
-\item{R}{Level payment amount per payment period.}
+  \item{loan_id}{Loan identifier.}
+  \item{L}{Initial loan principal.}
+  \item{i}{Annual effective interest rate.}
+  \item{n_months}{Loan term in months.}
+  \item{k}{Number of payments per year.}
+  \item{loan_type}{Short loan type label.}
+  \item{R}{Level payment amount per payment period.}
 }
 
 A tibble with 4 rows and 7 variables:
 \describe{
-\item{loan_id}{Loan identifier.}
-\item{L}{Initial loan principal.}
-\item{i}{Annual effective interest rate.}
-\item{n_months}{Loan term in months.}
-\item{k}{Number of payments per year.}
-\item{loan_type}{Short loan type label.}
-\item{R}{Level payment amount per payment period.}
+  \item{loan_id}{Loan identifier.}
+  \item{L}{Initial loan principal.}
+  \item{i}{Annual effective interest rate.}
+  \item{n_months}{Loan term in months.}
+  \item{k}{Number of payments per year.}
+  \item{loan_type}{Short loan type label.}
+  \item{R}{Level payment amount per payment period.}
 }
 }
 \source{

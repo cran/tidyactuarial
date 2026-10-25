@@ -7,7 +7,7 @@
 #' @description
 #' The function builds annual commutation columns from \code{x}, \code{lx}, and
 #' an interest-rate specification. The interest rate is converted internally to
-#' an annual effective rate before constructing the discount factor.
+#' an original log accumulation rate before forming discounted products.
 #'
 #' @param lt A life table object as produced by \code{\link{lifetable}}. It
 #'   must contain columns \code{x} and \code{lx}. If available, \code{qx} or
@@ -30,7 +30,7 @@
 #' interest-rate input, \code{i_type} is the interest-rate type, and \code{m}
 #' is the conversion frequency for nominal rates.
 #'
-#' The annual effective rate is obtained through \code{\link{standardize_interest}}.
+#' The rate specification is validated through \code{\link{standardize_interest}}.
 #' If \eqn{i_e} denotes the annual effective rate, then
 #' \deqn{v = \frac{1}{1+i_e}.}
 #'
@@ -39,7 +39,11 @@
 #' closing the table with \eqn{l_{\omega+1}=0}. The main commutation functions
 #' are then computed as
 #' \deqn{D_x = v^x l_x, \qquad C_x = v^{x+1} d_x,}
-#' with reverse cumulative sums used to obtain \eqn{N_x}, \eqn{S_x},
+#' Discounted products retain the original log accumulation rate to avoid
+#' intermediate factor overflow or underflow. This constructor always closes
+#' the terminal count, including when the input carries open-table metadata.
+#' The horizon is therefore different from the truncated integral in \code{e_x}.
+#' Reverse cumulative sums are used to obtain \eqn{N_x}, \eqn{S_x},
 #' \eqn{M_x}, and \eqn{R_x}.
 #'
 #' @examples
@@ -131,37 +135,25 @@ commutation_table <- function(
     }
   }
 
-  m <- as.integer(round(m))
-
-  i_effective <- standardize_interest(
-    type = i_type,
-    rate = i,
-    m = m
-  )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
+  m <- round(m)
+  basis <- .interest_basis(i_type, i, m)
 
   lt <- dplyr::arrange(lt, .data$x)
 
   x  <- lt$x
   lx <- lt$lx
 
-  v <- 1 / (1 + i_effective)
+  if (check && (length(x) < 1L || any(diff(round(x)) != 1)))
+    stop("Ages must be consecutive annual ages.", call. = FALSE)
+  if (check && any(diff(lx) > 0))
+    stop("Survivors must be nonincreasing.", call. = FALSE)
+  v <- exp(-basis$growth)
 
   # Robust annual deaths: dx = lx - l_{x+1}, closing at 0 by default.
   dx <- lx - dplyr::lead(lx, default = 0)
 
-  Dx <- (v^x) * lx
-  Cx <- (v^(x + 1)) * dx
+  Dx <- .cash_flow_value(lx, -basis$growth * x)
+  Cx <- .cash_flow_value(dx, -basis$growth * (as.numeric(x) + 1))
 
   rev_cumsum <- function(z) rev(cumsum(rev(z)))
 

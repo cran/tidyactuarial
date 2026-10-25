@@ -51,7 +51,9 @@ format. \code{"table"} is accepted as a compatibility alias for
 
 \item{check}{Logical scalar. If \code{TRUE}, validates the inputs.}
 
-\item{tol}{Nonnegative numeric tolerance used for consistency checks.}
+\item{tol}{Nonnegative finite numeric tolerance. Monetary consistency is
+checked relatively to the compared amounts, without a one-currency-unit
+floor; frequency and integer checks use absolute tolerance.}
 
 \item{...}{Transitional compatibility. The deprecated argument
 \code{payments_per_year} is mapped to \code{k}.}
@@ -74,6 +76,7 @@ Converts a net-premium result from \code{\link{premium_x}} or
 \details{
 The function preserves the package-wide distinction between an annualized
 premium and the amount paid at each of the \code{k} payment dates.
+
 
 Let \eqn{a^{(k)}} denote the APV of the premium annuity returned by
 \code{\link{premium_x}} or \code{\link{premium_xy}}. That annuity has
@@ -127,6 +130,17 @@ tables using \code{P}, \code{premium}, \code{P_net},
 
 Legacy premium columns are accepted automatically only when \code{k = 1},
 because their unit is ambiguous for subannual premiums.
+
+When annualized and per-payment premiums are both supplied, both must be
+valid and agree in their units. A supplied payment frequency is validated
+even if \code{k} is explicit. Acquisition shares and expense products retain
+representable values without overflowing \eqn{k a^{(k)}} first. The loading
+is evaluated directly from the expense equation; a small positive loading
+can be reported even when the rounded gross and net premiums coincide.
+The equivalence residual uses the same equation factored in annuity units,
+avoiding subtraction of overflowing APVs where possible; it is not forced
+to zero. Individual audit APVs may still be infinite. No finite result is
+promised when the annualized premium itself is outside numeric range.
 }
 \examples{
 net <- tibble::tibble(
@@ -173,23 +187,23 @@ life_contract(
 }
 \seealso{
 \code{\link{premium_x}}, \code{\link{premium_xy}},
-\code{\link{annuity_x}}, \code{\link{annuity_xy}}
+  \code{\link{annuity_x}}, \code{\link{annuity_xy}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

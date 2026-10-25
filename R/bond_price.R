@@ -19,9 +19,8 @@
 #'         \code{y_m}.
 #' }
 #'
-#' If an annual rate specification is supplied, it is first converted to the
-#' equivalent annual effective yield and then to the effective yield per coupon
-#' period.
+#' Annual yield specifications are valued using their original log accumulation
+#' rate, avoiding loss of precision or range in intermediate annual equivalents.
 #'
 #' @param face Numeric scalar. Face value of the bond.
 #' @param c Numeric scalar. Annual coupon rate as a proportion.
@@ -36,7 +35,7 @@
 #' @param y_m Positive integer. Conversion frequency for nominal annual yields.
 #' @param R Numeric scalar. Redemption value at maturity. If \code{NULL},
 #'   defaults to \code{face}.
-#' @param tol Numeric scalar. Tolerance used when checking alignment of maturity
+#' @param tol Finite positive numeric scalar. Tolerance used when checking alignment of maturity
 #'   with coupon periods.
 #' @param check Logical scalar. If \code{TRUE}, performs basic input validation.
 #'
@@ -119,17 +118,9 @@ bond_price <- function(
   k <- as.integer(round(k))
   y_m <- as.integer(round(y_m))
 
-  N_raw <- n * k
-  if (abs(N_raw - round(N_raw)) > tol) {
-    stop(
-      "`n * k` must be an integer ",
-      "(stub periods are not supported).",
-      call. = FALSE
-    )
-  }
-  N <- as.integer(round(N_raw))
+  cf_tbl <- bond_cash_flows(face, c, n, k, R, tol, check = FALSE)
 
-  if (N == 0L) {
+  if (cf_tbl$period[1L] == 0L) {
     return(R)
   }
 
@@ -141,25 +132,6 @@ bond_price <- function(
     y_m = y_m,
     coupons_per_year = k
   )
-  ip <- yield$ip
-
-  cf_tbl <- bond_cash_flows(
-    face = face,
-    c = c,
-    n = n,
-    k = k,
-    R = R,
-    tol = tol,
-    check = FALSE
-  )
-
-  # Discount by coupon period, not by time in years.
-  cf_periods_raw <- cf_tbl$t * k
-  if (any(abs(cf_periods_raw - round(cf_periods_raw)) > tol)) {
-    stop("Internal error: coupon times are not aligned with coupon periods.", call. = FALSE)
-  }
-
-  cf_periods <- as.integer(round(cf_periods_raw))
-
-  sum(cf_tbl$cf / (1 + ip)^cf_periods)
+  # Use exact stored period indices and combine amounts with log discounts.
+  .cash_flow_sum(cf_tbl$cf, -cf_tbl$period * yield$log_period)
 }

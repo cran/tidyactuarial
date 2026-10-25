@@ -7,7 +7,7 @@
 #' This function is intended for cash flows with multiple sign changes, where
 #' more than one IRR may exist. It evaluates the NPV on a fine grid over the
 #' search interval, identifies subintervals with sign changes (and grid points
-#' where the NPV is approximately zero), and applies
+#' where the scaled NPV evaluates to zero), and applies
 #' \code{\link[stats]{uniroot}} to each candidate interval.
 #'
 #' The IRRs returned are interpreted as annual effective rates.
@@ -52,6 +52,13 @@
 #' If no roots are detected, the function returns a tibble with zero rows.
 #'
 #' @details
+#' Cash flows are divided by their largest absolute amount during the search;
+#' reported NPVs remain in the original currency. Scaling that would erase a
+#' nonzero amount through underflow is rejected. Only exact computed grid
+#' zeros and sign-changing brackets generate candidates: an absolutely small
+#' monetary NPV is not by itself evidence of a root. Grid detection remains
+#' heuristic, including for tangential or very close roots.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
 #' and \code{m} denotes the conversion frequency used to report the equivalent
@@ -221,10 +228,16 @@ irr_flow_multi <- function(
     return(empty_result)
   }
 
+  scaled_cf <- cf / max(abs(cf))
+  if (any(cf != 0 & scaled_cf == 0)) {
+    stop("Cash-flow scaling would lose nonzero amounts at machine precision.",
+         call. = FALSE)
+  }
+
   # --- NPV function ---
   npv_fun <- function(r) {
     pv_flow(
-      cf = cf,
+      cf = scaled_cf,
       i = r,
       i_type = "effective",
       t = t,
@@ -245,13 +258,15 @@ irr_flow_multi <- function(
     numeric(1L)
   )
 
-  # --- Candidate roots from near-zero grid evaluations ---
-  zero_idx <- which(is.finite(f_vals) & abs(f_vals) <= sqrt(tol))
+  # An absolute monetary residual does not identify a root. Use exact grid
+  # zeros; other detectable roots are refined from sign-changing brackets.
+  zero_idx <- which(is.finite(f_vals) & f_vals == 0)
   point_roots <- if (length(zero_idx) > 0L) grid[zero_idx] else numeric(0)
 
   # --- Candidate brackets from sign changes (vectorized) ---
   ok <- is.finite(f_vals[-length(f_vals)]) & is.finite(f_vals[-1L])
-  sign_change <- ok & (f_vals[-length(f_vals)] * f_vals[-1L] < 0)
+  sign_change <- ok & (sign(f_vals[-length(f_vals)]) != sign(f_vals[-1L])) &
+    f_vals[-length(f_vals)] != 0 & f_vals[-1L] != 0
   bracket_idx <- which(sign_change)
 
   bracket_roots <- numeric(0)
@@ -336,9 +351,11 @@ irr_flow_multi <- function(
   # --- Compute derived quantities ---
   out_tbl$root_id <- seq_len(nrow(out_tbl))
   out_tbl$i_effective_annual <- out_tbl$irr
-  out_tbl$j_nominal_interest <- m * ((1 + out_tbl$irr)^(1 / m) - 1)
+  out_tbl$j_nominal_interest <- m * expm1(log1p(out_tbl$irr) / m)
   out_tbl$delta <- log1p(out_tbl$irr)
-  out_tbl$npv <- vapply(out_tbl$irr, npv_fun, numeric(1L))
+  out_tbl$npv <- vapply(out_tbl$irr, function(r) {
+    pv_flow(cf = cf, i = r, t = t, date = date, day_count = day_count)
+  }, numeric(1L))
   out_tbl$n_cashflows <- length(cf)
   out_tbl$has_both_signs <- has_both
   out_tbl$n_sign_changes_cashflow <- n_sign_changes

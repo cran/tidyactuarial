@@ -58,12 +58,26 @@
 #' }
 #'
 #' Fractional-year survival is computed under UDD within each year.
+#' Discounting uses the log accumulation rate from the original interest
+#' specification. A displayed discount factor may be zero or infinite even
+#' when its monetary APV contribution is representable.
+#'
+#' Unknown mortality intervals produce missing contributions, unless survival
+#' has already reached zero. Missing numeric payment times and cash flows are
+#' retained as missing rows. Cumulative APV follows input row order and remains
+#' missing after a missing contribution. For compatibility, the `apv` attribute
+#' is the sum of nonmissing contributions (zero if none are known), so it is a
+#' subtotal when any contribution is missing, not a complete contract valuation.
+#' Calendar times use actual elapsed days divided by 365.25; all dates must be
+#' finite and nonmissing. Payments at the same time remain separate rows.
 #'
 #' @return A tibble with one row per payment and columns:
 #'   \code{t}, \code{cf}, \code{surv_prob}, \code{discount},
 #'   \code{expected_cf}, \code{pv}, and \code{pv_cum}. If \code{date} was
 #'   provided, a \code{date} column is included. The total APV is stored as
 #'   \code{attr(result, "apv")}.
+#'   The `contingency` attribute identifies `"survival"` or `"weighted"`
+#'   (reversionary benefit fraction) for [plot_contingent_cash_flow()].
 #'
 #' @examples
 #' lt <- data.frame(
@@ -88,6 +102,7 @@
 #'   status = "first"
 #' )
 #'
+#' @md
 #' @export
 apv_life_flow <- function(
     lt,
@@ -134,7 +149,7 @@ apv_life_flow <- function(
       m < 1 || abs(m - round(m)) > 1e-10) {
     stop("`m` must be a single positive integer.", call. = FALSE)
   }
-  m <- as.integer(round(m))
+  m <- round(m)
 
   if (!is.data.frame(lt)) {
     stop("`lt` must be a data frame.", call. = FALSE)
@@ -148,6 +163,21 @@ apv_life_flow <- function(
       !("px" %in% names(lt)) &&
       !("qx" %in% names(lt))) {
     stop("`lt` must contain `lx`, `px`, or `qx`.", call. = FALSE)
+  }
+
+  if (!is.numeric(lt$x) || !nrow(lt) || any(!is.finite(lt$x)) ||
+      any(lt$x != round(lt$x)) || anyDuplicated(lt$x) ||
+      any(abs(lt$x) > .Machine$integer.max)) {
+    stop("`lt$x` must contain unique finite integer ages.", call. = FALSE)
+  }
+  for (column in intersect(c("lx", "px", "qx"), names(lt))) {
+    values <- lt[[column]]
+    if (!is.numeric(values) || any(is.nan(values)) ||
+        any(!is.finite(values) & !is.na(values)) ||
+        any(values < 0, na.rm = TRUE) ||
+        (column != "lx" && any(values > 1, na.rm = TRUE))) {
+      stop("`lt$", column, "` contains invalid mortality values.", call. = FALSE)
+    }
   }
 
   if (is.null(t) && is.null(date)) {
@@ -171,8 +201,8 @@ apv_life_flow <- function(
   if (!is.null(date)) {
     date_out <- as.Date(date)
 
-    if (any(is.na(date_out))) {
-      stop("`date` must be coercible to non-missing Date values.", call. = FALSE)
+    if (any(!is.finite(as.numeric(date_out)))) {
+      stop("`date` must be coercible to finite non-missing Date values.", call. = FALSE)
     }
 
     if (is.null(date0)) {
@@ -181,8 +211,8 @@ apv_life_flow <- function(
 
     date0 <- as.Date(date0)
 
-    if (length(date0) != 1L || is.na(date0)) {
-      stop("`date0` must be a single non-missing Date.", call. = FALSE)
+    if (length(date0) != 1L || !is.finite(as.numeric(date0))) {
+      stop("`date0` must be a single finite non-missing Date.", call. = FALSE)
     }
 
     t <- as.numeric(date_out - date0) / 365.25
@@ -216,11 +246,12 @@ apv_life_flow <- function(
     stop("`ages` must contain finite non-missing values.", call. = FALSE)
   }
 
-  if (any(abs(ages - round(ages)) > 1e-10)) {
+  if (any(abs(ages - round(ages)) > 1e-10) ||
+      any(abs(ages) > .Machine$integer.max)) {
     stop("`ages` must contain integer ages.", call. = FALSE)
   }
 
-  ages <- as.integer(round(ages))
+  ages <- round(ages)
 
   if (status == "reversionary") {
     if (is.null(alpha) || !is.numeric(alpha) || length(alpha) != 1L ||
@@ -229,26 +260,21 @@ apv_life_flow <- function(
     }
   }
 
-  i_effective <- standardize_interest(
-    type = i_type,
-    rate = i,
+  basis <- .interest_basis(
+    i_type = i_type,
+    i = i,
     m = m
   )
 
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  v_fun <- function(tt) (1 + i_effective)^(-tt)
-
   lt <- lt[order(lt$x), , drop = FALSE]
+  if ("lx" %in% names(lt) &&
+      any(diff(lt$lx[!is.na(lt$lx)]) > 0)) {
+    stop("`lt$lx` must be nonincreasing.", call. = FALSE)
+  }
+  if (all(c("px", "qx") %in% names(lt)) &&
+      any(abs(lt$px + lt$qx - 1) > 1e-10, na.rm = TRUE)) {
+    stop("`lt$px` and `lt$qx` must be complementary.", call. = FALSE)
+  }
 
   # --- one-year px at integer age ---
   get_px <- function(age) {
@@ -287,6 +313,7 @@ apv_life_flow <- function(
 
   # --- {}_t p_x using UDD for fractional years ---
   t_px_udd <- function(x_age, tt) {
+    if (is.na(tt)) return(NA_real_)
     if (tt <= 0) {
       return(1)
     }
@@ -294,16 +321,17 @@ apv_life_flow <- function(
     t_int <- floor(tt)
     u <- tt - t_int
 
+    p_k <- 1
+    # Never allocate a sequence proportional to an unsupported payment horizon.
+    # Extinction is absorbing; an unknown earlier interval remains unknown.
     if (t_int > 0) {
-      px_vec <- vapply(x_age:(x_age + t_int - 1L), get_px, numeric(1L))
-
-      if (anyNA(px_vec)) {
-        return(NA_real_)
+      for (j in seq_len(min(t_int, nrow(lt)))) {
+        px <- get_px(x_age + j - 1)
+        if (is.na(px)) return(NA_real_)
+        if (px == 0) return(0)
+        p_k <- p_k * px
       }
-
-      p_k <- prod(px_vec)
-    } else {
-      p_k <- 1
+      if (t_int > nrow(lt)) return(NA_real_)
     }
 
     if (u == 0) {
@@ -332,7 +360,7 @@ apv_life_flow <- function(
     }
 
     p_all <- prod(p_vec)
-    p_any <- 1 - prod(1 - p_vec)
+    p_any <- -expm1(sum(log1p(-p_vec)))
 
     if (status == "first") {
       return(p_all)
@@ -347,9 +375,14 @@ apv_life_flow <- function(
   }
 
   surv   <- vapply(t, p_status, numeric(1L))
-  disc   <- v_fun(t)
+  log_disc <- -basis$growth * t
+  disc   <- exp(log_disc)
   exp_cf <- cf * surv
-  pv     <- exp_cf * disc
+  # Combine all three factors before rounding intermediate monetary products.
+  pv <- .cash_flow_value(cf * sign(surv), log(abs(surv)) + log_disc)
+  known_zero <- !is.na(cf) & !is.na(surv) & !is.na(t) &
+    (cf == 0 | surv == 0)
+  pv[known_zero] <- 0
 
   out <- tibble::tibble(
     t           = as.numeric(t),
@@ -367,6 +400,8 @@ apv_life_flow <- function(
   }
 
   attr(out, "apv") <- sum(pv, na.rm = TRUE)
+  attr(out, "contingency") <- if (status == "reversionary" && length(ages) > 1L)
+    "weighted" else "survival"
 
   if (isTRUE(plot)) {
     plot_df <- out

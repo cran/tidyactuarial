@@ -32,10 +32,11 @@ positive.}
 \item{R}{Numeric scalar. Redemption value at maturity. If \code{NULL},
 defaults to \code{face}.}
 
-\item{interval}{Optional numeric vector of length 2 giving a bracket for the
-effective yield per coupon period.}
+\item{interval}{Optional finite numeric vector of length 2 giving an increasing
+bracket for the effective yield per coupon period, with both bounds above -1.}
 
-\item{tol}{Numeric scalar. Tolerance passed to \code{\link[stats]{uniroot}}.}
+\item{tol}{Finite positive numeric scalar. Yield-coordinate tolerance passed
+to \code{\link[stats]{uniroot}}, not a monetary price tolerance.}
 
 \item{maxiter}{Positive integer. Maximum number of iterations passed to
 \code{\link[stats]{uniroot}}.}
@@ -45,13 +46,13 @@ effective yield per coupon period.}
 \value{
 A one-row tibble with columns:
 \describe{
-\item{price}{Input dirty price.}
-\item{i_period}{Effective yield per coupon period.}
-\item{j_nominal}{Nominal annual yield convertible \code{k} times per year
-(= \code{k * i_period}). When \code{k = 2}, this is the bond-equivalent
-yield.}
-\item{i_effective_annual}{Annual effective yield.}
-\item{k}{Coupon frequency.}
+  \item{price}{Input dirty price.}
+  \item{i_period}{Effective yield per coupon period.}
+  \item{j_nominal}{Nominal annual yield convertible \code{k} times per year
+    (= \code{k * i_period}). When \code{k = 2}, this is the bond-equivalent
+    yield.}
+  \item{i_effective_annual}{Annual effective yield.}
+  \item{k}{Coupon frequency.}
 }
 }
 \description{
@@ -64,11 +65,12 @@ reported together with common annual equivalents.
 
 Assumptions:
 \itemize{
-\item Coupons are paid in arrears at regular intervals.
-\item Price is observed at a coupon date (no accrued interest).
-\item \code{n * k} must be an integer.
-\item Stub periods are not supported.
+  \item Coupons are paid in arrears at regular intervals.
+  \item Price is observed at a coupon date (no accrued interest).
+  \item \code{n * k} must be an integer.
+  \item Stub periods are not supported.
 }
+
 
 This function follows the compact bond notation used in
 \code{tidyactuarial}: \code{P} is the observed dirty price, \code{face} is
@@ -79,10 +81,16 @@ value.
 The effective yield per coupon period \eqn{j} is the solution to
 \deqn{P = \sum_{r=1}^{N} C_r (1+j)^{-r}.}
 
-The root is found numerically using \code{\link[stats]{uniroot}}. If no
-\code{interval} is supplied, the function automatically brackets the root
-starting from \eqn{(-0.999999, 0.10)} and progressively widens the upper
-bound until a sign change is detected.
+With nonnegative payments and at least one positive future payment, price
+is strictly decreasing in \eqn{j > -1}, so the yield is unique. The root is
+found with \code{\link[stats]{uniroot}}, using the log of the discounted
+cash-flow sum relative to price to avoid monetary overflow or underflow.
+If no \code{interval} is supplied, the lower bound is the nearest double
+precision number above -1 and the upper bound starts at 0.10 and is widened
+until the root is bracketed. A yield outside the representable domain or an
+exhausted iteration limit causes an error. Tolerance applies to the yield
+coordinate according to \code{uniroot}; it does not guarantee a given price
+residual, particularly for yields near -1.
 
 From the per-period yield, the annual equivalents are:
 \deqn{j^{(k)} = k j, \qquad i = (1 + j)^k - 1.}
@@ -107,16 +115,17 @@ bond_ytm(
 }
 \seealso{
 \code{\link{bond_price}}, \code{\link{bond_cash_flows}},
-\code{\link{bond_duration}}, \code{\link{bond_convexity}},
-\code{\link{bond_callable_price}}
+  \code{\link{bond_duration}}, \code{\link{bond_convexity}},
+  \code{\link{bond_callable_price}}
 
-Other bonds: 
-\code{\link{bond_book_value}()},
-\code{\link{bond_callable_price}()},
-\code{\link{bond_convexity}()},
-\code{\link{bond_duration}()},
-\code{\link{bond_price}()},
-\code{\link{portfolio_convexity}()},
-\code{\link{portfolio_duration}()}
+Other bonds:
+\code{\link[=accrued_interest]{accrued_interest()}},
+\code{\link[=bond_book_value]{bond_book_value()}},
+\code{\link[=bond_callable_price]{bond_callable_price()}},
+\code{\link[=bond_convexity]{bond_convexity()}},
+\code{\link[=bond_duration]{bond_duration()}},
+\code{\link[=bond_price]{bond_price()}},
+\code{\link[=portfolio_convexity]{portfolio_convexity()}},
+\code{\link[=portfolio_duration]{portfolio_duration()}}
 }
 \concept{bonds}

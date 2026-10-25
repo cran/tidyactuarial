@@ -18,13 +18,14 @@ bond_cash_flows(face, c, n, k = 1L, R = NULL, tol = 1e-10, check = TRUE)
 \item{R}{Numeric scalar. Redemption value. If \code{NULL}, it is set equal
 to \code{face}.}
 
-\item{tol}{Numeric scalar. Tolerance.}
+\item{tol}{Finite positive numeric scalar. Absolute tolerance for integer
+alignment of \code{k} and \code{n * k}; it is not a monetary tolerance.}
 
 \item{check}{Logical scalar. Input validation.}
 }
 \value{
 A tibble with the bond cash-flow schedule. The main actuarial
-columns are \code{t} for payment time and \code{cf} for cash flow.
+  columns are \code{t} for payment time and \code{cf} for cash flow.
 }
 \description{
 Builds the cash-flow schedule of a level coupon bond with constant coupon
@@ -38,6 +39,10 @@ coupon rate, \code{n} is the term to maturity, \code{k} is the number of
 coupon payments per year, and \code{R} is the redemption value.
 
 Stub periods are not supported; therefore, \code{n * k} must be an integer.
+The coupon is \eqn{face \cdot c/k}. Coupons and redemption remain separate
+rows at maturity. At \code{n = 0}, only immediate redemption is returned.
+The schedule requires finite coupons and an integer number of periods below
+\code{.Machine$integer.max}, with sufficient memory for the resulting rows.
 }
 \examples{
 bond_cash_flows(

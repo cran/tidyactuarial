@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Julian Mauricio Fajardo" />
+
+
+<title>Bonds, Duration, Convexity, and Immunization</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Bonds, Duration, Convexity, and
+Immunization</h1>
+<h4 class="author">Julian Mauricio Fajardo</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>A bond converts a contractual sequence of future payments into a
+value today. For a conventional fixed-coupon bond, the main inputs are
+the coupon payments, the redemption value, the payment dates, and the
+yield used to discount the cash flows.</p>
+<p>The coupon rate and the yield play different roles. The coupon rate
+is contractual and determines the periodic payment. The yield is the
+rate used to value those payments. A change in market yield does not
+modify the contractual coupon; it modifies the present value of the
+remaining cash flows and therefore the bond price.</p>
+<p>This vignette starts from the usual actuarial equations and then uses
+<code>tidyactuarial</code> to reproduce and audit the calculations. The
+mathematical structure is established first; the software is used
+afterward as a computational tool.</p>
+</div>
+<div id="bond-cash-flows-and-the-value-equation" class="section level2">
+<h2>Bond cash flows and the value equation</h2>
+<p>Consider a conventional bond with face value <span class="math inline">\(F\)</span>, coupon rate <span class="math inline">\(r\)</span> per coupon period, redemption value
+<span class="math inline">\(C\)</span>, effective yield <span class="math inline">\(i\)</span> per coupon period, and <span class="math inline">\(n\)</span> remaining coupon periods. The periodic
+coupon is <span class="math inline">\(Fr\)</span>.</p>
+<p>Taking the valuation date as time <span class="math inline">\(0\)</span>, the future cash flows are</p>
+<p><span class="math display">\[
+Fr,\; Fr,\; \ldots,\; Fr+C.
+\]</span></p>
+<p>Therefore,</p>
+<p><span class="math display">\[
+P
+=
+Fr(v+v^2+\cdots+v^n)+Cv^n,
+\]</span></p>
+<p>where <span class="math inline">\(v=(1+i)^{-1}\)</span>. Since the
+coupon payments form an annuity-immediate,</p>
+<p><span class="math display">\[
+P
+=
+Fr\,a_{\overline{n}|i}
++
+Cv^n.
+\]</span></p>
+<p>Equivalently,</p>
+<p><span class="math display">\[
+P
+=
+Fr\frac{1-(1+i)^{-n}}{i}
++
+C(1+i)^{-n}.
+\]</span></p>
+<p>This is the ordinary equation of value applied to a level stream of
+coupons plus a single redemption payment. The coupon rate, the yield,
+and the number of periods must refer to the same time unit.</p>
+</div>
+<div id="valuing-a-coupon-bond" class="section level2">
+<h2>Valuing a coupon bond</h2>
+<p>Consider a bond with</p>
+<p><span class="math display">\[
+F=C=1{,}000{,}000,
+\]</span></p>
+<p>a nominal annual coupon rate of <span class="math inline">\(9\%\)</span> payable semiannually, and six years
+to maturity. Suppose the investor requires a nominal annual yield of
+<span class="math inline">\(10\%\)</span> convertible semiannually.</p>
+<p>The coupon rate per half-year is</p>
+<p><span class="math display">\[
+r=\frac{0.09}{2}=0.045,
+\]</span></p>
+<p>so the semiannual coupon is <span class="math inline">\(45{,}000\)</span>. The effective yield per
+half-year is <span class="math inline">\(i=0.05\)</span>, and there are
+<span class="math inline">\(12\)</span> remaining coupon periods.
+Hence,</p>
+<p><span class="math display">\[
+P
+=
+45{,}000a_{\overline{12}|0.05}
++
+1{,}000{,}000(1.05)^{-12}
+=
+955{,}683.74.
+\]</span></p>
+<p>Only after constructing the equation of value do we move to the
+computational representation.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>face_value <span class="ot">&lt;-</span> <span class="dv">1000000</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>redemption_value <span class="ot">&lt;-</span> <span class="dv">1000000</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>annual_coupon_rate <span class="ot">&lt;-</span> <span class="fl">0.09</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>years_to_maturity <span class="ot">&lt;-</span> <span class="dv">6</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>coupons_per_year <span class="ot">&lt;-</span> <span class="dv">2</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>bond_flows <span class="ot">&lt;-</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="fu">bond_cash_flows</span>(</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>    <span class="at">face =</span> face_value,</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>    <span class="at">c =</span> annual_coupon_rate,</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>    <span class="at">n =</span> years_to_maturity,</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>    <span class="at">k =</span> coupons_per_year,</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>    <span class="at">R =</span> redemption_value</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>  )</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>bond_flows</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt; # A tibble: 13 x 5</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co">#&gt;    cashflow_id period     t      cf type      </span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="co">#&gt;          &lt;int&gt;  &lt;int&gt; &lt;dbl&gt;   &lt;dbl&gt; &lt;chr&gt;     </span></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a><span class="co">#&gt;  1           1      1   0.5   45000 coupon    </span></span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a><span class="co">#&gt;  2           2      2   1     45000 coupon    </span></span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a><span class="co">#&gt;  3           3      3   1.5   45000 coupon    </span></span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a><span class="co">#&gt;  4           4      4   2     45000 coupon    </span></span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a><span class="co">#&gt;  5           5      5   2.5   45000 coupon    </span></span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a><span class="co">#&gt;  6           6      6   3     45000 coupon    </span></span>
+<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a><span class="co">#&gt;  7           7      7   3.5   45000 coupon    </span></span>
+<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a><span class="co">#&gt;  8           8      8   4     45000 coupon    </span></span>
+<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a><span class="co">#&gt;  9           9      9   4.5   45000 coupon    </span></span>
+<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a><span class="co">#&gt; 10          10     10   5     45000 coupon    </span></span>
+<span id="cb1-30"><a href="#cb1-30" tabindex="-1"></a><span class="co">#&gt; 11          11     11   5.5   45000 coupon    </span></span>
+<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a><span class="co">#&gt; 12          12     12   6     45000 coupon    </span></span>
+<span id="cb1-32"><a href="#cb1-32" tabindex="-1"></a><span class="co">#&gt; 13          13     12   6   1000000 redemption</span></span></code></pre></div>
+<p><code>bond_cash_flows()</code> represents the contractual payments.
+It does not determine the bond price. The valuation basis is introduced
+separately.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>semiannual_yield <span class="ot">&lt;-</span> <span class="fl">0.05</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>bond_value <span class="ot">&lt;-</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>  <span class="fu">bond_price</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>    <span class="at">face =</span> face_value,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>    <span class="at">c =</span> annual_coupon_rate,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>    <span class="at">n =</span> years_to_maturity,</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>    <span class="at">k =</span> coupons_per_year,</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>    <span class="at">y_effective_per_period =</span> semiannual_yield,</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>    <span class="at">R =</span> redemption_value</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>  )</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>bond_value</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co">#&gt; [1] 955683.7</span></span></code></pre></div>
+<p>The package result reproduces the analytical value. The comparison
+verifies that the computational implementation follows the actuarial
+equation established independently.</p>
+</div>
+<div id="yield-to-maturity-as-an-inverse-problem" class="section level2">
+<h2>Yield to maturity as an inverse problem</h2>
+<p>Suppose the market price of the same bond is now</p>
+<p><span class="math display">\[
+P=935{,}000.
+\]</span></p>
+<p>The YTM is the rate <span class="math inline">\(i\)</span>
+satisfying</p>
+<p><span class="math display">\[
+935{,}000
+=
+45{,}000\frac{1-(1+i)^{-12}}{i}
++
+1{,}000{,}000(1+i)^{-12}.
+\]</span></p>
+<p>For this bond,</p>
+<p><span class="math display">\[
+f(0.05)&gt;0
+\qquad\text{and}\qquad
+f(0.06)&lt;0,
+\]</span></p>
+<p>so the root lies in</p>
+<p><span class="math display">\[
+5\%&lt;i&lt;6\%.
+\]</span></p>
+<p>Since the price of a conventional bond with positive future cash
+flows is strictly decreasing in the yield, the solution is unique in
+this interval. Numerically,</p>
+<p><span class="math display">\[
+i\approx5.2435\%
+\]</span></p>
+<p>per half-year.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>market_price <span class="ot">&lt;-</span> <span class="dv">935000</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>ytm_result <span class="ot">&lt;-</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="fu">bond_ytm</span>(</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>    <span class="at">P =</span> market_price,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>    <span class="at">face =</span> face_value,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>    <span class="at">c =</span> annual_coupon_rate,</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>    <span class="at">n =</span> years_to_maturity,</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>    <span class="at">k =</span> coupons_per_year,</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>    <span class="at">R =</span> redemption_value,</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>    <span class="at">interval =</span> <span class="fu">c</span>(<span class="fl">0.05</span>, <span class="fl">0.06</span>)</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>  )</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a>semiannual_ytm <span class="ot">&lt;-</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>  ytm_result <span class="sc">|&gt;</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">pull</span>(i_period) <span class="sc">|&gt;</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">first</span>()</span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a>ytm_result</span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="co">#&gt; # A tibble: 1 x 5</span></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co">#&gt;    price i_period j_nominal i_effective_annual     k</span></span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="co">#&gt;    &lt;dbl&gt;    &lt;dbl&gt;     &lt;dbl&gt;              &lt;dbl&gt; &lt;int&gt;</span></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="co">#&gt; 1 935000   0.0524     0.105              0.108     2</span></span></code></pre></div>
+<p>The interval does not come from the software. It is identified from
+the equation of value before the numerical solver is used.</p>
+</div>
+<div id="book-value" class="section level2">
+<h2>Book value</h2>
+<p>Let <span class="math inline">\(BV_t\)</span> denote the book value
+at coupon date <span class="math inline">\(t\)</span>.
+Prospectively,</p>
+<p><span class="math display">\[
+BV_t
+=
+Fr\,a_{\overline{n-t}|i}
++
+Cv^{n-t}.
+\]</span></p>
+<p>Retrospectively,</p>
+<p><span class="math display">\[
+BV_t
+=
+P(1+i)^t
+-
+Fr\,s_{\overline{t}|i}.
+\]</span></p>
+<p>These are two representations of the same financial equation.</p>
+<p>For the bond purchased at <span class="math inline">\(935{,}000\)</span>, after three years, or six
+semiannual coupon periods,</p>
+<p><span class="math display">\[
+BV_6
+\approx
+962{,}555.82.
+\]</span></p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>valuation_time <span class="ot">&lt;-</span> <span class="dv">3</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>book_value <span class="ot">&lt;-</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="fu">bond_book_value</span>(</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>    <span class="at">face =</span> face_value,</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>    <span class="at">c =</span> annual_coupon_rate,</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>    <span class="at">n =</span> years_to_maturity,</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>    <span class="at">t =</span> valuation_time,</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>    <span class="at">k =</span> coupons_per_year,</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>    <span class="at">y_effective_per_period =</span> semiannual_ytm,</span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>    <span class="at">R =</span> redemption_value</span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  )</span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a>book_value</span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt; [1] 962555.8</span></span></code></pre></div>
+<p>The recurrence</p>
+<p><span class="math display">\[
+BV_t=BV_{t-1}(1+i)-Fr
+\]</span></p>
+<p>shows how premiums and discounts are recognized through time. Book
+value should not be confused with market value: the former follows the
+yield basis adopted for amortization, whereas the latter uses the yield
+currently required by the market.</p>
+</div>
+<div id="callable-bonds" class="section level2">
+<h2>Callable bonds</h2>
+<p>A callable bond gives the issuer the right to redeem the bond before
+maturity under specified contractual conditions. The investor does not
+control the final redemption date.</p>
+<p>Suppose scenario <span class="math inline">\(s\)</span> redeems the
+bond after <span class="math inline">\(n_s\)</span> coupon periods for
+<span class="math inline">\(C_s\)</span>. At target yield <span class="math inline">\(i\)</span>,</p>
+<p><span class="math display">\[
+P_s(i)
+=
+Fr\,a_{\overline{n_s}|i}
++
+C_sv^{n_s}.
+\]</span></p>
+<p>To guarantee at least the target yield under every admissible
+scenario, the purchase price must satisfy <span class="math inline">\(P\le P_s(i)\)</span> for every <span class="math inline">\(s\)</span>. Hence,</p>
+<p><span class="math display">\[
+P_{\max}(i)
+=
+\min_s P_s(i).
+\]</span></p>
+<p>The minimum follows from the contractual structure: the investor must
+be protected against the least favorable redemption scenario the issuer
+is allowed to impose.</p>
+<p>Consider a bond with face value <span class="math inline">\(1{,}000{,}000\)</span>, a nominal annual coupon
+rate of <span class="math inline">\(10\%\)</span> payable semiannually,
+and final maturity in eight years. It may be redeemed at year 4 for
+<span class="math inline">\(1{,}040{,}000\)</span>, at year 6 for <span class="math inline">\(1{,}020{,}000\)</span>, or at year 8 for <span class="math inline">\(1{,}000{,}000\)</span>.</p>
+<p>At a target semiannual yield of <span class="math inline">\(4\%\)</span>, the scenario prices are
+approximately <span class="math inline">\(1{,}096{,}555.06\)</span>,
+<span class="math inline">\(1{,}106{,}342.68\)</span>, and <span class="math inline">\(1{,}116{,}522.96\)</span>. Therefore,</p>
+<p><span class="math display">\[
+P_{\max}=1{,}096{,}555.06.
+\]</span></p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>call_dates <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">4</span>, <span class="dv">6</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>call_values <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">1040000</span>, <span class="dv">1020000</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>target_yield <span class="ot">&lt;-</span> <span class="fl">0.04</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>callable_price <span class="ot">&lt;-</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="fu">bond_callable_price</span>(</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>    <span class="at">face =</span> <span class="dv">1000000</span>,</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>    <span class="at">c =</span> <span class="fl">0.10</span>,</span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>    <span class="at">n =</span> <span class="dv">8</span>,</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>    <span class="at">k =</span> <span class="dv">2</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>    <span class="at">call_t =</span> call_dates,</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>    <span class="at">call_R =</span> call_values,</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>    <span class="at">y_effective_per_period =</span> target_yield,</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>    <span class="at">R =</span> <span class="dv">1000000</span></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>  )</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>callable_price</span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co">#&gt; [1] 1096555</span></span></code></pre></div>
+<p>The same contractual logic applies when price is known and yields are
+compared: the yield to worst is the minimum among the relevant
+yields.</p>
+</div>
+<div id="from-price-to-sensitivity" class="section level2">
+<h2>From price to sensitivity</h2>
+<p>For a conventional bond with positive future cash flows,</p>
+<p><span class="math display">\[
+P(i)
+=
+\sum_{t=1}^{n}CF_t(1+i)^{-t}.
+\]</span></p>
+<p>Differentiating,</p>
+<p><span class="math display">\[
+\frac{dP}{di}
+=
+-\sum_{t=1}^{n}tCF_t(1+i)^{-(t+1)}&lt;0,
+\]</span></p>
+<p>and</p>
+<p><span class="math display">\[
+\frac{d^2P}{di^2}
+=
+\sum_{t=1}^{n}t(t+1)CF_t(1+i)^{-(t+2)}&gt;0.
+\]</span></p>
+<p>The price-yield relationship is therefore decreasing and convex.
+These two derivatives lead naturally to duration and convexity.</p>
+</div>
+<div id="duration-and-convexity-of-a-cash-flow-stream" class="section level2">
+<h2>Duration and convexity of a cash-flow stream</h2>
+<p>For payments <span class="math inline">\(C_j\)</span> at times <span class="math inline">\(t_j\)</span>,</p>
+<p><span class="math display">\[
+P(i)
+=
+\sum_j C_j(1+i)^{-t_j}.
+\]</span></p>
+<p>Define present-value weights</p>
+<p><span class="math display">\[
+w_j(i)
+=
+\frac{C_j(1+i)^{-t_j}}{P(i)}.
+\]</span></p>
+<p>For positive cash flows, Macaulay duration is</p>
+<p><span class="math display">\[
+D_{\text{Mac}}(i)
+=
+\sum_j t_jw_j(i),
+\]</span></p>
+<p>while modified duration is</p>
+<p><span class="math display">\[
+D_{\text{mod}}(i)
+=
+-\frac{1}{P(i)}\frac{dP(i)}{di}
+=
+\frac{D_{\text{Mac}}(i)}{1+i}.
+\]</span></p>
+<p>Thus,</p>
+<p><span class="math display">\[
+\frac{\Delta P}{P}
+\approx
+-D_{\text{mod}}\Delta i.
+\]</span></p>
+<p>Relative convexity is</p>
+<p><span class="math display">\[
+C(i)
+=
+\frac{1}{P(i)}\frac{d^2P(i)}{di^2},
+\]</span></p>
+<p>so the second-order approximation is</p>
+<p><span class="math display">\[
+\frac{\Delta P}{P}
+\approx
+-D_{\text{mod}}\Delta i
++
+\frac12 C(\Delta i)^2.
+\]</span></p>
+<p>Duration gives a first-order approximation; convexity adds the effect
+of curvature.</p>
+</div>
+<div id="a-general-cash-flow-example" class="section level2">
+<h2>A general cash-flow example</h2>
+<p>Consider payments of 120, 160, 220, and 300 million at years 1, 2, 4,
+and 6, valued at an annual effective rate of <span class="math inline">\(7\%\)</span>. The analytical results are
+approximately</p>
+<p><span class="math display">\[
+P_0=619.64,
+\qquad
+D_{\text{Mac}}=3.6512,
+\qquad
+D_{\text{mod}}=3.4123,
+\qquad
+C=18.0646.
+\]</span></p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>cash_flows <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">120</span>, <span class="dv">160</span>, <span class="dv">220</span>, <span class="dv">300</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>payment_times <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">4</span>, <span class="dv">6</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>valuation_rate <span class="ot">&lt;-</span> <span class="fl">0.07</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>macaulay_duration <span class="ot">&lt;-</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="fu">duration_cash_flow</span>(</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>    <span class="at">cf =</span> cash_flows,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>    <span class="at">t =</span> payment_times,</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>    <span class="at">rate =</span> valuation_rate,</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>    <span class="at">duration =</span> <span class="st">&quot;macaulay&quot;</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>    <span class="at">output =</span> <span class="st">&quot;value&quot;</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>  )</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a>modified_duration <span class="ot">&lt;-</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a>  <span class="fu">duration_cash_flow</span>(</span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>    <span class="at">cf =</span> cash_flows,</span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>    <span class="at">t =</span> payment_times,</span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>    <span class="at">rate =</span> valuation_rate,</span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a>    <span class="at">duration =</span> <span class="st">&quot;modified&quot;</span>,</span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a>    <span class="at">output =</span> <span class="st">&quot;value&quot;</span></span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a>  )</span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a>cash_flow_convexity <span class="ot">&lt;-</span></span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a>  <span class="fu">convexity_cash_flow</span>(</span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a>    <span class="at">cf =</span> cash_flows,</span>
+<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a>    <span class="at">t =</span> payment_times,</span>
+<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a>    <span class="at">rate =</span> valuation_rate,</span>
+<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a>    <span class="at">output =</span> <span class="st">&quot;value&quot;</span></span>
+<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a>  )</span>
+<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a></span>
+<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a>tibble<span class="sc">::</span><span class="fu">tibble</span>(</span>
+<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a>  <span class="at">measure =</span> <span class="fu">c</span>(<span class="st">&quot;Macaulay duration&quot;</span>, <span class="st">&quot;Modified duration&quot;</span>, <span class="st">&quot;Convexity&quot;</span>),</span>
+<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">c</span>(macaulay_duration, modified_duration, cash_flow_convexity)</span>
+<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a>)</span>
+<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a><span class="co">#&gt; # A tibble: 3 x 2</span></span>
+<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="co">#&gt;   measure           value</span></span>
+<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a><span class="co">#&gt;   &lt;chr&gt;             &lt;dbl&gt;</span></span>
+<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="co">#&gt; 1 Macaulay duration  3.65</span></span>
+<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a><span class="co">#&gt; 2 Modified duration  3.41</span></span>
+<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="co">#&gt; 3 Convexity         18.1</span></span></code></pre></div>
+<p>The functions reproduce quantities already defined from the value
+function and its derivatives.</p>
+</div>
+<div id="specialization-to-bonds" class="section level2">
+<h2>Specialization to bonds</h2>
+<p>For a bond with face value <span class="math inline">\(F\)</span>,
+annual coupon rate <span class="math inline">\(c\)</span>, <span class="math inline">\(k\)</span> coupon payments per year, maturity
+<span class="math inline">\(n\)</span> years, and redemption value <span class="math inline">\(R\)</span>,</p>
+<p><span class="math display">\[
+C=\frac{Fc}{k},
+\qquad
+N=nk.
+\]</span></p>
+<p>Let <span class="math inline">\(j\)</span> be the effective yield per
+coupon period and <span class="math inline">\(y\)</span> the annual
+effective yield. Then</p>
+<p><span class="math display">\[
+1+y=(1+j)^k,
+\qquad
+j=(1+y)^{1/k}-1.
+\]</span></p>
+<p>If <span class="math inline">\(D_p\)</span> denotes Macaulay duration
+in coupon periods, duration in years is</p>
+<p><span class="math display">\[
+D=\frac{D_p}{k}.
+\]</span></p>
+<p>The rate variable used in the sensitivity measure must match the rate
+change being studied. A duration defined with respect to <span class="math inline">\(j\)</span> must be combined with <span class="math inline">\(\Delta j\)</span>; one defined with respect to
+<span class="math inline">\(y\)</span> must be combined with <span class="math inline">\(\Delta y\)</span>.</p>
+<p>Consider</p>
+<p><span class="math display">\[
+F=R=1000,
+\qquad
+c=8\%,
+\qquad
+n=10,
+\qquad
+k=2,
+\qquad
+y=9\%.
+\]</span></p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>bond_duration_result <span class="ot">&lt;-</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="fu">bond_duration</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>    <span class="at">face =</span> <span class="dv">1000</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>    <span class="at">c =</span> <span class="fl">0.08</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>    <span class="at">n =</span> <span class="dv">10</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>    <span class="at">k =</span> <span class="dv">2</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>    <span class="at">y =</span> <span class="fl">0.09</span>,</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>    <span class="at">y_type =</span> <span class="st">&quot;effective&quot;</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  )</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a>bond_convexity_result <span class="ot">&lt;-</span></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a>  <span class="fu">bond_convexity</span>(</span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a>    <span class="at">face =</span> <span class="dv">1000</span>,</span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a>    <span class="at">c =</span> <span class="fl">0.08</span>,</span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a>    <span class="at">n =</span> <span class="dv">10</span>,</span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a>    <span class="at">k =</span> <span class="dv">2</span>,</span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a>    <span class="at">y =</span> <span class="fl">0.09</span>,</span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a>    <span class="at">y_type =</span> <span class="st">&quot;effective&quot;</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a>  )</span>
+<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a></span>
+<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a>bond_duration_result</span>
+<span id="cb7-22"><a href="#cb7-22" tabindex="-1"></a><span class="co">#&gt; # A tibble: 1 x 9</span></span>
+<span id="cb7-23"><a href="#cb7-23" tabindex="-1"></a><span class="co">#&gt;   price macaulay_duration_periods macaulay_duration_years modified_duration_pe~1</span></span>
+<span id="cb7-24"><a href="#cb7-24" tabindex="-1"></a><span class="co">#&gt;   &lt;dbl&gt;                     &lt;dbl&gt;                   &lt;dbl&gt;                  &lt;dbl&gt;</span></span>
+<span id="cb7-25"><a href="#cb7-25" tabindex="-1"></a><span class="co">#&gt; 1  947.                      14.0                    6.98                   13.4</span></span>
+<span id="cb7-26"><a href="#cb7-26" tabindex="-1"></a><span class="co">#&gt; # i abbreviated name: 1: modified_duration_periods_j</span></span>
+<span id="cb7-27"><a href="#cb7-27" tabindex="-1"></a><span class="co">#&gt; # i 5 more variables: modified_duration_years_i &lt;dbl&gt;, yield_per_period &lt;dbl&gt;,</span></span>
+<span id="cb7-28"><a href="#cb7-28" tabindex="-1"></a><span class="co">#&gt; #   yield_effective_annual &lt;dbl&gt;, k &lt;int&gt;, n_periods &lt;int&gt;</span></span>
+<span id="cb7-29"><a href="#cb7-29" tabindex="-1"></a>bond_convexity_result</span>
+<span id="cb7-30"><a href="#cb7-30" tabindex="-1"></a><span class="co">#&gt; # A tibble: 1 x 7</span></span>
+<span id="cb7-31"><a href="#cb7-31" tabindex="-1"></a><span class="co">#&gt;   price discrete_convexity_periods discrete_convexity_years yield_per_period</span></span>
+<span id="cb7-32"><a href="#cb7-32" tabindex="-1"></a><span class="co">#&gt;   &lt;dbl&gt;                      &lt;dbl&gt;                    &lt;dbl&gt;            &lt;dbl&gt;</span></span>
+<span id="cb7-33"><a href="#cb7-33" tabindex="-1"></a><span class="co">#&gt; 1  947.                       235.                     58.7           0.0440</span></span>
+<span id="cb7-34"><a href="#cb7-34" tabindex="-1"></a><span class="co">#&gt; # i 3 more variables: yield_effective_annual &lt;dbl&gt;, k &lt;int&gt;, n_periods &lt;int&gt;</span></span></code></pre></div>
+<p>For this bond, the Macaulay duration is approximately <span class="math inline">\(13.9529\)</span> coupon periods, or <span class="math inline">\(6.9764\)</span> years.</p>
+</div>
+<div id="portfolio-duration-and-convexity" class="section level2">
+<h2>Portfolio duration and convexity</h2>
+<p>Portfolio sensitivities are value-weighted averages when the
+individual measures refer to the same rate movement.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>portfolio <span class="ot">&lt;-</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  tibble<span class="sc">::</span><span class="fu">tibble</span>(</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>    <span class="at">asset =</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>, <span class="st">&quot;C&quot;</span>),</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>    <span class="at">units =</span> <span class="fu">c</span>(<span class="dv">450</span>, <span class="dv">300</span>, <span class="dv">180</span>),</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>    <span class="at">price =</span> <span class="fu">c</span>(<span class="fl">96.20</span>, <span class="fl">102.75</span>, <span class="fl">88.50</span>),</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>    <span class="at">duration =</span> <span class="fu">c</span>(<span class="fl">2.80</span>, <span class="fl">5.60</span>, <span class="fl">9.40</span>),</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>    <span class="at">convexity =</span> <span class="fu">c</span>(<span class="fl">11.40</span>, <span class="fl">43.20</span>, <span class="fl">104.60</span>)</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>    <span class="at">market_value =</span> units <span class="sc">*</span> price</span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>  )</span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a>portfolio_duration_result <span class="ot">&lt;-</span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a>  <span class="fu">portfolio_duration</span>(</span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a>    portfolio,</span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a>    <span class="at">col_P =</span> <span class="st">&quot;market_value&quot;</span>,</span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a>    <span class="at">col_D =</span> <span class="st">&quot;duration&quot;</span>,</span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a>    <span class="at">col_portfolio =</span> <span class="cn">NULL</span></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a>  )</span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a></span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a>portfolio_convexity_result <span class="ot">&lt;-</span></span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a>  <span class="fu">portfolio_convexity</span>(</span>
+<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a>    portfolio,</span>
+<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a>    <span class="at">col_P =</span> <span class="st">&quot;market_value&quot;</span>,</span>
+<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a>    <span class="at">col_C =</span> <span class="st">&quot;convexity&quot;</span>,</span>
+<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a>    <span class="at">col_portfolio =</span> <span class="cn">NULL</span></span>
+<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a>  )</span>
+<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a>portfolio_duration_result</span>
+<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a><span class="co">#&gt; # A tibble: 1 x 3</span></span>
+<span id="cb8-31"><a href="#cb8-31" tabindex="-1"></a><span class="co">#&gt;     D_P P_total n_positions</span></span>
+<span id="cb8-32"><a href="#cb8-32" tabindex="-1"></a><span class="co">#&gt;   &lt;dbl&gt;   &lt;dbl&gt;       &lt;int&gt;</span></span>
+<span id="cb8-33"><a href="#cb8-33" tabindex="-1"></a><span class="co">#&gt; 1  4.93   90045           3</span></span>
+<span id="cb8-34"><a href="#cb8-34" tabindex="-1"></a>portfolio_convexity_result</span>
+<span id="cb8-35"><a href="#cb8-35" tabindex="-1"></a><span class="co">#&gt; # A tibble: 1 x 3</span></span>
+<span id="cb8-36"><a href="#cb8-36" tabindex="-1"></a><span class="co">#&gt;     C_P P_total n_positions</span></span>
+<span id="cb8-37"><a href="#cb8-37" tabindex="-1"></a><span class="co">#&gt;   &lt;dbl&gt;   &lt;dbl&gt;       &lt;int&gt;</span></span>
+<span id="cb8-38"><a href="#cb8-38" tabindex="-1"></a><span class="co">#&gt; 1  38.8   90045           3</span></span></code></pre></div>
+<p>The weights are based on economic value, not simply on face amount or
+number of securities.</p>
+</div>
+<div id="from-sensitivity-to-immunization" class="section level2">
+<h2>From sensitivity to immunization</h2>
+<p>For a positive cash-flow stream and a horizon <span class="math inline">\(H\)</span>, suppose all cash flows are valued and
+reinvested using the same flat effective rate <span class="math inline">\(i\)</span>. The accumulated value at the horizon
+is</p>
+<p><span class="math display">\[
+W_H(i)
+=
+(1+i)^HP(i).
+\]</span></p>
+<p>Therefore,</p>
+<p><span class="math display">\[
+\frac{W_H&#39;(i)}{W_H(i)}
+=
+\frac{H-D_{\text{Mac}}(i)}{1+i}.
+\]</span></p>
+<p>If</p>
+<p><span class="math display">\[
+H=D_{\text{Mac}}(i_0),
+\]</span></p>
+<p>then <span class="math inline">\(W_H&#39;(i_0)=0\)</span>. At a
+horizon equal to Macaulay duration, the local price effect and the local
+reinvestment effect offset each other to first order.</p>
+</div>
+<div id="the-surplus-function-and-redington" class="section level2">
+<h2>The surplus function and Redington</h2>
+<p>Let</p>
+<p><span class="math display">\[
+S(i)=PV_A(i)-PV_L(i).
+\]</span></p>
+<p>If</p>
+<p><span class="math display">\[
+PV_A(i_0)=PV_L(i_0),
+\]</span></p>
+<p>then <span class="math inline">\(S(i_0)=0\)</span>. If, in
+addition,</p>
+<p><span class="math display">\[
+D_A(i_0)=D_L(i_0),
+\]</span></p>
+<p>then <span class="math inline">\(S&#39;(i_0)=0\)</span>.</p>
+<p>Since <span class="math inline">\(PV&#39;&#39;(i)=PV(i)C(i)\)</span>,
+under present-value equality,</p>
+<p><span class="math display">\[
+S&#39;&#39;(i_0)
+=
+PV_A(i_0)\left[C_A(i_0)-C_L(i_0)\right].
+\]</span></p>
+<p>Thus the classical Redington conditions are</p>
+<p><span class="math display">\[
+PV_A(i_0)=PV_L(i_0),
+\]</span></p>
+<p><span class="math display">\[
+D_A(i_0)=D_L(i_0),
+\]</span></p>
+<p>and</p>
+<p><span class="math display">\[
+C_A(i_0)&gt;C_L(i_0).
+\]</span></p>
+<p>Redington is therefore a local curvature condition. By contrast,
+duration-convexity matching imposes <span class="math inline">\(C_A=C_L\)</span>, so <span class="math inline">\(S&#39;&#39;(i_0)=0\)</span>. These are different
+constructions.</p>
+</div>
+<div id="an-integrated-immunization-example" class="section level2">
+<h2>An integrated immunization example</h2>
+<p>Consider liabilities</p>
+<p><span class="math display">\[
+L=(30{,}000,\ 40{,}000,\ 50{,}000)
+\]</span></p>
+<p>payable at years <span class="math inline">\(3\)</span>, <span class="math inline">\(5\)</span>, and <span class="math inline">\(8\)</span>, valued at an annual effective rate of
+<span class="math inline">\(5\%\)</span>. Their present value is
+approximately <span class="math inline">\(91{,}098.14\)</span>, with
+Macaulay duration <span class="math inline">\(5.5455\)</span> and
+convexity <span class="math inline">\(36.7184\)</span>.</p>
+<p>Suppose zero-coupon assets with redemption value 1,000 are available
+at maturities 2, 5, and 10 years.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>liabilities <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">30000</span>, <span class="dv">40000</span>, <span class="dv">50000</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>liability_times <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">5</span>, <span class="dv">8</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>reference_rate <span class="ot">&lt;-</span> <span class="fl">0.05</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>asset_maturities <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">5</span>, <span class="dv">10</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>asset_redemption <span class="ot">&lt;-</span> <span class="dv">1000</span></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>asset_prices <span class="ot">&lt;-</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a>  asset_redemption <span class="sc">*</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a>  (<span class="dv">1</span> <span class="sc">+</span> reference_rate)<span class="sc">^</span>(<span class="sc">-</span>asset_maturities)</span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>asset_durations <span class="ot">&lt;-</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a>  asset_maturities</span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a>asset_convexities <span class="ot">&lt;-</span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a>  asset_maturities <span class="sc">*</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a>  (asset_maturities <span class="sc">+</span> <span class="dv">1</span>) <span class="sc">/</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a>  (<span class="dv">1</span> <span class="sc">+</span> reference_rate)<span class="sc">^</span><span class="dv">2</span></span></code></pre></div>
+<p>Using the 2-year and 10-year assets:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>duration_match <span class="ot">&lt;-</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="fu">immunize_duration</span>(</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>    <span class="at">L =</span> liabilities,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>    <span class="at">t =</span> liability_times,</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>    <span class="at">P =</span> asset_prices[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>)],</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>    <span class="at">D =</span> asset_durations[<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>)],</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>    <span class="at">i =</span> reference_rate,</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;effective&quot;</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>  )</span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>duration_match</span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co">#&gt; # A tibble: 2 x 6</span></span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="co">#&gt;       w   PV_L   D_L   PV_A   D_A n_assets</span></span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a><span class="co">#&gt;   &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;    &lt;int&gt;</span></span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="co">#&gt; 1  55.9 91098.  5.55 91098.  5.55        2</span></span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="co">#&gt; 2  65.8 91098.  5.55 91098.  5.55        2</span></span></code></pre></div>
+<p><code>immunize_duration()</code> matches present value and duration.
+It does not by itself prove Redington; the convexity inequality must be
+checked separately.</p>
+<p>With all three assets, present value, duration, and convexity can be
+matched simultaneously:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>duration_convexity_match <span class="ot">&lt;-</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="fu">immunize_duration_convexity</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>    <span class="at">L =</span> liabilities,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>    <span class="at">t =</span> liability_times,</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>    <span class="at">P =</span> asset_prices,</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>    <span class="at">D =</span> asset_durations,</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>    <span class="at">C =</span> asset_convexities,</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>    <span class="at">i =</span> reference_rate,</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;effective&quot;</span></span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>  )</span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a></span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>duration_convexity_match</span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a><span class="co">#&gt; # A tibble: 3 x 8</span></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="co">#&gt;       w   PV_L   D_L   C_L   PV_A   D_A   C_A n_assets</span></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt;   &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;    &lt;int&gt;</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a><span class="co">#&gt; 1  7.34 91098.  5.55  36.7 91098.  5.55  36.7        3</span></span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a><span class="co">#&gt; 2 90.0  91098.  5.55  36.7 91098.  5.55  36.7        3</span></span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a><span class="co">#&gt; 3 22.7  91098.  5.55  36.7 91098.  5.55  36.7        3</span></span></code></pre></div>
+<p><code>immunize_duration_convexity()</code> should be interpreted
+exactly this way: it matches present value, duration, and convexity. It
+is not a direct implementation of Redington and it does not establish
+full immunization.</p>
+</div>
+<div id="the-immunization-gap" class="section level2">
+<h2>The immunization gap</h2>
+<p>The surplus function has a direct interpretation:</p>
+<p><span class="math display">\[
+S(i)&gt;0 \Rightarrow \text{asset surplus},
+\]</span></p>
+<p><span class="math display">\[
+S(i)=0 \Rightarrow \text{exact value equality},
+\]</span></p>
+<p><span class="math display">\[
+S(i)&lt;0 \Rightarrow \text{asset insufficiency}.
+\]</span></p>
+<p><code>plot_immunization_gap()</code> can be used to inspect this gap
+over a finite range of rates.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>asset_cash_flows <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="fu">list</span>(</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>    <span class="at">cf =</span> <span class="fl">444998.22</span>,</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>    <span class="at">t =</span> <span class="dv">3</span></span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  ),</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="fu">list</span>(</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>    <span class="at">cf =</span> <span class="fl">561800.00</span>,</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>    <span class="at">t =</span> <span class="dv">7</span></span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>  )</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>)</span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="fu">plot_immunization_gap</span>(</span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a>  <span class="at">L =</span> <span class="dv">1000000</span>,</span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a>  <span class="at">t =</span> <span class="dv">5</span>,</span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a>  <span class="at">asset_cashflows =</span> asset_cash_flows,</span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a>  <span class="at">w =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>),</span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a>  <span class="at">i =</span> <span class="fl">0.06</span>,</span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a>  <span class="at">i_type =</span> <span class="st">&quot;effective&quot;</span>,</span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">0.02</span></span>
+<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Immunization gap around the reference rate." src="data:image/png;base64,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" alt="Immunization gap around the reference rate." />
+<div class="figcaption">Immunization gap around the reference
+rate.</div>
+</div>
+<p>The graph is a diagnostic tool. A finite grid of rates can illustrate
+the shape of <span class="math inline">\(S(i)\)</span>, but it cannot
+prove <span class="math inline">\(S(i)\ge0\)</span> for every admissible
+rate. Full immunization requires a stronger structural argument.</p>
+</div>
+<div id="final-actuarial-reading" class="section level2">
+<h2>Final actuarial reading</h2>
+<p>The valuation of a fixed-income position begins with cash flows and a
+rate basis. Duration and convexity then describe how that value responds
+locally to changes in the rate.</p>
+<p>The sequence is</p>
+<p><span class="math display">\[
+P(i)
+\longrightarrow
+P&#39;(i)
+\longrightarrow
+D
+\longrightarrow
+P&#39;&#39;(i)
+\longrightarrow
+C,
+\]</span></p>
+<p>followed by</p>
+<p><span class="math display">\[
+PV_A-PV_L
+\longrightarrow
+\text{duration matching}
+\longrightarrow
+\text{immunization}.
+\]</span></p>
+<p>Throughout the vignette, <code>tidyactuarial</code> enters after the
+actuarial structure has been identified. It reproduces bond values,
+yields, sensitivities, portfolio measures, and immunization systems
+while the mathematical interpretation remains explicit.</p>
+<p>The same precision applies to the immunization functions:
+<code>immunize_duration()</code> matches present value and duration;
+<code>immunize_duration_convexity()</code> matches present value,
+duration, and convexity; Redington additionally requires favorable
+curvature; and full immunization requires a stronger structural
+argument.</p>
+<p>The software verifies the equations being solved. It does not replace
+the conditions that define the actuarial strategy.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

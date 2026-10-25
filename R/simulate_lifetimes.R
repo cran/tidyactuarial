@@ -41,6 +41,9 @@
 #' generates the appropriate terminal \code{qx = 1}. If the final available
 #' \code{lx} remains positive, the resulting distribution is recognized as
 #' truncated and handled according to \code{truncation}.
+#' Positive exposure means \code{lx > 0}, independently of the table radix.
+#' Death probabilities use the direct decrement \eqn{(l_y-l_{y+1})/l_y},
+#' avoiding loss from subtracting a rounded survival ratio from one.
 #'
 #' Conditional on the supplied life table, the simulated lives are independent.
 #' A single seed is set once for the entire call; the seed is not reset for each
@@ -116,14 +119,19 @@ simulate_lifetimes <- function(
     stop("`data` must contain at least one life-table row.", call. = FALSE)
   }
 
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0) {
+    stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
+  }
+
   if (!is.numeric(x) ||
       length(x) == 0L ||
       anyNA(x) ||
       any(!is.finite(x)) ||
       any(x < 0) ||
+      any(x > .Machine$integer.max) ||
       any(abs(x - round(x)) > tol)) {
     stop(
-      "`x` must be a nonempty vector of nonnegative integer ages.",
+      "`x` must be a nonempty vector of nonnegative integer ages within the supported range.",
       call. = FALSE
     )
   }
@@ -132,25 +140,14 @@ simulate_lifetimes <- function(
 
   .mc_assert_positive_integer(n_sim, "n_sim")
 
-  if (n_sim > .Machine$integer.max) {
+  if (n_sim > .Machine$integer.max || round(n_sim) < 1) {
     stop(
-      "`n_sim` exceeds the supported integer range.",
+      "`n_sim` must round to a positive integer within the supported range.",
       call. = FALSE
     )
   }
 
   n_sim <- as.integer(round(n_sim))
-
-  if (!is.numeric(tol) ||
-      length(tol) != 1L ||
-      is.na(tol) ||
-      !is.finite(tol) ||
-      tol < 0) {
-    stop(
-      "`tol` must be a single nonnegative finite number.",
-      call. = FALSE
-    )
-  }
 
   if (!is.null(seed)) {
     if (!is.numeric(seed) ||
@@ -189,9 +186,10 @@ simulate_lifetimes <- function(
       anyNA(ages) ||
       any(!is.finite(ages)) ||
       any(ages < 0) ||
+      any(ages > .Machine$integer.max) ||
       any(abs(ages - round(ages)) > tol)) {
     stop(
-      "The age column must contain finite nonnegative integer ages.",
+      "The age column must contain finite nonnegative integer ages within the supported range.",
       call. = FALSE
     )
   }
@@ -276,7 +274,7 @@ simulate_lifetimes <- function(
       )
     }
 
-    positive_rows <- which(lx > tol)
+    positive_rows <- which(lx > 0)
 
     if (length(positive_rows) == 0L) {
       stop(
@@ -296,7 +294,7 @@ simulate_lifetimes <- function(
     denominator <- lx[derivation_rows]
     numerator <- lx[derivation_rows + 1L]
 
-    qx <- 1 - numerator / denominator
+    qx <- (denominator - numerator) / denominator
 
     if (any(!is.finite(qx)) ||
         any(qx < -tol | qx > 1 + tol)) {

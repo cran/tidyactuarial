@@ -74,6 +74,21 @@
 #' For continuous annuities:
 #' \deqn{\bar{a}_{\overline{n|}} = \frac{1 - e^{-\delta n}}{\delta}}
 #'
+#' More generally, let \eqn{N=nk}, let \eqn{b=0} for immediate payments and
+#' \eqn{b=1} for due payments. The deferred discrete factor is
+#' \deqn{\sum_{j=1}^{N} \exp\{-\delta[h+(j-b)/k]\}.}
+#' Each discrete payment is one unit, whereas a continuous annuity pays one
+#' unit per year. The continuous deferred factor is
+#' \eqn{\int_h^{h+n} e^{-\delta t}\,dt}.
+#'
+#' The original log accumulation rate is retained even if its annual
+#' effective equivalent rounds to -1 or overflows. Geometric sums and
+#' continuous integrals use stable logarithmic formulas with exact zero-rate
+#' limits, rather than replacing a small nonzero rate by zero. Perpetuities
+#' require a strictly positive rate, without a numerical lower cutoff.
+#' Monetary values combine payments with log factors before declaring range
+#' loss; a reported annuity factor or equivalent rate may still be non-finite.
+#'
 #' Input vectors must have length 1 or a common length. Missing values are
 #' propagated.
 #'
@@ -246,11 +261,11 @@ a_angle <- function(
   }
 
   # --- Convert to effective annual rate ---
-  i_effective <- standardize_interest(type = i_type, rate = i, m = m)
-  delta <- log1p(i_effective)
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  i_effective <- basis$effective
+  delta <- basis$growth
 
-  annuity_factor <- rep(NA_real_, size)
-  eps <- 1e-12
+  log_annuity_factor <- rep(NA_real_, size)
 
   # --- Identify element-level NA ---
   is_na_elem <- is.na(i) |
@@ -276,32 +291,22 @@ a_angle <- function(
 
   cont_perp <- is_cont & perpetuity
   if (any(cont_perp)) {
-    if (any(delta[cont_perp] <= eps)) {
+    if (any(delta[cont_perp] <= 0)) {
       stop(
         "Continuous perpetuity requires a strictly positive force of interest.",
         call. = FALSE
       )
     }
 
-    annuity_factor[cont_perp] <-
-      exp(-delta[cont_perp] * h[cont_perp]) / delta[cont_perp]
+    log_annuity_factor[cont_perp] <-
+      -delta[cont_perp] * h[cont_perp] - log(delta[cont_perp])
   }
 
   cont_fin <- is_cont & !perpetuity
   if (any(cont_fin)) {
-    d_cf <- delta[cont_fin]
-    n_cf <- n[cont_fin]
-    h_cf <- h[cont_fin]
-
-    near_zero <- abs(d_cf) < eps
-
-    base_cf <- ifelse(
-      near_zero,
-      n_cf,
-      (1 - exp(-d_cf * n_cf)) / d_cf
-    )
-
-    annuity_factor[cont_fin] <- base_cf * exp(-d_cf * h_cf)
+    log_annuity_factor[cont_fin] <- vapply(which(cont_fin), function(j) {
+      .annuity_log_integral(-delta[j], n[j]) - delta[j] * h[j]
+    }, numeric(1))
   }
 
   # =========================================================
@@ -338,24 +343,21 @@ a_angle <- function(
         )
       }
 
-      i_period[j] <- (1 + i_effective[j])^(1 / kk) - 1
-      v_period[j] <- 1 / (1 + i_period[j])
+      period_growth <- delta[j] / kk
+      i_period[j] <- expm1(period_growth)
+      v_period[j] <- exp(-period_growth)
 
       if (perpetuity[j]) {
-        if (i_period[j] <= eps) {
+        if (delta[j] <= 0) {
           stop(
             "Discrete perpetuity requires a strictly positive per-period rate.",
             call. = FALSE
           )
         }
 
-        base <- 1 / i_period[j]
-
-        if (timing[j] == "due") {
-          base <- base * (1 + i_period[j])
-        }
-
-        annuity_factor[j] <- base * v_period[j]^h_periods[j]
+        log_annuity_factor[j] <- -log(-expm1(-period_growth)) -
+          if (timing[j] == "immediate") period_growth else 0
+        log_annuity_factor[j] <- log_annuity_factor[j] - period_growth * h_periods[j]
         next
       }
 
@@ -369,20 +371,13 @@ a_angle <- function(
         )
       }
 
-      base <- if (abs(i_period[j]) < eps) {
-        n_periods[j]
-      } else {
-        (1 - v_period[j]^n_periods[j]) / i_period[j]
-      }
-
-      if (timing[j] == "due") {
-        base <- base * (1 + i_period[j])
-      }
-
-      annuity_factor[j] <- base * v_period[j]^h_periods[j]
+      log_annuity_factor[j] <- .annuity_log_sum(-period_growth, n_periods[j]) -
+        if (timing[j] == "immediate") period_growth else 0
+      log_annuity_factor[j] <- log_annuity_factor[j] - period_growth * h_periods[j]
     }
   }
 
+  annuity_factor <- exp(log_annuity_factor)
   if (!tidy) {
     return(annuity_factor)
   }
@@ -408,6 +403,6 @@ a_angle <- function(
     h_periods = h_periods,
     annuity_factor = annuity_factor,
     payment = payment,
-    present_value = payment * annuity_factor
+    present_value = .cash_flow_value(payment, log_annuity_factor)
   )
 }

@@ -23,6 +23,7 @@
 #' @param age_col Character. Name of the age column (default \code{"x"}).
 #' @param cause_cols Character vector. Names of the cause columns. If \code{NULL}
 #'   (default), all columns other than \code{age_col} are treated as causes.
+#'   Cause names must not collide with reserved totals or generated death columns.
 #' @param radix Numeric. Starting cohort size at the first age (default \code{1e5}).
 #' @param close Logical. If \code{TRUE}, requires \eqn{q_{\omega}^{(\tau)} = 1}
 #'   at the last age (default \code{TRUE}).
@@ -64,7 +65,16 @@ md_table <- function(
   if (!is.data.frame(qx_df)) stop("`qx_df` must be a data.frame/tibble.")
   if (!is.character(age_col) || length(age_col) != 1L) stop("`age_col` must be a single character string.")
   if (!(age_col %in% names(qx_df))) stop("`qx_df` must contain the age column specified by `age_col`.")
-  if (!is.numeric(radix) || length(radix) != 1L || is.na(radix) || radix <= 0) stop("`radix` must be a single positive number.")
+  if (!is.numeric(radix) || length(radix) != 1L || !is.finite(radix) || radix <= 0) stop("`radix` must be a single positive number.")
+
+  for (name in c("check", "close")) {
+    value <- get(name, inherits = FALSE)
+    if (!is.logical(value) || length(value) != 1L || is.na(value))
+      stop("`", name, "` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0)
+    stop("`tol` must be finite and nonnegative.", call. = FALSE)
+  if (!nrow(qx_df)) stop("`qx_df` must be nonempty.", call. = FALSE)
 
   df <- dplyr::as_tibble(qx_df) |>
     dplyr::arrange(.data[[age_col]])
@@ -81,11 +91,20 @@ md_table <- function(
 
   if (length(cause_cols) == 0L) stop("At least one cause column is required.")
 
+  reserved <- c("x", "lx", "q_total", "p_total", "d_total", age_col)
+  generated <- make.unique(ifelse(startsWith(cause_cols, "q_"),
+    paste0("d_", substring(cause_cols, 3)), paste0("d_", cause_cols)))
+  if (age_col %in% c("lx", "q_total", "p_total", "d_total") ||
+      anyDuplicated(cause_cols) || any(cause_cols %in% reserved) ||
+      any(generated %in% c(reserved, cause_cols)))
+    stop("Cause names collide with reserved or generated decrement columns.", call. = FALSE)
+
   # --- checks ---
   ages <- as.numeric(df[[age_col]])
 
   if (check) {
     if (any(!is.finite(ages))) stop("Ages must be finite.")
+    if (any(abs(ages) > .Machine$integer.max)) stop("Ages must be representable as integers.")
     if (any(abs(ages - round(ages)) > tol)) stop("Ages must be integer-valued for an annual multiple decrement table.")
     if (anyDuplicated(ages)) stop("Age column contains duplicated ages.")
     if (length(ages) > 1L && any(diff(as.integer(round(ages))) != 1L)) {

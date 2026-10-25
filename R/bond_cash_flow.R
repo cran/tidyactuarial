@@ -10,7 +10,8 @@
 #' @param k Positive integer. Number of coupon payments per year.
 #' @param R Numeric scalar. Redemption value. If \code{NULL}, it is set equal
 #'   to \code{face}.
-#' @param tol Numeric scalar. Tolerance.
+#' @param tol Finite positive numeric scalar. Absolute tolerance for integer
+#'   alignment of \code{k} and \code{n * k}; it is not a monetary tolerance.
 #' @param check Logical scalar. Input validation.
 #'
 #' @return A tibble with the bond cash-flow schedule. The main actuarial
@@ -23,6 +24,10 @@
 #' coupon payments per year, and \code{R} is the redemption value.
 #'
 #' Stub periods are not supported; therefore, \code{n * k} must be an integer.
+#' The coupon is \eqn{face \cdot c/k}. Coupons and redemption remain separate
+#' rows at maturity. At \code{n = 0}, only immediate redemption is returned.
+#' The schedule requires finite coupons and an integer number of periods below
+#' \code{.Machine$integer.max}, with sufficient memory for the resulting rows.
 #'
 #' @examples
 #' bond_cash_flows(
@@ -48,6 +53,10 @@ bond_cash_flows <- function(
   }
 
   if (isTRUE(check)) {
+    if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) ||
+        !is.finite(tol) || tol <= 0) {
+      stop("`tol` must be a single finite positive numeric value.", call. = FALSE)
+    }
     if (!is.numeric(face) || length(face) != 1L || is.na(face) ||
         !is.finite(face) || face < 0) {
       stop("`face` must be a single finite nonnegative number.", call. = FALSE)
@@ -65,7 +74,7 @@ bond_cash_flows <- function(
 
     if (!is.numeric(k) || length(k) != 1L ||
         is.na(k) || !is.finite(k) ||
-        k <= 0 ||
+        k <= 0 || k > .Machine$integer.max ||
         abs(k - round(k)) > tol) {
       stop("`k` must be a positive integer.", call. = FALSE)
     }
@@ -75,14 +84,16 @@ bond_cash_flows <- function(
       stop("`R` must be a single finite nonnegative number.", call. = FALSE)
     }
 
-    if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || tol <= 0) {
-      stop("`tol` must be a single positive numeric value.", call. = FALSE)
-    }
   }
 
   k <- as.integer(round(k))
 
   N_raw <- n * k
+  if (!is.finite(N_raw) || N_raw < 0 ||
+      round(N_raw) >= .Machine$integer.max) {
+    stop("`n * k` must be finite, nonnegative and below the integer index limit.",
+         call. = FALSE)
+  }
   if (abs(N_raw - round(N_raw)) > tol) {
     stop(
       "`n * k` must be an integer ",
@@ -106,6 +117,12 @@ bond_cash_flows <- function(
   }
 
   coupon_per_period <- face * c / k
+  if (!is.finite(coupon_per_period) || (coupon_per_period == 0 && face > 0 && c > 0)) {
+    coupon_per_period <- .cash_flow_value(face, log(c) - log(k))
+  }
+  if (!is.finite(coupon_per_period)) {
+    stop("Coupon per period must be finite and representable.", call. = FALSE)
+  }
   period <- seq_len(N)
   t <- period / k
 

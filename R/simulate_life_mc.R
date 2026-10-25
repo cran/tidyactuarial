@@ -38,6 +38,13 @@
 #' For \code{k > 1}, the curtate lifetime alone is insufficient because
 #' payments may occur during the year of death. The function therefore
 #' simulates a complete lifetime \eqn{T_x=K_x+S} under \code{frac}.
+#' Fractional survival is retained in log form, including when an annual
+#' \code{lx} ratio underflows. Cash flows use the original log interest rate
+#' and combine the monetary amount before exponentiating. The displayed
+#' annual effective rate may overflow or round to -1 at extreme forces.
+#' With a finite horizon, surviving paths have \code{Kx = n}, missing
+#' \code{Tx}, and \code{died_within_horizon = FALSE}; their future lifetime
+#' is censored, not observed to equal \code{n}.
 #'
 #' @return A tibble with one row per simulation, or a summary from
 #'   \code{\link{summary_mc}}. Simulation output includes
@@ -205,22 +212,25 @@ simulate_annuity_x <- function(
   )
 
   .mc_assert_positive_integer(k, "k")
+  if (k > .Machine$integer.max || round(k) < 1)
+    stop("`k` must round to a positive integer within the supported range.", call. = FALSE)
   .mc_assert_numeric_scalar(payment, "payment", min = 0)
 
   x <- as.integer(round(x))
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
   k <- as.integer(round(k))
   n_sim <- as.integer(round(n_sim))
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    n <- if (n <= .Machine$integer.max) as.integer(round(n)) else round(n)
   }
 
-  i_effective <- .mc_effective_rate(
+  interest <- .interest_basis(
     i = i,
     i_type = i_type,
     m = m
   )
+  i_effective <- interest$effective
 
   lifetime <- .simulate_lifetime_inverse_lx(
     lt = lt,
@@ -240,14 +250,14 @@ simulate_annuity_x <- function(
     timing = timing
   )
 
-  annuity_factor <- .annuity_factor_count(
+  log_factor <- .annuity_log_factor_count(
     n_payments = n_payments,
-    i_effective = i_effective,
+    growth = interest$growth,
     k = k,
     timing = timing
   )
 
-  present_value <- payment * annuity_factor
+  present_value <- .cash_flow_value(rep(payment, length(log_factor)), log_factor)
 
   first_payment_time <- ifelse(
     n_payments > 0L,
@@ -316,6 +326,10 @@ simulate_annuity_x <- function(
 #'
 #' Simulates present values of a discrete single-life insurance payable at the
 #' end of the year of death, or at maturity for an endowment insurance.
+#' Monetary values retain the original log interest rate, even when the
+#' displayed annual effective rate loses range. Finite-horizon survivors
+#' are censored: \code{Kx = n} is a placeholder and
+#' \code{died_within_horizon = FALSE}, not an observed death at that duration.
 #'
 #' @param lt A life table or a \code{tidyact_life_contract}.
 #' @param x Integer actuarial age.
@@ -502,18 +516,19 @@ simulate_insurance_x <- function(
   }
 
   x <- as.integer(round(x))
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
   n_sim <- as.integer(round(n_sim))
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    n <- if (n <= .Machine$integer.max) as.integer(round(n)) else round(n)
   }
 
-  i_effective <- .mc_effective_rate(
+  interest <- .interest_basis(
     i = i,
     i_type = i_type,
     m = m
   )
+  i_effective <- interest$effective
 
   lifetime <- .simulate_lifetime_inverse_lx(
     lt = lt,
@@ -525,7 +540,6 @@ simulate_insurance_x <- function(
   )
 
   Kx <- lifetime$Kx
-  v <- 1 / (1 + i_effective)
 
   if (type == "whole") {
     benefit_indicator <- as.numeric(
@@ -557,10 +571,11 @@ simulate_insurance_x <- function(
     )
   }
 
-  present_value <- ifelse(
-    benefit_indicator == 1,
-    benefit * v^benefit_time,
-    0
+  present_value <- numeric(n_sim)
+  covered_rows <- which(benefit_indicator == 1)
+  present_value[covered_rows] <- .cash_flow_value(
+    rep(benefit, length(covered_rows)),
+    -interest$growth * benefit_time[covered_rows]
   )
 
   out <- tibble::tibble(
@@ -724,6 +739,7 @@ simulate_insurance_x <- function(
       is.na(x) ||
       !is.finite(x) ||
       x < 0 ||
+      x > .Machine$integer.max ||
       abs(x - round(x)) > 1e-10) {
     stop(
       "`x` must be a single nonnegative integer age.",
@@ -734,6 +750,10 @@ simulate_insurance_x <- function(
   .mc_assert_numeric_scalar(i, "i")
   .mc_assert_positive_integer(m, "m")
   .mc_assert_positive_integer(n_sim, "n_sim")
+  if (round(m) < 1)
+    stop("`m` must round to a positive integer.", call. = FALSE)
+  if (n_sim > .Machine$integer.max || round(n_sim) < 1)
+    stop("`n_sim` must round to a positive integer within the supported range.", call. = FALSE)
 
   if (!is.null(seed)) {
     if (!is.numeric(seed) ||
@@ -757,7 +777,7 @@ simulate_insurance_x <- function(
       n <= 0 ||
       (!is.infinite(n) &&
        (!is.finite(n) ||
-        abs(n - round(n)) > 1e-10))) {
+        abs(n - round(n)) > 1e-10 || round(n) < 1))) {
     stop(
       "`n` must be `Inf` or a single positive integer.",
       call. = FALSE
@@ -818,6 +838,7 @@ simulate_insurance_x <- function(
 
   if (anyNA(lt$x) ||
       any(!is.finite(lt$x)) ||
+      any(abs(lt$x) > .Machine$integer.max) ||
       any(abs(lt$x - round(lt$x)) > 1e-10)) {
     stop(
       "Column `x` must contain finite integer ages.",
@@ -834,14 +855,14 @@ simulate_insurance_x <- function(
     )
   }
 
-  if (anyDuplicated(lt$x)) {
+  if (anyDuplicated(round(lt$x))) {
     stop(
       "Column `x` must not contain duplicated ages.",
       call. = FALSE
     )
   }
 
-  if (any(diff(lt$lx) > 1e-10)) {
+  if (any(diff(lt$lx) > 0)) {
     stop(
       "Column `lx` must be nonincreasing with age.",
       call. = FALSE
@@ -867,7 +888,7 @@ simulate_insurance_x <- function(
   omega <- max(ages)
 
   if (is.infinite(n)) {
-    horizon <- omega - x
+    horizon <- as.double(omega) - x
 
     if (horizon <= 0) {
       stop(
@@ -876,10 +897,12 @@ simulate_insurance_x <- function(
       )
     }
   } else {
-    horizon <- as.integer(round(n))
+    horizon <- round(n)
   }
 
-  needed_ages <- x:(x + horizon)
+  if (horizon > as.double(omega) - x)
+    stop("`n` exceeds the horizon supported by the life table.", call. = FALSE)
+  needed_ages <- seq.int(from=x, to=as.double(x)+horizon)
 
   if (!all(needed_ages %in% ages)) {
     stop(
@@ -1016,8 +1039,10 @@ simulate_insurance_x <- function(
     l_start <- lx[match(death_ages, ages)]
     l_end <- lx[match(death_ages + 1L, ages)]
 
-    p_year <- l_end / l_start
-    q_year <- 1 - p_year
+    log_p <- .single_life_log_ratio(l_end, l_start)
+    q_year <- (l_start-l_end)/l_start
+    near_one <- log_p > log(.5)
+    log_p[near_one] <- log1p(-q_year[near_one])
 
     u <- stats::runif(length(death_rows))
 
@@ -1025,26 +1050,25 @@ simulate_insurance_x <- function(
       u
     } else if (identical(frac, "cml")) {
       out <- numeric(length(u))
-      degenerate <- p_year <= 0
+      degenerate <- l_end == 0
 
       out[degenerate] <- 0
       regular <- !degenerate
 
       out[regular] <-
         log1p(-u[regular] * q_year[regular]) /
-        log(p_year[regular])
+        log_p[regular]
 
       out
     } else {
       out <- numeric(length(u))
-      degenerate <- p_year <= 0
+      degenerate <- l_end == 0
 
       out[degenerate] <- 0
       regular <- !degenerate
 
-      out[regular] <-
-        u[regular] * p_year[regular] /
-        (1 - u[regular] * q_year[regular])
+      out[regular] <- exp(log(u[regular]) + log_p[regular] -
+        log1p(-u[regular] * q_year[regular]))
 
       out
     }
@@ -1173,6 +1197,12 @@ simulate_insurance_x <- function(
     k,
     timing
 ) {
+  exp(.annuity_log_factor_count(n_payments, log1p(i_effective), k, timing))
+}
+
+# Log present-value factor of the consecutive payment dates. Keep the original
+# rate until monetary amounts are combined; zero counts have log factor -Inf.
+.annuity_log_factor_count <- function(n_payments, growth, k, timing) {
   timing <- match.arg(
     timing,
     c("due", "immediate")
@@ -1192,30 +1222,18 @@ simulate_insurance_x <- function(
     )
   }
 
-  i_period <- (1 + i_effective)^(1 / k) - 1
-  v_period <- 1 / (1 + i_period)
-
-  out <- numeric(length(n_payments))
+  out <- rep(-Inf, length(n_payments))
   positive <- n_payments > 0L
 
   if (!any(positive)) {
     return(out)
   }
 
-  if (abs(i_period) < 1e-12) {
-    out[positive] <- n_payments[positive]
-    return(out)
-  }
-
-  due_factor <-
-    (1 - v_period^n_payments[positive]) /
-    (1 - v_period)
-
-  if (timing == "due") {
-    out[positive] <- due_factor
-  } else {
-    out[positive] <- v_period * due_factor
-  }
+  counts <- unique(n_payments[positive])
+  values <- vapply(counts,function(count)
+    if (count == 1) 0 else .annuity_log_sum(-growth/k, count),0)
+  out[positive] <- values[match(n_payments[positive], counts)]
+  if (timing == "immediate") out[positive] <- out[positive]-growth/k
 
   out
 }

@@ -31,12 +31,12 @@ for \code{i_type = "effective"} and \code{i_type = "force"}.}
 \value{
 A tibble with:
 \describe{
-\item{w}{Numeric vector of asset weights or units.}
-\item{PV_L}{Present value of the liabilities.}
-\item{D_L}{Macaulay duration of the liabilities.}
-\item{PV_A}{Present value of the immunized asset portfolio.}
-\item{D_A}{Macaulay duration of the asset portfolio.}
-\item{n_assets}{Number of assets used.}
+  \item{w}{Numeric vector of asset weights or units.}
+  \item{PV_L}{Present value of the liabilities.}
+  \item{D_L}{Macaulay duration of the liabilities.}
+  \item{PV_A}{Present value of the immunized asset portfolio.}
+  \item{D_A}{Macaulay duration of the asset portfolio.}
+  \item{n_assets}{Number of assets used.}
 }
 }
 \description{
@@ -46,12 +46,13 @@ two or more assets, using compact actuarial notation.
 \details{
 The method enforces:
 \enumerate{
-\item present value of assets = present value of liabilities;
-\item Macaulay duration of assets = Macaulay duration of liabilities.
+  \item present value of assets = present value of liabilities;
+  \item Macaulay duration of assets = Macaulay duration of liabilities.
 }
 
 For exactly two assets, a closed-form solution is used. For three or more
 assets, a minimum-norm solution is computed by linear algebra.
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{L} denotes liabilities, \code{t} denotes payment
@@ -94,6 +95,23 @@ and
 and
 
 \deqn{b = (PV_L, PV_LD_L)^T.}
+
+The minimum Euclidean norm is taken over asset units \code{w}, not
+portfolio market-value fractions. It is evaluated by singular value
+decomposition of the row-scaled constraint matrix, without forming
+normal equations. Short positions are allowed. Matching present value
+and duration gives a zero value and first derivative of the surplus at
+the base yield, but does not ensure nonnegative surplus after rate shifts;
+the Redington convexity condition must be checked separately.
+Liability values retain the original log accumulation rate, and relative
+moments avoid monetary numerator overflow. Payment times include zero:
+a liability at time zero contributes value but no duration. Constraints are
+scaled by a common monetary magnitude and by moment magnitudes before
+products are formed. These are row transformations, preserving the norm over
+units; asset columns are not rescaled independently. Final values, weights
+and sensitivities must be finite, and nearly cancelled liability value is
+rejected. Rank and cancellation tests remain subject to double precision;
+reported portfolio moments should be inspected for ill-conditioned systems.
 }
 \examples{
 # Two-asset immunization
@@ -128,10 +146,10 @@ immunize_duration(
 }
 \seealso{
 \code{\link{immunize_duration_convexity}},
-\code{\link{bond_duration}}, \code{\link{bond_convexity}}
+  \code{\link{bond_duration}}, \code{\link{bond_convexity}}
 
-Other immunization: 
-\code{\link{immunize_duration_convexity}()},
-\code{\link{plot_immunization_gap}()}
+Other immunization:
+\code{\link[=immunize_duration_convexity]{immunize_duration_convexity()}},
+\code{\link[=plot_immunization_gap]{plot_immunization_gap()}}
 }
 \concept{immunization}

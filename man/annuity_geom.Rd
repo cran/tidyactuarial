@@ -35,7 +35,8 @@ values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
 \item{m}{Positive integer vector giving the conversion frequency for nominal
-interest-rate inputs. Ignored for \code{"effective"} and \code{"force"}.}
+interest-rate inputs. Observed values are validated for every rate family,
+although only nominal conversions use this frequency.}
 
 \item{g}{Numeric vector of annual growth-rate values for the payments.}
 
@@ -44,8 +45,8 @@ values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
 \item{g_m}{Positive integer vector giving the conversion frequency for
-nominal growth-rate inputs. Ignored for \code{"effective"} and
-\code{"force"}.}
+nominal growth-rate inputs. Observed values are validated for every rate
+family, although only nominal conversions use this frequency.}
 
 \item{h}{Numeric vector of deferment times in years. Must be greater than or
 equal to 0. For present values, the deferment discounts the payment block.
@@ -81,9 +82,10 @@ This function covers finite geometric annuities and geometric perpetuities.
 
 Supported timing conventions:
 \itemize{
-\item \code{"immediate"}: payments at the end of each period.
-\item \code{"due"}: payments at the beginning of each period.
+  \item \code{"immediate"}: payments at the end of each period.
+  \item \code{"due"}: payments at the beginning of each period.
 }
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{n} is the term, \code{k} is the payment
@@ -114,6 +116,32 @@ gs_N = \sum_{r=1}^{N}(1+g_p)^{r-1}(1+i_p)^{N-r}.
 
 For annuities-due, the corresponding immediate factor is multiplied by
 \eqn{1+i_p}.
+
+Valuation retains the original annual log rates \eqn{\delta_i} and
+\eqn{\delta_g}. Let \eqn{r=\delta_i/k}, \eqn{s=\delta_g/k},
+\eqn{H=hk}, and \eqn{b=0} for immediate or \eqn{b=1} for due payments.
+With \eqn{G_N(z)=\sum_{j=0}^{N-1}\exp(zj)}, the finite present value is
+\deqn{P_1\exp[-r(H+1-b)]G_N(s-r).}
+The accumulated value at \eqn{h+n} years is
+\deqn{P_1\exp[br+(N-1)\max(r,s)]G_N(-|s-r|).}
+Stable logarithmic sums avoid subtracting nearly equal effective rates or
+accumulation levels. The spread is computed before period conversion as
+\eqn{(\delta_g-\delta_i)/k}; no nonzero spread is replaced by zero.
+For matching effective rates or nominal rates with equal conversion
+frequencies, log-ratio identities preserve close input differences before
+taking logarithms. Widely separated ratios that lose range fall back to
+the original log rates. Different rate families retain the accuracy limits
+of their separate conversions.
+
+A perpetuity requires \eqn{\delta_i>\delta_g}, without an arbitrary
+numerical gap. Its value is
+\eqn{P_1\exp[-r(H+1-b)]/[1-\exp(s-r)]}.
+Missing finite terms propagate missing values. Signed and zero first
+payments retain their meaning. Standalone audit rates may saturate, while
+monetary values combine the first payment with log factors before declaring
+range loss. No arbitrary precision or universal extreme-range guarantee is
+implied. Unlike \code{g} in \code{annuity_arith}, this \code{g} is an annual
+growth-rate specification and not a monetary increment per payment.
 }
 \examples{
 # Present value of a geometric annuity
@@ -155,11 +183,11 @@ annuity_geom(
 }
 \seealso{
 \code{\link{a_angle}}, \code{\link{s_angle}},
-\code{\link{annuity_arith}}, \code{\link{standardize_interest}}
+  \code{\link{annuity_arith}}, \code{\link{standardize_interest}}
 
-Other annuities: 
-\code{\link{a_angle}()},
-\code{\link{annuity_arith}()},
-\code{\link{s_angle}()}
+Other annuities:
+\code{\link[=a_angle]{a_angle()}},
+\code{\link[=annuity_arith]{annuity_arith()}},
+\code{\link[=s_angle]{s_angle()}}
 }
 \concept{annuities}

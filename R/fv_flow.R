@@ -32,6 +32,11 @@
 #' \code{\link{standardize_interest}}. When \code{i} is a vector, the
 #' accumulation uses the implied discount-factor ratio under the spot-rate
 #' interpretation.
+#' The ratio is evaluated from log accumulation rates, avoiding overflow of
+#' its separate numerator and denominator. If a horizon annual equivalent
+#' rounds to -1 or overflows to Inf, tied horizon flows must have exactly
+#' equal log accumulation rates; otherwise the existing annual-rate tolerance
+#' applies.
 #'
 #' @param cf Numeric vector of cash flows.
 #' @param i Numeric scalar or numeric vector of interest-rate values.
@@ -39,8 +44,9 @@
 #'   \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, or \code{"force"}.
 #'   May have length 1 or the same length as \code{cf}.
-#' @param m Positive integer vector giving the conversion frequency for nominal
-#'   rates. May have length 1 or the same length as \code{cf}.
+#' @param m Conversion frequency for nominal rates. Must contain positive
+#'   integers for nominal conversions and is ignored by other rate families.
+#'   May have length 1 or the same length as \code{cf}.
 #' @param t Optional numeric vector of cash-flow times in years.
 #' @param date Optional vector of cash-flow dates. If supplied, the earliest
 #'   date is treated as time 0.
@@ -52,6 +58,12 @@
 #' latest cash-flow time.
 #'
 #' @details
+#' Products are evaluated in log space when separate factors lose range or
+#' precision; original cash-flow signs and known zero amounts are preserved.
+#' If individual values overflow, amounts with exactly equal finite log
+#' factors are netted before valuation. Cancellation between unequal factors
+#' is not recovered by this rule and may still produce non-finite results.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
 #' \code{i} denotes the interest rate, \code{i_type} denotes the interest-rate
@@ -212,7 +224,8 @@ fv_flow <- function(
   i_type <- rep_len(i_type, n_cf)
   m      <- rep_len(m, n_cf)
 
-  i_eff <- standardize_interest(type = i_type, rate = i, m = m)
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  i_eff <- basis$effective
 
   # ---- Accumulate to the latest cash-flow time ----
   # The horizon rate i_T is the spot rate at T. When multiple cash flows share
@@ -225,14 +238,22 @@ fv_flow <- function(
   if (length(i_h) == 0L) {
     stop("Could not determine the horizon rate.", call. = FALSE)
   }
-  if (max(i_h) - min(i_h) > tol) {
+  # Retain the existing tolerance on representable annual rates. When that
+  # representation saturates, require equal original log accumulation rates.
+  g_h <- basis$growth[idx_h]
+  agree <- if (all(is.finite(i_h) & i_h > -1)) {
+    max(i_h) - min(i_h) <= tol
+  } else {
+    all(g_h == g_h[1L])
+  }
+  if (!isTRUE(agree)) {
     stop(
       "When multiple cash flows occur at the horizon, their associated spot rates must agree.",
       call. = FALSE
     )
   }
 
-  i_T <- i_h[1]
-
-  sum(cf * ((1 + i_T)^T_horizon / (1 + i_eff)^t_cf))
+  log_ratio <- g_h[1L] * (T_horizon - t_cf) +
+    (g_h[1L] - basis$growth) * t_cf
+  .cash_flow_sum(cf, log_ratio)
 }

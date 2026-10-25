@@ -42,6 +42,9 @@
 #' year of death. Under CML, it follows the conditional constant-force
 #' distribution. Under Balducci, it follows the corresponding conditional
 #' Balducci distribution.
+#' Positive annual survival is retained even below \code{tol}; only exact
+#' zero survival gives the established zero fractional lifetime under CML
+#' and Balducci. Tolerances do not replace a positive probability by zero.
 #'
 #' @return A tibble with one row per simulation and standardized columns
 #' including \code{sim_id}, \code{Kx}, \code{curtate_lifetime}, \code{Tx},
@@ -120,10 +123,15 @@ simulate_lifetime <- function(
     stop("`lt` must contain at least one life-table row.", call. = FALSE)
   }
 
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0) {
+    stop("`tol` must be a single nonnegative finite number.", call. = FALSE)
+  }
+
   .mc_assert_numeric_scalar(
     x,
     "x",
-    min = 0
+    min = 0,
+    max = .Machine$integer.max
   )
 
   if (abs(x - round(x)) > tol) {
@@ -134,9 +142,9 @@ simulate_lifetime <- function(
 
   .mc_assert_positive_integer(n_sim, "n_sim")
 
-  if (n_sim > .Machine$integer.max) {
+  if (n_sim > .Machine$integer.max || round(n_sim) < 1) {
     stop(
-      "`n_sim` exceeds the supported integer range.",
+      "`n_sim` must round to a positive integer within the supported range.",
       call. = FALSE
     )
   }
@@ -171,17 +179,6 @@ simulate_lifetime <- function(
     )
   }
 
-  if (!is.numeric(tol) ||
-      length(tol) != 1L ||
-      is.na(tol) ||
-      !is.finite(tol) ||
-      tol < 0) {
-    stop(
-      "`tol` must be a single nonnegative finite number.",
-      call. = FALSE
-    )
-  }
-
   if (!is.null(seed)) {
     if (!is.numeric(seed) ||
         length(seed) != 1L ||
@@ -206,10 +203,11 @@ simulate_lifetime <- function(
   if (anyNA(age_vec) ||
       any(!is.finite(age_vec)) ||
       any(age_vec < 0) ||
+      any(age_vec > .Machine$integer.max) ||
       any(abs(age_vec - round(age_vec)) > tol)) {
     stop(
       "The column selected by `x_col` must contain finite nonnegative ",
-      "integer ages.",
+      "integer ages within the supported range.",
       call. = FALSE
     )
   }
@@ -423,19 +421,19 @@ simulate_lifetime <- function(
       u_frac
     } else if (identical(frac, "cml")) {
       out <- numeric(n_sim)
-      degenerate <- px_death <= tol
+      degenerate <- px_death == 0
       out[degenerate] <- 0
 
       regular <- !degenerate
 
       out[regular] <-
         log1p(-u_frac[regular] * q_death[regular]) /
-        log(px_death[regular])
+        log1p(-q_death[regular])
 
       out
     } else {
       out <- numeric(n_sim)
-      degenerate <- px_death <= tol
+      degenerate <- px_death == 0
       out[degenerate] <- 0
 
       regular <- !degenerate
@@ -455,6 +453,9 @@ simulate_lifetime <- function(
     Tx <- Kx + fractional_year
   }
 
+  death_age <- as.double(x) + as.double(Kx) + 1
+  if (all(death_age <= .Machine$integer.max)) death_age <- as.integer(death_age)
+
   out <- tibble::tibble(
     sim_id = seq_len(n_sim),
     simulation_id = seq_len(n_sim),
@@ -467,7 +468,7 @@ simulate_lifetime <- function(
     curtate_lifetime = as.integer(Kx),
     Tx = Tx,
     complete_lifetime = Tx,
-    death_age = x + as.integer(Kx) + 1L,
+    death_age = death_age,
     qx_at_death_year = q_death,
     distribution_conditioned = conditioned
   )

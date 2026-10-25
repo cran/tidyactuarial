@@ -7,26 +7,26 @@
 \format{
 A tibble with 5 rows and 8 variables:
 \describe{
-\item{bond_id}{Bond identifier.}
-\item{face}{Face value of the bond.}
-\item{c}{Annual coupon rate.}
-\item{k}{Number of coupon payments per year.}
-\item{n}{Maturity in years.}
-\item{y}{Annual nominal yield rate consistent with coupon frequency.}
-\item{bond_type}{Short bond type label.}
-\item{P}{Theoretical bond price computed from the listed yield rate.}
+  \item{bond_id}{Bond identifier.}
+  \item{face}{Face value of the bond.}
+  \item{c}{Annual coupon rate.}
+  \item{k}{Number of coupon payments per year.}
+  \item{n}{Maturity in years.}
+  \item{y}{Annual nominal yield rate consistent with coupon frequency.}
+  \item{bond_type}{Short bond type label.}
+  \item{P}{Theoretical bond price computed from the listed yield rate.}
 }
 
 A tibble with 5 rows and 8 variables:
 \describe{
-\item{bond_id}{Bond identifier.}
-\item{face}{Face value of the bond.}
-\item{c}{Annual coupon rate.}
-\item{k}{Number of coupon payments per year.}
-\item{n}{Maturity in years.}
-\item{y}{Annual nominal yield rate consistent with coupon frequency.}
-\item{bond_type}{Short bond type label.}
-\item{P}{Theoretical bond price computed from the listed yield rate.}
+  \item{bond_id}{Bond identifier.}
+  \item{face}{Face value of the bond.}
+  \item{c}{Annual coupon rate.}
+  \item{k}{Number of coupon payments per year.}
+  \item{n}{Maturity in years.}
+  \item{y}{Annual nominal yield rate consistent with coupon frequency.}
+  \item{bond_type}{Short bond type label.}
+  \item{P}{Theoretical bond price computed from the listed yield rate.}
 }
 }
 \source{

@@ -22,9 +22,9 @@ insurance_x(
 \item{lt}{A life table as produced by \code{\link{lifetable}}. It must
 contain columns \code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age at issue.}
+\item{x}{Integer actuarial age at issue, or a vector of scenario ages.}
 
-\item{i}{Numeric scalar. Annual interest-rate input.}
+\item{i}{Numeric annual interest-rate input, scalar or by scenario.}
 
 \item{i_type}{Character string indicating the interest-rate type. Allowed
 values are \code{"effective"}, \code{"nominal_interest"},
@@ -42,10 +42,11 @@ for whole-life insurance.}
 \item{type}{Character string. One of \code{"whole"}, \code{"term"}, or
 \code{"endowment"}.}
 
-\item{benefit}{Numeric scalar. Benefit amount.}
+\item{benefit}{Numeric benefit amount, scalar or by scenario. A vector
+represents separate contracts, not a benefit schedule within one contract.}
 
 \item{tidy}{Logical scalar. If \code{FALSE}, returns a numeric APV. If
-\code{TRUE}, returns a one-row tibble with intermediate quantities.}
+\code{TRUE}, returns one tibble row per scenario with intermediate quantities.}
 
 \item{...}{Transitional compatibility for older calls using
 \code{mortality_table}, \code{age}, \code{rate}, \code{rate_type},
@@ -53,10 +54,10 @@ for whole-life insurance.}
 \code{output}.}
 }
 \value{
-If \code{tidy = FALSE}, a numeric scalar containing the actuarial present
-value.
+If \code{tidy = FALSE}, a numeric vector of actuarial present values,
+of length one for a single scenario.
 
-If \code{tidy = TRUE}, a one-row tibble with the main input values,
+If \code{tidy = TRUE}, a tibble with one row per scenario, the main input values,
 equivalent interest rate, deferral factor, pure endowment factor,
 annuity-due value used in the standard identities, and APV.
 }
@@ -71,10 +72,11 @@ within the term or at the end of the term if the life survives.
 
 Supported contracts:
 \itemize{
-\item \code{"whole"}: whole-life insurance.
-\item \code{"term"}: n-year term insurance.
-\item \code{"endowment"}: n-year endowment insurance.
+  \item \code{"whole"}: whole-life insurance.
+  \item \code{"term"}: n-year term insurance.
+  \item \code{"endowment"}: n-year endowment insurance.
 }
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{lt} is the life table, \code{x} is the age at
@@ -91,6 +93,33 @@ is computed over the available life-table horizon. For term and endowment
 insurance, the death benefit is computed over the first \code{n} years.
 Endowment insurance additionally includes the pure endowment component
 \deqn{v^n\,{}_np_x.}
+
+\strong{Scenarios.} \code{x}, \code{i}, \code{i_type}, \code{m},
+\code{n}, \code{h}, \code{type}, and \code{benefit} may have a common
+positive length; only length-one arguments recycle. The table and \code{tidy}
+control are shared. Scenarios are paired by position, not expanded to a
+Cartesian product. Missing or invalid cases are rejected with the scenario
+number. Use the numeric result in \code{dplyr::mutate()}, or request a tibble
+for intermediate values. Explicit interest arguments override contract defaults.
+
+\strong{Valuation and scope.} For annual deaths in interval \eqn{[r,r+1)},
+the unconditional payment probability is
+\eqn{(l_{x+r}-l_{x+r+1})/l_x}. The benefit is discounted at \eqn{r+1},
+not at the exact moment of death. Decrements are formed before division,
+and log ratios and original interest rates retain representable APVs when
+intermediate conditional values or discount factors overflow or underflow.
+Intermediate diagnostics may therefore be zero or infinite while APV is finite.
+Tables require an annual age grid, nonincreasing finite \code{lx}, and a
+positive count at issue. For compatibility the terminal count one year beyond
+the table is zero, even for an open input table. Extinct tails contribute zero.
+A zero-term endowment pays the benefit at time \code{h} on survival;
+zero-term death insurance pays nothing.
+
+Use \code{\link{insurance_variable_k}} for benefits varying by subperiod,
+including level benefits paid at the end of the subperiod of death, and
+\code{\link{t_Ex}} for pure endowments. Continuous death-time insurance,
+fractional issue ages and time-varying interest curves require additional
+model specifications and are not implied by this annual contract.
 }
 \examples{
 lt <- data.frame(
@@ -143,26 +172,30 @@ insurance_x(
   tidy = TRUE
 )
 
+# Parallel single-life scenarios with a shared mortality table
+insurance_x(lt, x = c(60, 61), i = 0.04, n = c(2, 3),
+            type = "term", benefit = c(10000, 20000), tidy = TRUE)
+
 }
 \seealso{
 \code{\link{annuity_x}}, \code{\link{premium_x}},
-\code{\link{reserve_x}}, \code{\link{t_Ex}}, \code{\link{insurance_xy}}
+  \code{\link{reserve_x}}, \code{\link{t_Ex}}, \code{\link{insurance_xy}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

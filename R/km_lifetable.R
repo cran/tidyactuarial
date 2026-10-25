@@ -62,9 +62,24 @@
 #'   \item \eqn{\mathring{e}_x = T_x / \ell_x}: complete life expectancy
 #'     (Finan, Sec. 23.3).
 #'   \item \eqn{m_x = d_x / L_x}: central death rate (Finan, Sec. 23.9).
-#'   \item \eqn{a_x = (\ell_x \Delta - L_x) / d_x}: average fraction of the
-#'     interval lived by those who die.
+#'   \item \eqn{a_x = (L_x - \ell_{x+\Delta}\Delta) / d_x}: mean time
+#'     lived within the interval by those who die, in years (not a fraction
+#'     when interval width differs from one). Undefined if there are no deaths.
 #' }
+#'
+#' Nonfinite time/entry rows are omitted with a warning; the remaining sample
+#' must be nonempty. Breaks are sorted and deduplicated. Beyond the last
+#' observation, the KM step is held constant (no tail extrapolation is fitted).
+#' CF/Balducci exposure at an interval ending at zero survival uses its zero
+#' limit; positive deaths with zero exposure give infinite central mortality.
+#' Confidence intervals remain undefined at survival zero or one.
+#' Standard errors and intervals use Greenwood sums directly, preserving
+#' small positive survival estimates without a fixed survival floor.
+#' For delayed entry the risk set uses the existing inclusive convention
+#' \code{entry <= time}; this is a deliberate convention at tied entries/events.
+#' The lifetable component may have arbitrary interval widths: annual consumers
+#' such as \code{t_px} require conversion to an annual grid with the needed
+#' endpoint survivors; its class alone does not certify that conversion.
 #'
 #' @return A list with two tibbles:
 #' \itemize{
@@ -117,6 +132,13 @@ km_lifetable <- function(
 ) {
   assumption <- match.arg(assumption)
 
+  if (!length(time)) stop("`time` must be nonempty.", call. = FALSE)
+  if (!is.numeric(radix) || length(radix) != 1L || !is.finite(radix) || radix <= 0)
+    stop("`radix` must be positive and finite.", call. = FALSE)
+  if (!is.numeric(conf_level) || length(conf_level) != 1L ||
+      !is.finite(conf_level) || conf_level <= 0 || conf_level >= 1)
+    stop("`conf_level` must be in (0, 1).", call. = FALSE)
+
   # --- checks ---
   if (length(time) != length(status)) stop("'time' and 'status' must have same length.")
   if (!is.numeric(time)) stop("'time' must be numeric.")
@@ -132,7 +154,9 @@ km_lifetable <- function(
   }
 
   ok <- is.finite(time) & is.finite(status) & is.finite(entry)
+  if (any(!ok)) warning("Omitting ", sum(!ok), " rows with nonfinite time/status/entry.", call. = FALSE)
   time <- time[ok]; status <- status[ok]; entry <- entry[ok]
+  if (!length(time)) stop("Complete observations must be nonempty.", call. = FALSE)
   if (any(entry > time)) stop("Each entry time must satisfy entry <= time.")
 
   # --- sort by observed time ---
@@ -172,20 +196,17 @@ km_lifetable <- function(
   g_term <- ifelse(n_risk > d & n_risk > 0, d / (n_risk * (n_risk - d)), 0)
   g_cum  <- cumsum(g_term)
   varS   <- (S^2) * g_cum
-  seS    <- sqrt(pmax(varS, 0))
+  seS    <- S * sqrt(pmax(g_cum, 0))
 
   # --- log(-log) CI ---
   alpha <- 1 - conf_level
   z     <- stats::qnorm(1 - alpha / 2)
-  eps   <- 1e-16
-  loglog    <- log(-log(pmax(S, eps)))
-  se_loglog <- ifelse(
-    S > 0 & S < 1,
-    seS / (abs(log(pmax(S, eps))) * pmax(S, eps)),
-    NA_real_
-  )
-  ci_low  <- exp(-exp(loglog + z * se_loglog))
-  ci_high <- exp(-exp(loglog - z * se_loglog))
+  interior_S <- S > 0 & S < 1
+  ci_low <- ci_high <- rep(NA_real_, length(S))
+  loglog <- log(-log(S[interior_S]))
+  se_loglog <- sqrt(g_cum[interior_S]) / abs(log(S[interior_S]))
+  ci_low[interior_S] <- exp(-exp(loglog + z * se_loglog))
+  ci_high[interior_S] <- exp(-exp(loglog - z * se_loglog))
 
   km_tbl <- tibble::tibble(
     time     = ut,
@@ -203,7 +224,7 @@ km_lifetable <- function(
   S_at <- function(t) {
     if (n_ut == 0L) return(rep(1, length(t)))
     idx <- findInterval(t, ut)
-    ifelse(idx == 0L, 1, S[idx])
+    c(1, S)[idx + 1L]
   }
 
   # --- breaks default ---
@@ -211,6 +232,8 @@ km_lifetable <- function(
     mx_time <- max(time)
     breaks  <- 0:ceiling(mx_time)
   }
+  if (!is.numeric(breaks) || any(!is.finite(breaks)) || any(breaks < 0))
+    stop("`breaks` must be finite nonnegative numeric values.", call. = FALSE)
   breaks <- sort(unique(breaks))
   if (length(breaks) < 2) stop("'breaks' must have at least two points.")
 
@@ -223,30 +246,44 @@ km_lifetable <- function(
 
   lx  <- radix * Sx
   lx1 <- radix * Sx1
-  dx  <- pmax(lx - lx1, 0)
-
-  qx <- ifelse(lx > 0, dx / lx, NA_real_)
-  px <- 1 - qx
+  qx <- ifelse(Sx > 0, (Sx - Sx1) / Sx, NA_real_)
+  px <- ifelse(Sx > 0, Sx1 / Sx, NA_real_)
+  dx <- ifelse(lx == 0, 0, lx * qx)
 
   # --- Lx under chosen fractional-age assumption (Finan, Section 24) ---
-  same      <- abs(lx - lx1) < 1e-12
-  ratio     <- pmax(lx / pmax(lx1, eps), eps)
-  log_ratio <- log(ratio)
-
-  Lx <- switch(
-    assumption,
-    "UDD"     = 0.5 * (lx + lx1) * width,
-    "CF"      = ifelse(same, lx * width, width * (lx - lx1) / log_ratio),
-    "Balducci" = ifelse(same, lx * width, width * (lx * lx1) / (lx - lx1) * log_ratio)
-  )
+  # Integrate normalized survival, preserving the scale of the cohort.
+  factor <- rep(NA_real_, length(px))
+  same <- !is.na(px) & px == 1
+  zero <- !is.na(px) & px == 0
+  interior <- !is.na(px) & px > 0 & px < 1
+  factor[same] <- 1
+  factor[zero] <- if (assumption == "UDD") .5 else 0
+  if (assumption == "UDD") factor[interior] <- 1 - qx[interior] / 2
+  log_p <- ifelse(qx[interior] < .5, log1p(-qx[interior]), log(px[interior]))
+  if (assumption == "CF") factor[interior] <- qx[interior] / (-log_p)
+  if (assumption == "Balducci") factor[interior] <-
+    px[interior] * (-log_p) / qx[interior]
+  factor[lx == 0] <- 0
+  Lx <- .cash_flow_value(lx, log(width) + log(factor))
+  if (any(!is.finite(Lx))) stop("Exposure must be representable; rescale the radix.", call. = FALSE)
 
   # --- Tx, ex (Finan, Sections 23.3 and 23.8) ---
   Tx <- rev(cumsum(rev(Lx)))
   ex <- ifelse(lx > 0, Tx / lx, NA_real_)
 
   # --- extra empirical columns (Finan, Section 23.9) ---
-  mx_col <- ifelse(Lx > 0, dx / Lx, NA_real_)
-  ax_col <- ifelse(dx > 0, (lx * width - Lx) / dx, NA_real_)
+  mx_col <- ifelse(lx > 0, dx / Lx, NA_real_)
+  ax_col <- ifelse(dx > 0, width * (factor - px) / qx, NA_real_)
+  # Stable small-decrement limits of the mean time lived by decedents.
+  small <- !is.na(qx) & qx > 0 & qx < 1e-4
+  if (assumption == "CF") {
+    mu <- -log1p(-qx[small])
+    ax_col[small] <- width[small] * (.5 - mu / 12 + mu^3 / 720)
+  } else if (assumption == "Balducci") {
+    q <- qx[small]
+    ax_col[small] <- width[small] * (.5 - q/6 - q^2/12 - q^3/20 - q^4/30)
+  }
+  if (assumption == "UDD") ax_col[!is.na(qx) & qx > 0] <- width[!is.na(qx) & qx > 0] / 2
 
   life_tbl <- tibble::tibble(
     x      = x,

@@ -32,7 +32,8 @@ values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
 \item{m}{Positive integer vector giving the conversion frequency for nominal
-rates. Ignored for \code{"effective"} and \code{"force"}.}
+rates. Observed values are validated for every rate family, although only
+nominal conversions use this frequency.}
 
 \item{h}{Numeric vector of deferment times in years. Must be greater than or
 equal to 0.}
@@ -72,17 +73,18 @@ functions.
 
 Supported payment patterns:
 \itemize{
-\item \code{"increasing"}: payments \eqn{1, 2, \ldots, N}.
-\item \code{"decreasing"}: payments \eqn{N, N-1, \ldots, 1}.
-\item \code{"custom"}: payments following
-\eqn{P_r = P_1 + (r - 1)g}.
+  \item \code{"increasing"}: payments \eqn{1, 2, \ldots, N}.
+  \item \code{"decreasing"}: payments \eqn{N, N-1, \ldots, 1}.
+  \item \code{"custom"}: payments following
+    \eqn{P_r = P_1 + (r - 1)g}.
 }
 
 Supported timing conventions:
 \itemize{
-\item \code{"immediate"}: payments at the end of each period.
-\item \code{"due"}: payments at the beginning of each period.
+  \item \code{"immediate"}: payments at the end of each period.
+  \item \code{"due"}: payments at the beginning of each period.
 }
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{n} is the term, \code{k} is the payment
@@ -90,8 +92,9 @@ frequency, \code{i} is the interest-rate input, \code{i_type} is the
 interest-rate type, \code{m} is the conversion frequency for nominal rates,
 and \code{h} is the deferment period.
 
-The function first converts the supplied rate to the equivalent annual
-effective interest rate using \code{\link{standardize_interest}}.
+Rate validation uses \code{\link{standardize_interest}}. Valuation retains
+the original log accumulation rate, even if the displayed annual effective
+equivalent rounds to -1 or overflows.
 
 For each scenario, the total number of payments is
 \deqn{N = n k.}
@@ -100,6 +103,18 @@ The present value is computed by summing the discounted payment stream. The
 accumulated value is computed at the end of the annuity term. Under this
 convention, \code{h} affects the present value factor but not the
 accumulated value factor.
+
+Let \eqn{b=0} for immediate payments and \eqn{b=1} for due payments,
+\eqn{r=\delta/k}, and \eqn{H=hk}. The present value is
+\eqn{\sum_{j=1}^N P_j\exp[-r(H+j-b)]}; the value at \eqn{h+n}
+years is \eqn{\sum_{j=1}^N P_j\exp[r(N-j+b)]}.
+In a custom stream, \code{g} is an increment in currency per payment,
+not an annual growth rate. Signed and zero payments are supported.
+
+Payments are enumerated explicitly, so memory grows with \eqn{N}.
+Capital-factor products are evaluated stably using the shared cash-flow
+rules. Those rules do not recover arbitrary extreme signed cancellation
+across different factors, or payments already outside the numeric range.
 }
 \examples{
 # Increasing arithmetic annuity
@@ -136,11 +151,11 @@ annuity_arith(
 }
 \seealso{
 \code{\link{a_angle}}, \code{\link{s_angle}},
-\code{\link{standardize_interest}}
+  \code{\link{standardize_interest}}
 
-Other annuities: 
-\code{\link{a_angle}()},
-\code{\link{annuity_geom}()},
-\code{\link{s_angle}()}
+Other annuities:
+\code{\link[=a_angle]{a_angle()}},
+\code{\link[=annuity_geom]{annuity_geom()}},
+\code{\link[=s_angle]{s_angle()}}
 }
 \concept{annuities}

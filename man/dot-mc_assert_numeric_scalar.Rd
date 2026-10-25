@@ -19,18 +19,18 @@
 
 \item{arg}{Character string with the argument name.}
 
-\item{min}{Minimum allowed value. Default is \code{-Inf}.}
+\item{min}{Minimum allowed value. Default is `-Inf`.}
 
-\item{max}{Maximum allowed value. Default is \code{Inf}.}
+\item{max}{Maximum allowed value. Default is `Inf`.}
 
 \item{strict_min}{Logical. Should the lower bound be strict?}
 
 \item{strict_max}{Logical. Should the upper bound be strict?}
 
-\item{allow_null}{Logical. Should \code{NULL} be allowed?}
+\item{allow_null}{Logical. Should `NULL` be allowed?}
 }
 \value{
-Invisibly returns \code{TRUE} if validation is successful.
+Invisibly returns `TRUE` if validation is successful.
 }
 \description{
 Internal helper: validate numeric scalar

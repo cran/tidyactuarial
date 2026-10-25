@@ -115,6 +115,7 @@ advance. The premium input \code{P} is always interpreted as the annualized
 premium \eqn{P^{(k)}}. The amount paid at each premium date is
 \eqn{P^{(k)} / k}.
 
+
 At integer duration \eqn{t}, conditional on survival to age \eqn{x+t}, the
 prospective reserve is
 \deqn{
@@ -141,6 +142,27 @@ For annual premiums, the recursive method uses
 ({}_tV_x + P_t)(1+i) - b_{t+1}q_{x+t}
 }{p_{x+t}}.
 }
+
+The implementation evaluates its algebraically equivalent backward form
+\deqn{{}_tV_x = v(p_{x+t}{}_{t+1}V_x + q_{x+t}b_{t+1}) - P_t.}
+This avoids amplification by repeated division by small survival
+probabilities. The boundary value is the prospective value at the last
+supported positive cohort within the contract horizon; it is not generally
+zero for whole-life insurance. Already defined maturity payments are retained.
+Unrequested extinct conditioning states are not traversed. A requested
+intermediate reserve conditional on an extinct cohort remains undefined.
+
+Tables must have nonincreasing finite \code{lx} on an annual age grid.
+The recursive calculation retains the original log accumulation rate and
+forms death decrements before dividing survivor counts. Positive survival is
+obtained directly from counts, not as \eqn{1-q_x}. The whole-life output
+horizon remains the last recorded age with positive \code{lx}; finite
+coverage must be supported by recorded table ages. These local conventions
+are retained separately from the implicit final interval in insurance APVs.
+\code{t} indexes durations of one contract, not independent policy scenarios.
+No clipping or zeroing of small/negative reserves is applied. Nonfinite
+future APV components do not in general identify their difference; exact
+recovery of arbitrary cancellations between infinite components is not promised.
 }
 \examples{
 lt <- data.frame(
@@ -184,24 +206,24 @@ life_contract(
 }
 \seealso{
 \code{\link{premium_x}}, \code{\link{insurance_x}},
-\code{\link{annuity_x}}, \code{\link{life_contract}},
-\code{\link{add_insurance}}, \code{\link{add_premium_schedule}}
+  \code{\link{annuity_x}}, \code{\link{life_contract}},
+  \code{\link{add_insurance}}, \code{\link{add_premium_schedule}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

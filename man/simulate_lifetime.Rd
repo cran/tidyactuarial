@@ -79,6 +79,9 @@ Under UDD, the fractional part of \eqn{T_x} is uniform conditional on the
 year of death. Under CML, it follows the conditional constant-force
 distribution. Under Balducci, it follows the corresponding conditional
 Balducci distribution.
+Positive annual survival is retained even below \code{tol}; only exact
+zero survival gives the established zero fractional lifetime under CML
+and Balducci. Tolerances do not replace a positive probability by zero.
 }
 \examples{
 lt <- tibble::tibble(
@@ -112,17 +115,17 @@ Society of Actuaries.
 }
 \seealso{
 \code{\link{simulate_lifetimes}}, \code{\link{mc_insurance}},
-\code{\link{mc_annuity}}, \code{\link{mc_premium}},
-\code{\link{mc_loss}}, \code{\link{mc_reserve}}
+  \code{\link{mc_annuity}}, \code{\link{mc_premium}},
+  \code{\link{mc_loss}}, \code{\link{mc_reserve}}
 
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_loss}()},
-\code{\link{mc_multilife_status}()},
-\code{\link{mc_premium}()},
-\code{\link{mc_reserve}()},
-\code{\link{simulate_lifetimes}()},
-\code{\link{summary_mc}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_loss]{mc_loss()}},
+\code{\link[=mc_multilife_status]{mc_multilife_status()}},
+\code{\link[=mc_premium]{mc_premium()}},
+\code{\link[=mc_reserve]{mc_reserve()}},
+\code{\link[=simulate_lifetimes]{simulate_lifetimes()}},
+\code{\link[=summary_mc]{summary_mc()}}
 }
 \concept{monte-carlo}

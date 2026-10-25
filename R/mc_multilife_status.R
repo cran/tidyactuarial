@@ -10,14 +10,16 @@
 #'   \code{"last_survivor"}. The aliases \code{"joint_life"},
 #'   \code{"last"}, and \code{"last_survivor_life"} are accepted.
 #' @param col_sim Character scalar naming the simulation identifier column.
+#'   It must not collide with the output fields \code{K_status},
+#'   \code{T_status}, \code{n_lives}, or \code{status}.
 #' @param col_life Character scalar naming the life identifier column. The
 #'   default is \code{"life_id"}. Supply \code{NULL} only when no life
 #'   identifier exists; in that case the function can validate equal row counts
 #'   across simulations but cannot detect duplicated or substituted lives.
 #' @param col_K Character scalar naming the curtate future lifetime column.
 #' @param col_T Character scalar naming the complete future lifetime column.
-#' @param tol Nonnegative numeric tolerance used when checking that each
-#'   complete future lifetime is compatible with its curtate lifetime.
+#' @param tol Nonnegative numeric tolerance for checking whole-number curtate
+#'   lifetimes. It does not relax the interval \eqn{K \le T < K+1}.
 #'
 #' @details
 #' For simulated complete future lifetimes \eqn{T_1,\ldots,T_r}, the
@@ -35,6 +37,10 @@
 #' or maximum operation on \eqn{K_1,\ldots,K_r}. Because the function validates
 #' \eqn{K_j \le T_j < K_j+1}, the returned values satisfy the same
 #' curtate-complete relationship.
+#' Each complete lifetime must satisfy this interval exactly after the
+#' existing whole-number check and rounding of \code{K}. Incompatible
+#' complete lifetimes are rejected, not rounded or repaired. Ordinary
+#' curtate outputs use integer storage; larger values retain numeric storage.
 #'
 #' When \code{col_life} is available, every simulation must contain exactly one
 #' row for every life and the same set of lives must appear in every
@@ -118,6 +124,10 @@ mc_multilife_status <- function(
   assert_column_name(col_life, "col_life", allow_null = TRUE)
   assert_column_name(col_K, "col_K")
   assert_column_name(col_T, "col_T")
+
+  if (col_sim %in% c("K_status", "T_status", "n_lives", "status")) {
+    stop("`col_sim` must not use a reserved output field name.", call. = FALSE)
+  }
 
   if (!is.numeric(tol) ||
       length(tol) != 1L ||
@@ -207,13 +217,13 @@ mc_multilife_status <- function(
 
   K_values <- round(K_values)
 
-  incompatible_lifetime <- T_values < K_values - tol |
-    T_values >= K_values + 1 + tol
+  # Equivalent to K <= T < K+1, without losing the upper boundary when
+  # adding one to a large double. tol applies only to the integer K check.
+  incompatible_lifetime <- floor(T_values) != K_values
 
   if (any(incompatible_lifetime)) {
     stop(
-      "Each complete lifetime must satisfy `K <= T < K + 1` within ",
-      "the specified tolerance.",
+      "Each complete lifetime must satisfy `K <= T < K + 1` exactly.",
       call. = FALSE
     )
   }
@@ -298,9 +308,15 @@ mc_multilife_status <- function(
     numeric(1)
   )
 
+  K_status <- if (all(K_status <= .Machine$integer.max)) {
+    as.integer(K_status)
+  } else {
+    as.double(K_status)
+  }
+
   out <- tibble::tibble(
     "{col_sim}" := sim_levels,
-    K_status = as.integer(K_status),
+    K_status = K_status,
     T_status = as.numeric(T_status),
     n_lives = as.integer(n_lives_by_sim),
     status = status

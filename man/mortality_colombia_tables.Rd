@@ -7,23 +7,23 @@
 \format{
 A tibble with 12 variables:
 \describe{
-\item{table_id}{Mortality table identifier.}
-\item{sex}{Sex category, typically \code{"male"} or \code{"female"}.}
-\item{x}{Integer actuarial age.}
-\item{lx}{Number of survivors at exact age \code{x}.}
-\item{dx}{Expected number of deaths between ages \code{x} and
-\code{x + 1}.}
-\item{qx}{One-year death probability between ages \code{x} and
-\code{x + 1}.}
-\item{px}{One-year survival probability between ages \code{x} and
-\code{x + 1}.}
-\item{mu_x}{Force of mortality at age \code{x}, when available.}
-\item{ex}{Complete life expectancy at age \code{x}, when available.}
-\item{source}{Source identifier or reference.}
-\item{qx_calc}{Death probability recalculated from \code{lx} and
-\code{dx}, when available.}
-\item{qx_diff}{Difference between reported \code{qx} and recalculated
-\code{qx}, when available.}
+  \item{table_id}{Mortality table identifier.}
+  \item{sex}{Sex category, typically \code{"male"} or \code{"female"}.}
+  \item{x}{Integer actuarial age.}
+  \item{lx}{Number of survivors at exact age \code{x}.}
+  \item{dx}{Expected number of deaths between ages \code{x} and
+  \code{x + 1}.}
+  \item{qx}{One-year death probability between ages \code{x} and
+  \code{x + 1}.}
+  \item{px}{One-year survival probability between ages \code{x} and
+  \code{x + 1}.}
+  \item{mu_x}{Force of mortality at age \code{x}, when available.}
+  \item{ex}{Complete life expectancy at age \code{x}, when available.}
+  \item{source}{Source identifier or reference.}
+  \item{qx_calc}{Death probability recalculated from \code{lx} and
+  \code{dx}, when available.}
+  \item{qx_diff}{Difference between reported \code{qx} and recalculated
+  \code{qx}, when available.}
 }
 }
 \source{

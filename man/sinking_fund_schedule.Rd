@@ -38,37 +38,39 @@ type. Allowed values are \code{"effective"}, \code{"nominal_interest"},
 \code{"nominal_discount"}, and \code{"force"}.}
 
 \item{m}{Positive integer. Conversion frequency for nominal loan rates.
-Ignored for \code{i_type = "effective"} and \code{i_type = "force"}.}
+Validated for every rate family, although it affects conversion only for
+nominal rates.}
 
 \item{j_m}{Positive integer. Conversion frequency for nominal sinking-fund
-rates. Ignored for \code{j_type = "effective"} and
-\code{j_type = "force"}.}
+rates. Validated for every rate family, although it affects conversion
+only for nominal rates.}
 
 \item{deposit}{Optional numeric scalar. Level sinking-fund deposit per
 period. If \code{NULL}, it is computed so that the fund accumulates to
-\code{principal} at time \code{n}.}
+\code{principal} at the end of period \code{n} (\code{n / k} years).}
 
-\item{tol}{Numeric tolerance used for zero checks and final-balance checks.}
+\item{tol}{Finite positive numeric tolerance in monetary units used for
+final-balance checks.}
 }
 \value{
 A tibble with one row per period and columns:
 \describe{
-\item{period}{Period index.}
-\item{loan_balance_start}{Outstanding loan balance at the start of the period.}
-\item{interest_loan}{Interest paid on the loan during the period.}
-\item{sinking_deposit}{Deposit made into the sinking fund.}
-\item{fund_balance_start}{Fund balance at the start of the period.}
-\item{interest_fund}{Interest earned by the fund during the period.}
-\item{fund_balance_end_before_redemption}{Fund balance before final redemption.}
-\item{redemption_from_fund}{Amount withdrawn from the fund to redeem the loan at maturity.}
-\item{fund_balance_end}{Fund balance after redemption.}
-\item{loan_balance_end}{Outstanding loan balance after redemption.}
-\item{total_cashflow_borrower}{Borrower's external cash outflow during the period.}
-\item{i_effective_loan_annual}{Equivalent annual effective loan rate.}
-\item{i_effective_fund_annual}{Equivalent annual effective fund rate.}
-\item{i_loan_period}{Effective loan rate per schedule period.}
-\item{i_fund_period}{Effective fund rate per schedule period.}
-\item{k}{Schedule frequency.}
+  \item{period}{Period index.}
+  \item{loan_balance_start}{Outstanding loan balance at the start of the period.}
+  \item{interest_loan}{Interest paid on the loan during the period.}
+  \item{sinking_deposit}{Deposit made into the sinking fund.}
+  \item{fund_balance_start}{Fund balance at the start of the period.}
+  \item{interest_fund}{Interest earned by the fund during the period.}
+  \item{fund_balance_end_before_redemption}{Fund balance before final redemption.}
+  \item{redemption_from_fund}{Amount withdrawn from the fund to redeem the loan at maturity.}
+  \item{fund_balance_end}{Fund balance after redemption.}
+  \item{loan_balance_end}{Outstanding loan balance after redemption.}
+  \item{total_cashflow_borrower}{Borrower's external cash outflow during the period.}
+  \item{i_effective_loan_annual}{Equivalent annual effective loan rate.}
+  \item{i_effective_fund_annual}{Equivalent annual effective fund rate.}
+  \item{i_loan_period}{Effective loan rate per schedule period.}
+  \item{i_fund_period}{Effective fund rate per schedule period.}
+  \item{k}{Schedule frequency.}
 }
 }
 \description{
@@ -78,11 +80,12 @@ accumulation rate for the sinking fund, using compact actuarial notation.
 \details{
 The borrower pays:
 \itemize{
-\item interest on the loan each period, and
-\item a level deposit into the sinking fund.
+  \item interest on the loan each period, and
+  \item a level deposit into the sinking fund.
 }
 
 At maturity, the sinking fund is used to redeem the principal.
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{i} is the loan interest rate, \code{j} is the
@@ -95,9 +98,19 @@ rates and then to effective rates per schedule period:
 \deqn{i_p = (1+i_e)^{1/k} - 1,\qquad
       j_p = (1+j_e)^{1/k} - 1.}
 
-If \code{deposit} is \code{NULL} and the sinking-fund periodic rate
-\code{j_p} is approximately zero, the deposit is computed as
-\code{principal / n}.
+If \code{deposit} is \code{NULL}, the unit-payment accumulation sum is
+evaluated stably from the original log fund rate. Only an exactly zero
+rate uses the zero-rate limit \code{principal / n}. The monetary balance
+tolerance does not determine whether a rate is zero. The existing
+requirement of finite annual and period equivalents is retained.
+Non-finite monetary ledger entries cause an explicit error.
+A user-supplied deposit is not adjusted to force exact redemption: any
+uncovered loan balance or fund surplus remains in the corresponding final
+column and triggers the existing mismatch warning when it exceeds
+\code{tol}. Redemption from the fund is an internal transfer and is not
+counted again in the borrower's external cash flow.
+Storage grows with \code{n}; feasible terms are limited by integer indexing
+and available memory.
 
 Otherwise, the standard sinking-fund formula is used:
 \deqn{deposit = \frac{principal}{s_{\overline{n}|j_p}}}
@@ -130,8 +143,8 @@ sinking_fund_schedule(
 \seealso{
 \code{\link{amort_schedule}}, \code{\link{s_angle}}
 
-Other amortization: 
-\code{\link{amort_schedule}()},
-\code{\link{amort_schedule_general}()}
+Other amortization:
+\code{\link[=amort_schedule]{amort_schedule()}},
+\code{\link[=amort_schedule_general]{amort_schedule_general()}}
 }
 \concept{amortization}

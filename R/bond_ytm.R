@@ -22,9 +22,10 @@
 #' @param k Positive integer. Number of coupon payments per year.
 #' @param R Numeric scalar. Redemption value at maturity. If \code{NULL},
 #'   defaults to \code{face}.
-#' @param interval Optional numeric vector of length 2 giving a bracket for the
-#'   effective yield per coupon period.
-#' @param tol Numeric scalar. Tolerance passed to \code{\link[stats]{uniroot}}.
+#' @param interval Optional finite numeric vector of length 2 giving an increasing
+#'   bracket for the effective yield per coupon period, with both bounds above -1.
+#' @param tol Finite positive numeric scalar. Yield-coordinate tolerance passed
+#'   to \code{\link[stats]{uniroot}}, not a monetary price tolerance.
 #' @param maxiter Positive integer. Maximum number of iterations passed to
 #'   \code{\link[stats]{uniroot}}.
 #' @param check Logical scalar. If \code{TRUE}, performs basic input checks.
@@ -50,10 +51,16 @@
 #' The effective yield per coupon period \eqn{j} is the solution to
 #' \deqn{P = \sum_{r=1}^{N} C_r (1+j)^{-r}.}
 #'
-#' The root is found numerically using \code{\link[stats]{uniroot}}. If no
-#' \code{interval} is supplied, the function automatically brackets the root
-#' starting from \eqn{(-0.999999, 0.10)} and progressively widens the upper
-#' bound until a sign change is detected.
+#' With nonnegative payments and at least one positive future payment, price
+#' is strictly decreasing in \eqn{j > -1}, so the yield is unique. The root is
+#' found with \code{\link[stats]{uniroot}}, using the log of the discounted
+#' cash-flow sum relative to price to avoid monetary overflow or underflow.
+#' If no \code{interval} is supplied, the lower bound is the nearest double
+#' precision number above -1 and the upper bound starts at 0.10 and is widened
+#' until the root is bracketed. A yield outside the representable domain or an
+#' exhausted iteration limit causes an error. Tolerance applies to the yield
+#' coordinate according to \code{uniroot}; it does not guarantee a given price
+#' residual, particularly for yields near -1.
 #'
 #' From the per-period yield, the annual equivalents are:
 #' \deqn{j^{(k)} = k j, \qquad i = (1 + j)^k - 1.}
@@ -121,7 +128,7 @@ bond_ytm <- function(
 
     if (!is.numeric(k) || length(k) != 1L ||
         is.na(k) || !is.finite(k) ||
-        k <= 0 ||
+        k <= 0 || k > .Machine$integer.max ||
         abs(k - round(k)) > 1e-10) {
       stop("`k` must be a positive integer.", call. = FALSE)
     }
@@ -131,12 +138,14 @@ bond_ytm <- function(
       stop("`R` must be a single finite nonnegative number.", call. = FALSE)
     }
 
-    if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) || tol <= 0) {
-      stop("`tol` must be a single positive numeric value.", call. = FALSE)
+    if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) ||
+        !is.finite(tol) || tol <= 0) {
+      stop("`tol` must be a single finite positive numeric value.", call. = FALSE)
     }
 
     if (!is.numeric(maxiter) || length(maxiter) != 1L || is.na(maxiter) ||
-        !is.finite(maxiter) || maxiter <= 0 || maxiter != floor(maxiter)) {
+        !is.finite(maxiter) || maxiter <= 0 || maxiter > .Machine$integer.max ||
+        maxiter != floor(maxiter)) {
       stop("`maxiter` must be a positive integer.", call. = FALSE)
     }
   }
@@ -153,49 +162,49 @@ bond_ytm <- function(
     check = FALSE
   )
 
-  if (nrow(cf_tbl) == 0L || sum(cf_tbl$cf > 0) == 0L) {
+  positive <- cf_tbl$cf > 0 & cf_tbl$period > 0
+  if (!any(positive)) {
     stop("The bond must have at least one positive future cash flow.", call. = FALSE)
   }
 
-  # Objective function: bond_price(ip) - observed price = 0
+  # log(sum(C_r / P * exp(-r * log1p(ip)))) has the same unique root.
+  # Preserve accurate ordinary ratios; use separate logs only if a ratio loses range.
+  ratio <- cf_tbl$cf[positive] / P
+  log_ratio <- log(ratio)
+  recover <- !is.finite(log_ratio) | ratio < .Machine$double.xmin
+  log_ratio[recover] <- log(cf_tbl$cf[positive][recover]) - log(P)
+  periods <- cf_tbl$period[positive]
   f <- function(ip) {
-    bond_price(
-      face = face,
-      c = c,
-      n = n,
-      k = k,
-      y_effective_per_period = ip,
-      R = R,
-      check = FALSE
-    ) - P
+    terms <- log_ratio - periods * log1p(ip)
+    anchor <- max(terms)
+    anchor + log(sum(exp(terms - anchor)))
   }
 
   # --- Bracket the root automatically if no interval supplied ---
   if (is.null(interval)) {
-    lo <- -0.999999
+    lo <- -1 + .Machine$double.eps / 2
     hi <- 0.10
 
     flo <- f(lo)
     fhi <- f(hi)
 
-    it <- 0L
-    while (is.finite(flo) && is.finite(fhi) && flo * fhi > 0 && it < 100L) {
-      hi <- 2 * hi + 0.05
+    while (fhi > 0 && hi < .Machine$double.xmax) {
+      hi <- if (hi > .Machine$double.xmax / 2) .Machine$double.xmax else 2 * hi + 0.05
       fhi <- f(hi)
-      it <- it + 1L
     }
 
-    if (!(is.finite(flo) && is.finite(fhi) && flo * fhi <= 0)) {
-      stop("Could not bracket the YTM. Provide a wider `interval`.", call. = FALSE)
+    if (flo < 0 || fhi > 0) {
+      stop("Could not bracket the YTM within the representable yield domain.", call. = FALSE)
     }
 
     interval <- c(lo, hi)
 
   } else {
     if (!is.numeric(interval) || length(interval) != 2L || anyNA(interval) ||
+        any(!is.finite(interval)) ||
         interval[1] >= interval[2]) {
       stop(
-        "`interval` must be a numeric vector of length 2 with interval[1] < interval[2].",
+        "`interval` must be a finite numeric vector of length 2 with interval[1] < interval[2].",
         call. = FALSE
       )
     }
@@ -208,7 +217,8 @@ bond_ytm <- function(
     f,
     interval = interval,
     tol = tol,
-    maxiter = maxiter
+    maxiter = maxiter,
+    check.conv = TRUE
   )
 
   ip <- root$root
@@ -217,7 +227,7 @@ bond_ytm <- function(
     price = P,
     i_period = ip,
     j_nominal = k * ip,
-    i_effective_annual = (1 + ip)^k - 1,
+    i_effective_annual = expm1(k * log1p(ip)),
     k = k
   )
 }

@@ -12,6 +12,9 @@
 #' @param .data A data frame or tibble containing simulated future lifetimes,
 #'   typically returned by \code{\link{simulate_lifetime}} or by
 #'   \code{\link{mc_multilife_status}} when working with multiple-life statuses.
+#'   Observed curtate lifetimes must be finite nonnegative integers and
+#'   observed complete lifetimes finite and nonnegative. Paired observations
+#'   must satisfy \eqn{K_x \le T_x < K_x+1}; missing values remain missing.
 #' @param i Numeric scalar. Interest-rate input used for discounting.
 #' @param benefit Numeric scalar. Monetary amount paid when the insured
 #'   benefit is triggered. Default is \code{1}. Unlike an annuity payment,
@@ -53,6 +56,13 @@
 #'   \code{tx_col}, and \code{benefit_col}.
 #'
 #' @details
+#' Discounting uses the log accumulation rate from the original interest
+#' convention and combines the benefit amount with the discount factor.
+#' The displayed annual effective rate and discount factor may lose range
+#' at extreme rates; they are metadata rather than the valuation basis.
+#' A zero benefit remains zero for an observed eligible event, while a
+#' missing required lifetime continues to give a missing present value.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{i} is the interest-rate input, \code{i_type}
 #' is the interest-rate convention, \code{m} is the nominal conversion
@@ -86,6 +96,11 @@
 #'   \item \code{"endowment"}: death benefit is paid if death occurs within
 #'   \code{n} years; otherwise, a survival benefit is paid at time \code{n}.
 #' }
+#' With \code{timing = "moment_of_death"}, death at exactly \code{n}
+#' belongs to the term component. A pure endowment requires \eqn{T_x > n},
+#' so term and pure-endowment benefits are disjoint and sum to the endowment
+#' benefit on every observed trajectory. The annual convention continues to
+#' partition the events using \eqn{K_x < n} and \eqn{K_x \ge n}.
 #'
 #' The function returns simulated present values, not only their expected value.
 #' Therefore the resulting column can be summarized with
@@ -423,6 +438,8 @@ mc_insurance <- function(
   .mc_assert_numeric_scalar(i, "i")
   .mc_assert_numeric_scalar(benefit, "benefit", min = 0)
   .mc_assert_positive_integer(m, "m")
+  if (round(m) < 1)
+    stop("`m` must round to a positive integer.", call. = FALSE)
   .mc_assert_numeric_column(.data, col_K, "col_K")
   .mc_assert_character_scalar(col_T, "col_T")
   .mc_assert_character_scalar(col_pv, "col_pv")
@@ -470,22 +487,15 @@ mc_insurance <- function(
     }
   }
 
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
 
-  i_effective <- .mc_effective_rate(
+  interest <- .interest_basis(
     i = i,
     i_type = i_type,
     m = m
   )
 
-  if (!is.finite(i_effective) || i_effective <= -1) {
-    stop(
-      "The annual effective interest rate implied by `i`, `i_type`, and `m` ",
-      "must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
+  i_effective <- interest$effective
   v <- 1 / (1 + i_effective)
 
   Kx <- .data[[col_K]]
@@ -499,6 +509,7 @@ mc_insurance <- function(
   } else {
     rep(NA_real_, length(Kx))
   }
+  .mc_validate_lifetimes(Kx, Tx)
 
   if (timing == "moment_of_death") {
     if (any(Tx < 0, na.rm = TRUE)) {
@@ -570,7 +581,7 @@ mc_insurance <- function(
     if (timing == "end_of_year") {
       benefit_indicator <- as.numeric(Kx >= n)
     } else {
-      benefit_indicator <- as.numeric(Tx >= n)
+      benefit_indicator <- as.numeric(Tx > n)
     }
 
     benefit_time <- ifelse(benefit_indicator == 1, n, NA_real_)
@@ -595,11 +606,13 @@ mc_insurance <- function(
     )
   }
 
-  pv_benefit <- ifelse(
-    benefit_indicator == 1,
-    benefit * v^benefit_time,
-    0
-  )
+  pv_benefit <- numeric(length(Kx))
+  pv_benefit[is.na(benefit_indicator)] <- NA_real_
+  paid <- which(benefit_indicator == 1)
+  log_discount <- numeric(length(paid))
+  nonzero <- benefit_time[paid] != 0
+  log_discount[nonzero] <- -interest$growth * benefit_time[paid][nonzero]
+  pv_benefit[paid] <- .cash_flow_value(rep(benefit, length(paid)), log_discount)
 
   n_out <- if (is.null(n)) NA_real_ else n
 

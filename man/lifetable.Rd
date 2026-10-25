@@ -21,7 +21,7 @@ lifetable(
 )
 }
 \arguments{
-\item{x}{Numeric vector of ages. Must be \strong{integer} and \strong{consecutive}
+\item{x}{Numeric vector of ages. Must be **integer** and **consecutive**
 (annual table), e.g. \code{0:110}.}
 
 \item{lx}{Optional numeric vector of survivors \eqn{\ell_x}. Must be
@@ -47,13 +47,16 @@ table is truncated to \code{omega}. If \code{omega > max(x)}, an error is
 raised (the function will not invent missing ages).}
 
 \item{close}{Logical. If \code{TRUE} (default), closes the table at
-\code{omega} (forces terminal conditions).}
+\code{omega} (forces terminal conditions). With \code{FALSE} and only
+\code{lx}, the last \code{dx/qx/px/mx} are unknown (\code{NA}); a supplied
+terminal probability is used when available.}
 
 \item{ax}{Scalar in \code{[0,1]}. Average fraction of the year lived by
 those who die in the interval \eqn{[x, x+1)}. Under UDD (Finan, Sec. 24.1),
 \code{ax = 0.5}. Under constant force, \eqn{a_x = 1/\mu - 1/(\exp(\mu)-1)}.
 At the terminal age with \code{close = TRUE}, \code{mx} equals
-\eqn{1/(1 - a_x)}, which is 2 for \code{ax = 0.5}. Default is \code{0.5}.}
+\eqn{1/a_x}, which is 2 for \code{ax = 0.5}, 1 for \code{ax = 1},
+and \code{Inf} for \code{ax = 0}. Default is \code{0.5}.}
 
 \item{type}{Character. \code{"ultimate"} or \code{"select"} (metadata).
 Stored as an attribute and used by downstream functions.}
@@ -63,37 +66,38 @@ Stored as an attribute and used by downstream functions.}
 such as \code{\link{t_px}}.}
 
 \item{check}{Logical. If \code{TRUE} (default), performs strict validity
-and consistency checks.}
+and consistency checks, including \code{px = 1 - qx} when both are provided.
+Validated ages within tolerance of integers are rounded before truncation.}
 
 \item{tol}{Numeric tolerance for integer checks and consistency checks.}
 }
 \value{
 A \code{tibble} with class
-\code{c("lifetable","tbl_df","tbl","data.frame")} and columns:
+  \code{c("lifetable","tbl_df","tbl","data.frame")} and columns:
 \itemize{
-\item \code{x}: integer ages
-\item \code{lx}: survivors at exact age x
-\item \code{dx}: deaths in \eqn{[x, x+1)}
-\item \code{qx}: probability of death in \eqn{[x, x+1)}
-\item \code{px}: probability of survival to \eqn{x+1}
-\item \code{mx}: central death rate (derived using \code{ax}). At the
-terminal age with \code{close = TRUE}, \code{mx} equals
-\eqn{1/(1 - a_x)} and may be \code{Inf} if \code{ax = 1}.
+  \item \code{x}: integer ages
+  \item \code{lx}: survivors at exact age x
+  \item \code{dx}: deaths in \eqn{[x, x+1)}
+  \item \code{qx}: probability of death in \eqn{[x, x+1)}
+  \item \code{px}: probability of survival to \eqn{x+1}
+  \item \code{mx}: central death rate (derived using \code{ax}). At the
+    terminal age with \code{close = TRUE}, \code{mx} equals
+    \eqn{1/a_x} and is \code{Inf} if \code{ax = 0}.
 }
 Attributes include: \code{radix}, \code{omega}, \code{type}, \code{frac},
 \code{closed}, \code{ax}.
 }
 \description{
-Creates an annual life table with \strong{integer, consecutive ages} and returns a
-\strong{tibble} (tidyverse-friendly) with class \code{"lifetable"}.
+Creates an annual life table with **integer, consecutive ages** and returns a
+**tibble** (tidyverse-friendly) with class `"lifetable"`.
 }
 \details{
-The table can be built from exactly one of:
+The table can be built from any one of:
 \itemize{
-\item \code{lx} (survivors), or
-\item \code{qx} (one-year death probabilities), or
-\item \code{px} (one-year survival probabilities), or
-\item \code{mx} (central death rates),
+  \item \code{lx} (survivors), or
+  \item \code{qx} (one-year death probabilities), or
+  \item \code{px} (one-year survival probabilities), or
+  \item \code{mx} (central death rates),
 }
 and the function will compute the remaining columns consistently: \code{dx},
 \code{qx}, \code{px}, and \code{mx}.
@@ -107,6 +111,7 @@ By default, the table is actuarially closed at \code{omega}:
 \deqn{\ell_{\omega+1} = 0 \Rightarrow d_{\omega} = \ell_{\omega}
       \Rightarrow q_{\omega} = 1 \Rightarrow p_{\omega} = 0.}
 
+
 The life table follows the standard actuarial construction described in
 Finan, Sections 22--24 (Exam MLC preparation).
 
@@ -114,9 +119,11 @@ The basic identities are (Finan, Section 22):
 \deqn{\ell_x = \ell_0 \cdot s(x), \quad d_x = \ell_x - \ell_{x+1},
       \quad q_x = d_x / \ell_x, \quad p_x = \ell_{x+1} / \ell_x.}
 
-The central death rate \code{mx} is computed via the discrete approximation
-(Finan, Section 23.9):
-\deqn{m_x = \frac{q_x}{1 - a_x \cdot q_x}}
+With \eqn{a_x} the mean fraction of the year lived by those who die,
+exposure is \eqn{L_x = \ell_{x+1} + a_x d_x} and \eqn{m_x = d_x / L_x}.
+Consequently,
+\deqn{m_x = \frac{q_x}{1 - (1 - a_x) q_x}, \quad
+      q_x = \frac{m_x}{1 + (1 - a_x) m_x}}
 which under UDD (\code{ax = 0.5}) reduces to the classical formula
 \eqn{m_x = q_x / (1 - 0.5 \, q_x)} (Finan, Section 24.1). This arises
 because under UDD, \eqn{L_x = \ell_x - \tfrac{1}{2} d_x}, and therefore
@@ -124,8 +131,11 @@ because under UDD, \eqn{L_x = \ell_x - \tfrac{1}{2} d_x}, and therefore
 
 At the terminal age \eqn{\omega} with \code{close = TRUE}, closure forces
 \eqn{q_\omega = 1}, \eqn{p_\omega = 0}, and \eqn{d_\omega = \ell_\omega}.
-The corresponding \eqn{m_\omega} equals \eqn{1/(1 - a_x)}, which is 2
-under UDD (\code{ax = 0.5}). If \code{ax = 1}, \eqn{m_\omega = \infty}.
+For positive terminal survivors, \eqn{L_\omega = a_x \ell_\omega} and
+\eqn{m_\omega = 1/a_x}, which is 2 under UDD (\code{ax = 0.5}).
+At \code{ax = 0}, the zero-exposure limit is \eqn{m_\omega = \infty};
+at \code{ax = 1}, \eqn{m_\omega = 1}. Infinite \code{mx} inputs remain
+unsupported; this limit can be obtained from \code{lx} or \code{qx}.
 }
 \examples{
 # Example 1: build from lx (Finan, Section 22 style)

@@ -16,24 +16,24 @@ convexity_cash_flow(
 \item{cf}{Numeric vector of cash-flow amounts.}
 
 \item{t}{Numeric vector of cash-flow times. Times must be expressed in
-the same units used by \code{rate}.}
+the same units used by `rate`.}
 
 \item{rate}{Effective yield per unit of time. It must be a finite numeric
-scalar greater than \code{-1}.}
+scalar greater than `-1`.}
 
 \item{valuation_time}{Finite numeric scalar indicating the valuation time.
-Defaults to \code{0}.}
+Defaults to `0`.}
 
 \item{output}{Character scalar indicating the returned object:
-\code{"value"} returns convexity as a numeric scalar;
-\code{"audit"} returns a detailed tibble.}
+`"value"` returns convexity as a numeric scalar;
+`"audit"` returns a detailed tibble.}
 }
 \value{
-If \code{output = "value"}, a numeric scalar.
+If `output = "value"`, a numeric scalar.
 
-If \code{output = "audit"}, a tibble with six columns:
-\code{time}, \code{remaining_time}, \code{cash_flow}, \code{discount_factor},
-\code{present_value}, and \code{convexity_contribution}.
+If `output = "audit"`, a tibble with six columns:
+`time`, `remaining_time`, `cash_flow`, `discount_factor`,
+`present_value`, and `convexity_contribution`.
 }
 \description{
 Computes the yield convexity of a general cash-flow stream at a
@@ -86,12 +86,19 @@ approximation
 }
 
 The function follows an ex-cash-flow convention: cash flows occurring
-exactly at \code{valuation_time} are excluded. Therefore, the result represents
+exactly at `valuation_time` are excluded. Therefore, the result represents
 convexity immediately after any cash flow paid at that time.
 
 For streams containing both positive and negative cash flows, convexity
 remains a yield-sensitivity measure, but it may be negative and may not
 have the usual interpretation associated with conventional bonds.
+Relative contributions retain log weights rather than first forming a
+monetary convexity numerator. Representable products can be recovered when
+a standalone discount factor underflows; its audit column can then be zero
+while present value is positive. Discount factors, present values, their
+total/absolute sum, and the contributions/result must remain finite. Signed
+streams with absolute total value at most `sqrt(.Machine$double.eps)` times
+the sum of absolute present values are rejected as numerically cancelled.
 }
 \examples{
 convexity_cash_flow(
@@ -116,5 +123,5 @@ convexity_cash_flow(
 
 }
 \seealso{
-\code{\link[=duration_cash_flow]{duration_cash_flow()}}
+[duration_cash_flow()]
 }

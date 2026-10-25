@@ -7,22 +7,22 @@
 \format{
 A tibble with 7 rows and 6 variables:
 \describe{
-\item{x}{Integer actuarial age.}
-\item{q_death}{One-year death decrement probability.}
-\item{q_disability}{One-year disability decrement probability.}
-\item{q_withdrawal}{One-year withdrawal decrement probability.}
-\item{q_total}{Total one-year decrement probability.}
-\item{p_total}{Total one-year survival probability.}
+  \item{x}{Integer actuarial age.}
+  \item{q_death}{One-year death decrement probability.}
+  \item{q_disability}{One-year disability decrement probability.}
+  \item{q_withdrawal}{One-year withdrawal decrement probability.}
+  \item{q_total}{Total one-year decrement probability.}
+  \item{p_total}{Total one-year survival probability.}
 }
 
 A tibble with 7 rows and 6 variables:
 \describe{
-\item{x}{Integer actuarial age.}
-\item{q_death}{One-year death decrement probability.}
-\item{q_disability}{One-year disability decrement probability.}
-\item{q_withdrawal}{One-year withdrawal decrement probability.}
-\item{q_total}{Total one-year decrement probability.}
-\item{p_total}{Total one-year survival probability.}
+  \item{x}{Integer actuarial age.}
+  \item{q_death}{One-year death decrement probability.}
+  \item{q_disability}{One-year disability decrement probability.}
+  \item{q_withdrawal}{One-year withdrawal decrement probability.}
+  \item{q_total}{Total one-year decrement probability.}
+  \item{p_total}{Total one-year survival probability.}
 }
 }
 \source{

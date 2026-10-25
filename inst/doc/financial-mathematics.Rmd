@@ -1,0 +1,819 @@
+---
+title: "Financial Mathematics with tidyactuarial"
+author: "Julian Mauricio Fajardo"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Financial Mathematics with tidyactuarial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+
+library(tidyactuarial)
+```
+
+## Introduction
+
+Financial mathematics begins with a basic requirement: amounts located at different times cannot be compared directly. They must first be expressed at a common valuation date under a consistent financial law.
+
+This principle appears throughout actuarial mathematics. Accumulation, discounting, equivalent interest rates, equations of value, and annuities are not isolated topics. They are different expressions of the same financial structure.
+
+This vignette develops that sequence from single payments to regular payment streams. The actuarial equations are established first; `tidyactuarial` is then used to reproduce and audit the calculations.
+
+## Accumulation and discounting
+
+Let $a(t)$ be a positive accumulation function normalized by
+
+$$
+a(0)=1.
+$$
+
+The accumulation factor from time $s$ to time $t$ is
+
+$$
+\boxed{
+A(s,t)
+=
+\frac{a(t)}{a(s)}
+}.
+$$
+
+The reciprocal factor moves value in the opposite direction:
+
+$$
+\boxed{
+v(s,t)
+=
+\frac{1}{A(s,t)}
+=
+\frac{a(s)}{a(t)}
+}.
+$$
+
+Under a constant annual effective interest rate $i$,
+
+$$
+A(s,t)
+=
+(1+i)^{t-s},
+$$
+
+and
+
+$$
+v(s,t)
+=
+(1+i)^{-(t-s)}.
+$$
+
+The definitions are more general than compound interest. They remain valid whenever a consistent accumulation law is specified.
+
+Consider
+
+$$
+a(t)
+=
+\exp\left(
+0.03t+0.002t^2
+\right).
+$$
+
+Between times 2 and 5,
+
+$$
+A(2,5)
+=
+\frac{a(5)}{a(2)}
+=
+\exp(0.132)
+\approx
+1.141108.
+$$
+
+Therefore,
+
+$$
+v(2,5)
+=
+\frac{1}{A(2,5)}
+\approx
+0.876341.
+$$
+
+The same financial law can be supplied directly to the package.
+
+```{r general-accumulation-law}
+accumulation_law <- function(t) {
+  exp(
+    0.03 * t +
+      0.002 * t^2
+  )
+}
+
+accumulation <-
+  accumulation_factor(
+    s = 2,
+    t = 5,
+    a = accumulation_law
+  )
+
+discount <-
+  discount_factor(
+    s = 2,
+    t = 5,
+    a = accumulation_law
+  )
+
+tibble::tibble(
+  quantity = c(
+    "Accumulation factor",
+    "Discount factor"
+  ),
+  value = c(
+    accumulation,
+    discount
+  )
+)
+```
+
+The factors satisfy
+
+$$
+A(2,5)v(2,5)=1.
+$$
+
+`accumulation_factor()` and `discount_factor()` calculate financial factors. They do not by themselves represent monetary amounts. Keeping this distinction explicit avoids confusing the financial law with the capital to which it is applied.
+
+## Equivalent interest-rate conventions
+
+An interest rate is not completely specified by its numerical value. Its convention and, when relevant, its conversion frequency are part of the financial information.
+
+Let $i$ denote an annual effective interest rate. Then the equivalent annual effective discount rate is
+
+$$
+d
+=
+\frac{i}{1+i},
+$$
+
+the annual discount factor is
+
+$$
+v
+=
+\frac{1}{1+i},
+$$
+
+and the equivalent force of interest is
+
+$$
+\delta
+=
+\ln(1+i).
+$$
+
+For a nominal annual interest rate convertible $m$ times per year,
+
+$$
+i^{(m)}
+=
+m\left[
+(1+i)^{1/m}-1
+\right],
+$$
+
+while the equivalent nominal annual discount rate is
+
+$$
+d^{(m)}
+=
+m\left[
+1-(1+i)^{-1/m}
+\right].
+$$
+
+Consider an annual effective interest rate of $i=8\%$ and monthly conversion, $m=12$.
+
+The corresponding equivalent quantities describe the same annual financial return under different conventions.
+
+```{r interest-equivalents}
+annual_rate <- 0.08
+conversion_frequency <- 12
+
+rate_equivalents <-
+  interest_equivalents(
+    i_type = "effective",
+    i = annual_rate,
+    m = conversion_frequency
+  )
+
+rate_equivalents
+```
+
+The formulas remain visible, while `interest_equivalents()` provides a compact and auditable representation of the common actuarial conventions.
+
+## From financial factors to monetary values
+
+An accumulation factor describes how value moves through time. A present or future value applies that law to a monetary amount.
+
+For an amount $C$ invested for $t$ years at annual effective rate $i$,
+
+$$
+FV
+=
+C(1+i)^t.
+$$
+
+Conversely,
+
+$$
+PV
+=
+FV(1+i)^{-t}.
+$$
+
+Suppose 1,000 is invested for four years at an annual effective rate of $6\%$. Then
+
+$$
+FV
+=
+1000(1.06)^4
+=
+1262.48.
+$$
+
+```{r future-value}
+initial_capital <- 1000
+interest_rate <- 0.06
+term <- 4
+
+future_amount <-
+  future_value(
+    C = initial_capital,
+    i = interest_rate,
+    t = term
+  )
+
+future_amount
+```
+
+If instead 1,500 is payable in four years, its present value is
+
+$$
+PV
+=
+1500(1.06)^{-4}
+\approx
+1188.14.
+$$
+
+```{r present-value}
+future_payment <- 1500
+
+present_amount <-
+  present_value(
+    C = future_payment,
+    i = interest_rate,
+    t = term
+  )
+
+present_amount
+```
+
+These functions do not introduce new financial formulas. They apply the accumulation or discount law to monetary values already located in time.
+
+## Equations of value and focal dates
+
+An equation of value compares several cash flows after expressing them at a common focal date.
+
+Let cash flows $C_1,\ldots,C_n$ occur at times $t_1,\ldots,t_n$. Under a consistent accumulation law, an equation of value at focal date $f$ can be written as
+
+$$
+\boxed{
+\sum_{j=1}^{n}
+C_j A(t_j,f)
+=
+0
+}.
+$$
+
+Under compound interest with a constant annual effective rate $i$,
+
+$$
+A(t_j,f)
+=
+(1+i)^{f-t_j},
+$$
+
+so
+
+$$
+\sum_{j=1}^{n}
+C_j(1+i)^{f-t_j}
+=
+0.
+$$
+
+The financial solution does not depend on the focal date when all factors come from the same accumulation law. If the equation is valid at $f$, moving every term to another date $g$ multiplies the entire expression by the common nonzero factor $A(f,g)$.
+
+### Replacing two obligations by one payment
+
+Suppose obligations of 800 and 1,200 are due at years 1 and 3. They are replaced by a single payment $X$ at year 2. The annual effective rate is $6\%$.
+
+Taking year 2 as the focal date,
+
+$$
+X
+=
+800(1.06)
++
+1200(1.06)^{-1}.
+$$
+
+Thus,
+
+$$
+X
+\approx
+1980.08.
+$$
+
+The first obligation is accumulated one year and the second is discounted one year.
+
+```{r replacement-payment}
+replacement_rate <- 0.06
+
+replacement_payment <-
+  future_value(
+    C = 800,
+    i = replacement_rate,
+    t = 1
+  ) +
+  present_value(
+    C = 1200,
+    i = replacement_rate,
+    t = 1
+  )
+
+replacement_payment
+```
+
+The same equivalence can be checked at time 0.
+
+```{r replacement-audit}
+original_present_value <-
+  pv_flow(
+    cf = c(800, 1200),
+    i = replacement_rate,
+    t = c(1, 3)
+  )
+
+replacement_present_value <-
+  present_value(
+    C = replacement_payment,
+    i = replacement_rate,
+    t = 2
+  )
+
+tibble::tibble(
+  valuation = c(
+    "Original obligations",
+    "Replacement payment"
+  ),
+  present_value = c(
+    original_present_value,
+    replacement_present_value
+  )
+)
+```
+
+The numerical comparison verifies the equation of value; it does not replace its construction.
+
+## General cash-flow valuation
+
+A general finite cash flow has values $C_j$ at times $t_j$. Its value at focal date $f$ is
+
+$$
+V(f)
+=
+\sum_{j=1}^{n}
+C_jA(t_j,f).
+$$
+
+Under a constant annual effective rate,
+
+$$
+V(f)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{f-t_j}.
+$$
+
+In particular,
+
+$$
+V(0)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{-t_j}
+$$
+
+and, if $T$ is the final valuation date,
+
+$$
+V(T)
+=
+\sum_{j=1}^{n}
+C_j(1+i)^{T-t_j}.
+$$
+
+Hence,
+
+$$
+V(T)
+=
+V(0)(1+i)^T.
+$$
+
+Consider an investment agreement that pays 800, 1,200, and 1,500 at years 1, 3, and 6, but requires an additional contribution of 500 at year 5.
+
+```{r general-cash-flow}
+cash_flow <-
+  tibble::tibble(
+    time = c(1, 3, 5, 6),
+    amount = c(800, 1200, -500, 1500)
+  )
+
+cash_flow_rate <- 0.07
+
+present_value_flow <-
+  cash_flow |>
+  dplyr::summarise(
+    value = pv_flow(
+      cf = amount,
+      i = cash_flow_rate,
+      t = time
+    )
+  ) |>
+  dplyr::pull(value)
+
+future_value_flow <-
+  cash_flow |>
+  dplyr::summarise(
+    value = fv_flow(
+      cf = amount,
+      i = cash_flow_rate,
+      t = time
+    )
+  ) |>
+  dplyr::pull(value)
+
+present_value_flow
+future_value_flow
+```
+
+This is a natural use of a tidy workflow: the cash-flow table remains visible, and the financial calculation is applied to its columns without introducing additional programming structure.
+
+`pv_flow()` and `fv_flow()` implement the same equivalence principle at different focal dates.
+
+## Solving for an unknown date
+
+An equation of value may also determine the location of a payment.
+
+Suppose obligations of 4,000 and 7,000 are due at years 1 and 4. They are to be replaced by a single payment of 12,000 at an unknown time $x$. The annual effective rate is $8\%$.
+
+The present value of the original obligations is
+
+$$
+V_0
+=
+\frac{4000}{1.08}
++
+\frac{7000}{(1.08)^4}
+\approx
+8848.9127.
+$$
+
+The replacement payment must satisfy
+
+$$
+12000(1.08)^{-x}
+=
+8848.9127.
+$$
+
+Therefore,
+
+$$
+x
+=
+\frac{
+\log(12000/8848.9127)
+}{
+\log(1.08)
+}
+\approx
+3.9580.
+$$
+
+Before using a numerical solver, the interval can be identified financially. The present value of 12,000 at year 3 is above the target, while at year 4 it is below the target. Moreover,
+
+$$
+F(x)
+=
+12000(1.08)^{-x}
+$$
+
+is strictly decreasing. The solution is therefore unique in $(3,4)$.
+
+```{r unknown-date}
+unknown_date_rate <- 0.08
+replacement_amount <- 12000
+
+obligations_present_value <-
+  pv_flow(
+    cf = c(4000, 7000),
+    i = unknown_date_rate,
+    t = c(1, 4)
+  )
+
+unknown_date <-
+  solve_value(
+    fn = present_value,
+    solve_for = "t",
+    target = obligations_present_value,
+    args = list(
+      C = replacement_amount,
+      i = unknown_date_rate
+    ),
+    interval = c(3, 4),
+    method = "uniroot"
+  )
+
+unknown_date
+```
+
+`solve_value()` solves a scalar parameter after the financial equation has already been identified. It should not be used merely because something in the problem is unknown.
+
+## From arbitrary cash flows to annuities
+
+A level annuity is not a different valuation principle. It is a regular cash-flow stream.
+
+Suppose a payment $R$ is made at the end of each period for $n$ periods. The payments occur at
+
+$$
+1,2,\ldots,n.
+$$
+
+With $v=(1+i)^{-1}$, the present value is
+
+$$
+PV
+=
+Rv
++
+Rv^2
++
+\cdots
++
+Rv^n.
+$$
+
+Factoring $R$,
+
+$$
+PV
+=
+R
+\left(
+v+v^2+\cdots+v^n
+\right).
+$$
+
+The geometric sum gives
+
+$$
+\boxed{
+a_{\overline{n}|i}
+=
+\frac{1-v^n}{i}
+}.
+$$
+
+Therefore,
+
+$$
+\boxed{
+PV
+=
+R\,a_{\overline{n}|i}
+}.
+$$
+
+The annuity factor is the present value of unit payments. The monetary value is obtained only after multiplying by the payment amount.
+
+## Immediate and due annuities
+
+Consider level payments of 1,000 at the end of each year for 10 years at an annual effective rate of $5\%$.
+
+For an annuity-immediate,
+
+$$
+a_{\overline{10}|0.05}
+=
+\frac{
+1-(1.05)^{-10}
+}{
+0.05
+}
+\approx
+7.721735.
+$$
+
+Thus,
+
+$$
+PV
+\approx
+1000(7.721735)
+=
+7721.73.
+$$
+
+```{r annuity-immediate}
+level_payment <- 1000
+annuity_term <- 10
+annuity_rate <- 0.05
+
+immediate_factor <-
+  a_angle(
+    n = annuity_term,
+    i = annuity_rate,
+    i_type = "effective",
+    timing = "immediate"
+  )
+
+immediate_present_value <-
+  level_payment *
+  immediate_factor
+
+immediate_present_value
+```
+
+If payments occur at the beginning of each period, every payment is shifted one period earlier. Therefore,
+
+$$
+\ddot{a}_{\overline{n}|i}
+=
+(1+i)
+a_{\overline{n}|i}.
+$$
+
+For the same example,
+
+$$
+\ddot{a}_{\overline{10}|0.05}
+\approx
+8.107822.
+$$
+
+```{r annuity-due}
+due_factor <-
+  a_angle(
+    n = annuity_term,
+    i = annuity_rate,
+    i_type = "effective",
+    timing = "due"
+  )
+
+due_present_value <-
+  level_payment *
+  due_factor
+
+tibble::tibble(
+  timing = c(
+    "Immediate",
+    "Due"
+  ),
+  factor = c(
+    immediate_factor,
+    due_factor
+  ),
+  present_value = c(
+    immediate_present_value,
+    due_present_value
+  )
+)
+```
+
+The difference between the two annuities is not a change of formula by convention alone. It comes from the location of the payments in time.
+
+## Accumulated values of level annuities
+
+Changing the focal date changes the valuation, not the underlying payment stream.
+
+For an annuity-immediate, the accumulated value at time $n$ is
+
+$$
+s_{\overline{n}|i}
+=
+1+(1+i)+\cdots+(1+i)^{n-1}.
+$$
+
+Hence,
+
+$$
+\boxed{
+s_{\overline{n}|i}
+=
+\frac{
+(1+i)^n-1
+}{
+i
+}
+}.
+$$
+
+Also,
+
+$$
+s_{\overline{n}|i}
+=
+(1+i)^n
+a_{\overline{n}|i}.
+$$
+
+For the previous 10-year annuity,
+
+```{r accumulated-annuity}
+immediate_accumulation_factor <-
+  s_angle(
+    n = annuity_term,
+    i = annuity_rate,
+    i_type = "effective",
+    timing = "immediate"
+  )
+
+immediate_accumulated_value <-
+  level_payment *
+  immediate_accumulation_factor
+
+present_value_accumulated <-
+  future_value(
+    C = immediate_present_value,
+    i = annuity_rate,
+    t = annuity_term
+  )
+
+tibble::tibble(
+  route = c(
+    "s_angle()",
+    "Present value accumulated"
+  ),
+  accumulated_value = c(
+    immediate_accumulated_value,
+    present_value_accumulated
+  )
+)
+```
+
+The two routes must coincide because they value the same payment stream at the same focal date.
+
+## Final financial reading
+
+The topics developed here are connected by a single idea: financial equivalence across time.
+
+A financial law determines how values move between dates,
+
+$$
+A(s,t)
+=
+\frac{a(t)}{a(s)}.
+$$
+
+Present and future values apply that law to individual monetary amounts. Equations of value extend the same reasoning to several cash flows. General cash-flow functions preserve the structure when payments are irregular, while annuity factors exploit the additional regularity of equal periodic payments.
+
+The progression can be summarized as
+
+$$
+\text{financial law}
+\longrightarrow
+\text{single payment}
+\longrightarrow
+\text{equation of value}
+\longrightarrow
+\text{general cash flow}
+\longrightarrow
+\text{annuity}.
+$$
+
+A regular annuity is therefore not a separate valuation principle. It is a structured cash-flow stream evaluated under the same financial law.
+
+Throughout the vignette, `tidyactuarial` is used after the mathematical structure has been established. The package standardizes rate conventions, moves payments through time, values arbitrary cash flows, solves scalar financial parameters, and evaluates annuity factors without replacing the equations that give those calculations their meaning.

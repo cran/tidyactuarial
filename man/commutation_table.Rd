@@ -25,24 +25,25 @@ for \code{i_type = "effective"} and \code{i_type = "force"}.}
 }
 \value{
 A tibble with columns \code{x}, \code{lx}, \code{dx}, \code{v},
-\code{Dx}, \code{Nx}, \code{Sx}, \code{Cx}, \code{Mx}, and \code{Rx}.
+  \code{Dx}, \code{Nx}, \code{Sx}, \code{Cx}, \code{Mx}, and \code{Rx}.
 }
 \description{
 The function builds annual commutation columns from \code{x}, \code{lx}, and
 an interest-rate specification. The interest rate is converted internally to
-an annual effective rate before constructing the discount factor.
+an original log accumulation rate before forming discounted products.
 }
 \details{
 Constructs classical annual commutation functions \eqn{D_x}, \eqn{N_x},
 \eqn{S_x}, \eqn{C_x}, \eqn{M_x}, and \eqn{R_x} from a life table defined
 at integer ages, using compact actuarial notation.
 
+
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{lt} is the life table, \code{i} is the
 interest-rate input, \code{i_type} is the interest-rate type, and \code{m}
 is the conversion frequency for nominal rates.
 
-The annual effective rate is obtained through \code{\link{standardize_interest}}.
+The rate specification is validated through \code{\link{standardize_interest}}.
 If \eqn{i_e} denotes the annual effective rate, then
 \deqn{v = \frac{1}{1+i_e}.}
 
@@ -51,7 +52,11 @@ The annual deaths are computed as
 closing the table with \eqn{l_{\omega+1}=0}. The main commutation functions
 are then computed as
 \deqn{D_x = v^x l_x, \qquad C_x = v^{x+1} d_x,}
-with reverse cumulative sums used to obtain \eqn{N_x}, \eqn{S_x},
+Discounted products retain the original log accumulation rate to avoid
+intermediate factor overflow or underflow. This constructor always closes
+the terminal count, including when the input carries open-table metadata.
+The horizon is therefore different from the truncated integral in \code{e_x}.
+Reverse cumulative sums are used to obtain \eqn{N_x}, \eqn{S_x},
 \eqn{M_x}, and \eqn{R_x}.
 }
 \examples{

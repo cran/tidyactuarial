@@ -25,7 +25,8 @@
 #'   Allowed values are \code{"effective"}, \code{"nominal_interest"},
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param m Positive integer vector giving the conversion frequency for nominal
-#'   rates. Ignored for \code{"effective"} and \code{"force"}.
+#'   rates. Observed values are validated as positive integers for all rate
+#'   families; only nominal conversions use their numeric value.
 #' @param t Numeric vector of times in years from valuation to accumulation.
 #' @param tidy Logical scalar. If \code{FALSE}, returns a numeric future value.
 #'   If \code{TRUE}, returns a tibble with intermediate calculations.
@@ -37,6 +38,12 @@
 #' accumulation factors, and future values.
 #'
 #' @details
+#' Valuation retains the log accumulation rate of the original specification.
+#' In tidy output, an extreme annual equivalent can round to -1 or overflow
+#' to Inf while the requested accumulation factor remains representable.
+#' Capital-factor products use log space when a separate factor loses range
+#' or precision. The product can be representable even when the factor is not.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{C} denotes the initial payment amount or capital,
 #' \code{t} denotes time, \code{i} denotes the interest-rate input,
@@ -173,16 +180,9 @@ future_value <- function(
   }
 
   # --- Compute equivalent rates ---
-  i_effective <- standardize_interest(i_type = i_type, i = i, m = m)
-
-  if (any(!is.na(i_effective) & (!is.finite(i_effective) | i_effective <= -1))) {
-    stop(
-      "The standardized annual effective interest rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  accumulation_factor <- (1 + i_effective)^t
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  i_effective <- basis$effective
+  accumulation_factor <- exp(t * basis$growth)
 
   future_value_out <- rep(NA_real_, size)
 
@@ -190,7 +190,7 @@ future_value <- function(
     !is.na(t) &
     !is.na(i_effective)
 
-  future_value_out[ok] <- C[ok] * accumulation_factor[ok]
+  future_value_out[ok] <- .cash_flow_value(C[ok], t[ok] * basis$growth[ok])
 
   if (!tidy) {
     return(future_value_out)

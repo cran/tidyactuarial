@@ -35,7 +35,9 @@
 #'   Newton--Raphson only when no bracket is found and `start` is available.
 #' @param multiple Character scalar controlling multiple roots found inside the
 #'   interval: `"error"`, `"all"`, or `"first"`.
-#' @param tol Positive numeric scalar. Convergence and residual tolerance.
+#' @param tol Positive finite numeric scalar controlling unknown-coordinate
+#'   precision: passed to `uniroot`, used relatively for Newton corrections,
+#'   and used when identifying duplicate roots.
 #' @param maxiter Positive integer. Maximum number of iterations.
 #' @param scan_points Positive integer. Number of points used to detect sign
 #'   changes and possible multiple roots.
@@ -44,6 +46,8 @@
 #'   initially. An interval supplied explicitly by the user is never expanded.
 #' @param output Character scalar. One of `"value"`, `"summary"`, or
 #'   `"audit"`.
+#' @param residual_tol Positive finite numeric scalar. Absolute residual
+#'   tolerance in the units of the selected result of `fn`. Defaults to `tol`.
 #'
 #' @return
 #' Depending on `output`:
@@ -56,6 +60,31 @@
 #' }
 #'
 #' @details
+#' Newton iteration accepts an exact zero immediately. Otherwise, convergence
+#' requires both a small residual and a small Newton correction relative to
+#' the unknown: \code{abs(dx) <= tol * max(1, abs(x))}. The residual must
+#' satisfy \code{abs(achieved - target) <= residual_tol}.
+#' A nonzero derivative is not rejected merely
+#' because its units make its absolute magnitude small. A step clipped to an
+#' interval boundary does not by itself demonstrate convergence.
+#'
+#' The audit field `converged` requires successful solver termination and the
+#' explicit residual tolerance, without a hidden numerical floor. Exhausting
+#' `uniroot` iterations is an error. A bracketed approximation can satisfy
+#' coordinate precision while failing residual precision; `"value"` and
+#' `"summary"` still return that candidate, so use `"audit"` to inspect this
+#' distinction. Newton retains its error when it cannot meet both criteria.
+#'
+#' When changing the units of `fn` and `target` by a positive factor, scale
+#' `residual_tol` by the same factor and retain `tol`. For example, a root in
+#' years with a value in currency has a temporal coordinate tolerance and a
+#' monetary residual tolerance. No automatic scale is inferred from `target`.
+#'
+#' During interval scanning, only exact computed zeros are accepted directly
+#' as grid roots. Other candidates require a sign-changing bracket and are
+#' refined numerically. A small residual alone does not establish a root;
+#' tangential roots may require an appropriate Newton starting value.
+#'
 #' `solve_value()` is restricted to one scalar unknown. It is appropriate for
 #' quantities such as an effective interest rate, a payment, a principal, a
 #' present value, or another continuous scalar parameter.
@@ -115,6 +144,13 @@
 #'   method = "newton"
 #' )
 #'
+#' # A term in years, allowing one cent of monetary residual
+#' solve_value(
+#'   fn = function(t) 1000 * 1.05^t,
+#'   solve_for = "t", target = 1500, interval = c(0, 20),
+#'   tol = 1e-10, residual_tol = 0.01, output = "audit"
+#' )
+#'
 #' @export
 solve_value <- function(
     fn,
@@ -131,7 +167,8 @@ solve_value <- function(
     maxiter = 1000L,
     scan_points = 401L,
     max_expand = 6L,
-    output = c("value", "summary", "audit")
+    output = c("value", "summary", "audit"),
+    residual_tol = tol
 ) {
   method <- match.arg(method)
   multiple <- match.arg(multiple)
@@ -207,6 +244,10 @@ solve_value <- function(
   if (!is.numeric(tol) || length(tol) != 1L || is.na(tol) ||
       !is.finite(tol) || tol <= 0) {
     stop("`tol` must be a single finite positive number.", call. = FALSE)
+  }
+  if (!is.numeric(residual_tol) || length(residual_tol) != 1L ||
+      is.na(residual_tol) || !is.finite(residual_tol) || residual_tol <= 0) {
+    stop("`residual_tol` must be a single finite positive number.", call. = FALSE)
   }
 
   .validate_positive_integer <- function(x, name, allow_zero = FALSE) {
@@ -372,14 +413,14 @@ solve_value <- function(
     values <- vapply(grid, .safe_residual, numeric(1))
     finite <- is.finite(values)
 
-    exact_idx <- which(finite & abs(values) <= tol)
+    exact_idx <- which(finite & values == 0)
     exact_roots <- grid[exact_idx]
 
     brackets <- list()
     if (length(grid) >= 2L) {
       for (j in seq_len(length(grid) - 1L)) {
         if (!finite[j] || !finite[j + 1L]) next
-        if (abs(values[j]) <= tol || abs(values[j + 1L]) <= tol) next
+        if (values[j] == 0 || values[j + 1L] == 0) next
         if (sign(values[j]) != sign(values[j + 1L])) {
           brackets[[length(brackets) + 1L]] <- c(grid[j], grid[j + 1L])
         }
@@ -444,7 +485,7 @@ solve_value <- function(
 
     for (iteration in seq_len(maxiter)) {
       fx <- .residual(x)
-      if (abs(fx) <= tol) {
+      if (fx == 0) {
         return(list(root = x, residual = fx, iter = iteration - 1L, converged = TRUE))
       }
 
@@ -459,11 +500,15 @@ solve_value <- function(
       }
 
       if (!is.numeric(dfx) || length(dfx) != 1L || !is.finite(dfx) ||
-          abs(dfx) <= sqrt(.Machine$double.eps)) {
+          dfx == 0) {
         return(list(root = x, residual = fx, iter = iteration, converged = FALSE))
       }
 
       step <- fx / dfx
+      if (is.finite(step) && abs(step) <= tol * max(1, abs(x)) &&
+          abs(fx) <= residual_tol) {
+        return(list(root = x, residual = fx, iter = iteration - 1L, converged = TRUE))
+      }
       candidate <- x - step
 
       if (!is.finite(candidate)) {
@@ -488,13 +533,18 @@ solve_value <- function(
       }
 
       if (abs(candidate - x) <= tol * max(1, abs(x)) &&
-          abs(candidate_residual) <= sqrt(tol)) {
+          abs(step) <= tol * max(1, abs(x)) &&
+          abs(candidate_residual) <= residual_tol) {
         return(list(
           root = candidate,
           residual = candidate_residual,
           iter = iteration,
           converged = TRUE
         ))
+      }
+
+      if (candidate == x) {
+        return(list(root = x, residual = fx, iter = iteration, converged = FALSE))
       }
 
       x <- candidate
@@ -523,7 +573,8 @@ solve_value <- function(
           f = .residual,
           interval = bracket,
           tol = tol,
-          maxiter = maxiter
+          maxiter = maxiter,
+          check.conv = TRUE
         )
         list(root = root$root, iter = root$iter)
       })
@@ -640,7 +691,7 @@ solve_value <- function(
     achieved = achieved,
     residual = residuals,
     method = method_for_root,
-    converged = abs(residuals) <= max(tol, sqrt(.Machine$double.eps)),
+    converged = abs(residuals) <= residual_tol,
     n_iter = iter_for_root,
     interval_left = bounds_used[1L],
     interval_right = bounds_used[2L],

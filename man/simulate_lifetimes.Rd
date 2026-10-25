@@ -73,6 +73,9 @@ for ages with positive exposure. A terminal zero in \code{lx} therefore
 generates the appropriate terminal \code{qx = 1}. If the final available
 \code{lx} remains positive, the resulting distribution is recognized as
 truncated and handled according to \code{truncation}.
+Positive exposure means \code{lx > 0}, independently of the table radix.
+Death probabilities use the direct decrement \eqn{(l_y-l_{y+1})/l_y},
+avoiding loss from subtracting a rounded survival ratio from one.
 
 Conditional on the supplied life table, the simulated lives are independent.
 A single seed is set once for the entire call; the seed is not reset for each
@@ -96,17 +99,17 @@ simulate_lifetimes(
 }
 \seealso{
 \code{\link{simulate_lifetime}},
-\code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
-\code{\link{mc_annuity}}, \code{\link{mc_reserve}}
+  \code{\link{mc_multilife_status}}, \code{\link{mc_insurance}},
+  \code{\link{mc_annuity}}, \code{\link{mc_reserve}}
 
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_loss}()},
-\code{\link{mc_multilife_status}()},
-\code{\link{mc_premium}()},
-\code{\link{mc_reserve}()},
-\code{\link{simulate_lifetime}()},
-\code{\link{summary_mc}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_loss]{mc_loss()}},
+\code{\link[=mc_multilife_status]{mc_multilife_status()}},
+\code{\link[=mc_premium]{mc_premium()}},
+\code{\link[=mc_reserve]{mc_reserve()}},
+\code{\link[=simulate_lifetime]{simulate_lifetime()}},
+\code{\link[=summary_mc]{summary_mc()}}
 }
 \concept{monte-carlo}

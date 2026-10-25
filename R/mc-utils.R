@@ -140,6 +140,29 @@
   invisible(TRUE)
 }
 
+# Validate the selected representations of one simulated lifetime. Missing
+# values remain available to each caller's existing propagation rules.
+.mc_validate_lifetimes <- function(K, T) {
+  observed_K <- !is.na(K)
+  observed_T <- !is.na(T)
+  if (any(!is.finite(K[observed_K])) ||
+      any(K[observed_K] < 0) ||
+      any(K[observed_K] != floor(K[observed_K]))) {
+    stop("Curtate lifetimes must be finite nonnegative integers or missing.",
+         call. = FALSE)
+  }
+  if (any(!is.finite(T[observed_T])) || any(T[observed_T] < 0)) {
+    stop("Complete lifetimes must be finite nonnegative numbers or missing.",
+         call. = FALSE)
+  }
+  paired <- observed_K & observed_T
+  if (any(T[paired] < K[paired] | T[paired] >= K[paired] + 1)) {
+    stop("Observed lifetimes must satisfy K <= T < K + 1 for the same life.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 
 #' Internal helper: normalize Monte Carlo interest-rate type
 #'
@@ -437,5 +460,37 @@
   }
 
   quantile_names
+}
+
+# Monetary product value * numerator / denominator, with optional frequency
+# conversion. Preserve ordinary arithmetic; recover only lost intermediate range.
+.mc_ratio_product <- function(value, numerator, denominator, divisor = 1,
+                              multiplier = 1,
+                              log_ratio = log(numerator) - log(denominator)) {
+  ratio <- numerator / divisor / denominator
+  out <- ratio * value * multiplier
+  if (!length(out)) return(out)
+  value <- rep_len(value, length(out))
+  log_factor <- rep_len(log_ratio - log(divisor) + log(multiplier), length(out))
+  known <- is.finite(value) & !is.na(log_factor)
+  zero <- known & (value == 0 | log_factor == -Inf)
+  out[zero] <- 0
+  recover <- known & !zero &
+    (!is.finite(out) | out == 0 |
+       abs(rep_len(ratio, length(out))) < .Machine$double.xmin |
+       abs(rep_len(numerator / divisor, length(out))) < .Machine$double.xmin |
+       abs(ratio * value) < .Machine$double.xmin)
+  if (any(recover)) {
+    # An exact common scale often cancels here, without log roundoff.
+    relative <- value / denominator
+    alternate <- relative * (numerator / divisor) * multiplier
+    stable <- recover & is.finite(alternate) & alternate != 0 &
+      is.finite(relative) & abs(relative) >= .Machine$double.xmin &
+      is.finite(numerator / divisor) & abs(numerator / divisor) >= .Machine$double.xmin
+    out[stable] <- alternate[stable]
+    remaining <- recover & !stable
+    out[remaining] <- .cash_flow_value(value[remaining], log_factor[remaining])
+  }
+  out
 }
 

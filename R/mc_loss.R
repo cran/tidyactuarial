@@ -75,8 +75,20 @@
 #' \qquad
 #' P^{(k)} = k q c.
 #' }
+#' For annualized or per-payment inputs, monetary income retains the original
+#' premium amount and frequency until it is combined with the annuity present
+#' value. This avoids losing a representable income when an intermediate
+#' annuity-scale coefficient underflows or overflows. Displayed converted
+#' amounts may still be zero or infinite if they themselves do not fit in
+#' double precision. An explicitly supplied annuity-scale coefficient is used
+#' as supplied; a rounded zero or nonfinite coefficient cannot reconstruct
+#' information that has already been lost. Select a representable monetary
+#' premium column when passing extreme results from \code{\link{mc_premium}}.
+#' Positive infinite annualized annuity-basis metadata are accepted only when
+#' they agree with the product of the finite per-payment basis and frequency;
+#' they cannot be used alone to infer the payment basis.
 #'
-#' @return A tibble containing the original simulation and standardized columns:
+#' @return A data frame or tibble containing the original simulation and standardized columns:
 #' \describe{
 #'   \item{premium_annualized}{Annualized premium \eqn{P^{(k)}}.}
 #'   \item{premium_per_payment}{Amount collected at each premium date.}
@@ -276,7 +288,7 @@ mc_loss <- function(
   Z <- .data[[col_Z]]
   Y <- .data[[col_Y]]
 
-  constant_column <- function(column, label) {
+  constant_column <- function(column, label, allow_inf = FALSE) {
     values <- .data[[column]]
 
     if (!is.numeric(values)) {
@@ -285,7 +297,8 @@ mc_loss <- function(
 
     observed <- unique(values[!is.na(values)])
 
-    if (length(observed) != 1L || !is.finite(observed[[1L]])) {
+    if (length(observed) != 1L ||
+        (!is.finite(observed[[1L]]) && !(allow_inf && observed[[1L]] == Inf))) {
       stop(
         "`", column, "` must contain one constant finite value for the ",
         "simulated contract.",
@@ -342,7 +355,7 @@ mc_loss <- function(
     stop("`k` must be a single positive integer.", call. = FALSE)
   }
 
-  k <- as.integer(round(k))
+  k <- if (k <= .Machine$integer.max) as.integer(round(k)) else round(k)
 
   payment_from_data <- NULL
 
@@ -398,11 +411,13 @@ mc_loss <- function(
   if ("payment_annualized" %in% names(.data)) {
     annualized_basis <- constant_column(
       "payment_annualized",
-      "payment_annualized"
+      "payment_annualized", allow_inf = TRUE
     )
 
-    if (abs(annualized_basis - k * annuity_payment) >
-        tol * max(1, abs(annualized_basis))) {
+    expected_basis <- k * annuity_payment
+    if (annualized_basis != expected_basis &&
+        (!is.finite(annualized_basis) || !is.finite(expected_basis) ||
+         abs(annualized_basis - expected_basis) > tol * max(1, abs(annualized_basis)))) {
       stop(
         "`payment_annualized` is inconsistent with ",
         "`k * annuity_payment`.",
@@ -473,22 +488,23 @@ mc_loss <- function(
   if (identical(resolved_unit, "annualized")) {
     premium_annualized <- premium_input
     premium_per_payment <- premium_annualized / k
-    premium_annuity_scale <-
-      premium_per_payment / annuity_payment
+    premium_annuity_scale <- .mc_ratio_product(1, premium_input, annuity_payment, divisor = k)
+    pv_premiums <- .mc_ratio_product(Y, premium_input, annuity_payment, divisor = k)
   } else if (identical(resolved_unit, "per_payment")) {
     premium_per_payment <- premium_input
     premium_annualized <- k * premium_per_payment
     premium_annuity_scale <-
       premium_per_payment / annuity_payment
+    pv_premiums <- .mc_ratio_product(Y, premium_input, annuity_payment)
   } else {
     premium_annuity_scale <- premium_input
     premium_per_payment <-
       premium_annuity_scale * annuity_payment
-    premium_annualized <-
-      k * premium_per_payment
+    premium_annualized <- .mc_ratio_product(annuity_payment, premium_input, 1,
+                                           multiplier = k)
+    pv_premiums <- premium_annuity_scale * Y
   }
 
-  pv_premiums <- premium_annuity_scale * Y
   L <- Z - pv_premiums
 
   reserved_loss_names <- c(

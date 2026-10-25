@@ -11,13 +11,13 @@
 
 \item{to}{Numeric scalar. Last payment time.}
 
-\item{by}{Numeric scalar. Step between payment times. Default is \code{1}.}
+\item{by}{Numeric scalar. Step between payment times. Default is `1`.}
 }
 \value{
 Numeric vector.
 }
 \description{
 Creates a sequence of payment times. If the upper bound is smaller than the
-lower bound, it returns \code{numeric(0)}.
+lower bound, it returns `numeric(0)`.
 }
 \keyword{internal}

@@ -53,9 +53,9 @@ proportions remain constant:
 
 Supported fractional-age assumptions for the total decrement:
 \itemize{
-\item \code{"UDD"}: \eqn{{}_s q_x^{(\tau)} = s q_x^{(\tau)}}.
-\item \code{"CF"}:  \eqn{{}_s p_x^{(\tau)} = (p_x^{(\tau)})^s}.
-\item \code{"Balducci"}: \eqn{{}_s q_x^{(\tau)} = \frac{s q_x^{(\tau)}}{1-(1-s)q_x^{(\tau)}}}.
+  \item \code{"UDD"}: \eqn{{}_s q_x^{(\tau)} = s q_x^{(\tau)}}.
+  \item \code{"CF"}:  \eqn{{}_s p_x^{(\tau)} = (p_x^{(\tau)})^s}.
+  \item \code{"Balducci"}: \eqn{{}_s q_x^{(\tau)} = \frac{s q_x^{(\tau)}}{1-(1-s)q_x^{(\tau)}}}.
 }
 }
 \examples{

@@ -16,16 +16,16 @@
 \item{i}{Numeric scalar. Interest-rate input.}
 
 \item{i_type}{Character string. Interest-rate convention. One of
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.
-The legacy value \code{"nominal"} is accepted internally and treated as
-\code{"nominal_interest"}.}
+`"effective"`, `"nominal_interest"`, `"nominal_discount"`, or `"force"`.
+The legacy value `"nominal"` is accepted internally and treated as
+`"nominal_interest"`.}
 
 \item{m}{Numeric scalar. Number of interest conversion periods per year for
-nominal annual rates. Default is \code{1}.}
+nominal annual rates. Default is `1`.}
 
-\item{rate}{Deprecated internal alias for \code{i}.}
+\item{rate}{Deprecated internal alias for `i`.}
 
-\item{interest_type}{Deprecated internal alias for \code{i_type}.}
+\item{interest_type}{Deprecated internal alias for `i_type`.}
 }
 \value{
 Numeric scalar with the annual discount factor.

@@ -17,8 +17,8 @@
 #'   \item If \code{y_effective_per_period} is supplied, it is interpreted as the
 #'         effective yield per coupon period.
 #'   \item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
-#'         yield specification, which is converted first to annual effective
-#'         yield and then to effective yield per coupon period.
+#'         yield specification. Calculations retain its original log growth;
+#'         reported effective equivalents remain subject to numeric range.
 #' }
 #'
 #' @param face Numeric scalar. Face value of the bond.
@@ -34,7 +34,8 @@
 #' @param y_m Positive integer. Conversion frequency for nominal annual yields.
 #' @param R Numeric scalar. Redemption value at maturity. If \code{NULL},
 #'   defaults to \code{face}.
-#' @param tol Numeric scalar. Tolerance used to check maturity alignment.
+#' @param tol Finite positive numeric scalar. Tolerance used to check maturity
+#'   alignment with integer coupon periods, not a monetary price threshold.
 #' @param check Logical scalar. If \code{TRUE}, performs input validation.
 #'
 #' @return A one-row tibble with:
@@ -64,10 +65,21 @@
 #' \frac{\sum_{r=1}^{N} C_r r(r+1) v^r}{(1+j)^2}.}
 #'
 #' Discrete convexity in years is \eqn{C_p / k^2}.
+#' This is sensitivity to the nominal annual yield \eqn{z=kj}; it is
+#' generally not the relative second derivative with respect to the annual
+#' effective yield \eqn{i=(1+j)^k-1}. Before passing convexity to
+#' \code{immunize_duration_convexity()}, apply the chain rule described
+#' there or compute \code{convexity_cash_flow()} from annual cash-flow times.
 #'
 #' This is the second-order sensitivity of the bond price to changes in the
 #' yield per period. Together with \code{\link{bond_duration}}, it is used in
 #' the second-order Taylor approximation of price changes.
+#' Prices use original log yields and moments use relative present values,
+#' avoiding monetary numerator overflow. Nonzero-term bonds require a positive
+#' finite price and finite risk measures; changing currency alone does not
+#' create an undefined sensitivity. Reported equivalent yields may reach -1 or
+#' Inf by rounding while the original specification remains usable. At zero
+#' term, the existing convention returns immediate redemption and zero risk.
 #'
 #' @seealso \code{\link{bond_duration}}, \code{\link{bond_price}},
 #'   \code{\link{bond_cash_flows}}, \code{\link{bond_book_value}},
@@ -122,15 +134,8 @@ bond_convexity <- function(
   k <- as.integer(round(k))
   y_m <- as.integer(round(y_m))
 
-  N_raw <- n * k
-  if (abs(N_raw - round(N_raw)) > tol) {
-    stop(
-      "`n * k` must be an integer ",
-      "(stub periods are not supported).",
-      call. = FALSE
-    )
-  }
-  N <- as.integer(round(N_raw))
+  cf_tbl <- bond_cash_flows(face, c, n, k, R, tol, check = FALSE)
+  N <- max(cf_tbl$period)
 
   if (N == 0L) {
     return(tibble::tibble(
@@ -155,44 +160,27 @@ bond_convexity <- function(
   j <- yield$ip
   i_annual <- yield$i_annual
 
-  # Extra robustness: validate derived yield
-  if (!is.finite(i_annual) || i_annual <= -1) {
-    stop("Derived annual effective yield is invalid (<= -1).", call. = FALSE)
+  if (length(yield$log_period) != 1L || !is.finite(yield$log_period)) {
+    stop("Derived log yield per period must be finite.", call. = FALSE)
   }
-  if (!is.finite(j) || j <= -1) {
-    stop("Derived yield per period is invalid (<= -1).", call. = FALSE)
-  }
-
-  cf_tbl <- bond_cash_flows(
-    face = face,
-    c = c,
-    n = n,
-    k = k,
-    R = R,
-    tol = tol,
-    check = FALSE
-  )
-
-  period_raw <- cf_tbl$t * k
-  if (any(abs(period_raw - round(period_raw)) > tol)) {
-    stop("Internal error: coupon times are not aligned with coupon periods.", call. = FALSE)
-  }
-  period <- as.integer(round(period_raw))
-
-  v <- 1 / (1 + j)
-  pv <- cf_tbl$cf * v^period
+  period <- cf_tbl$period
+  pv <- .cash_flow_value(cf_tbl$cf, -period * yield$log_period)
   price <- sum(pv)
 
-  if (!is.finite(price) || abs(price) <= tol) {
+  if (!is.finite(price) || price <= 0) {
     stop(
-      "Bond price is zero or numerically indistinguishable from zero; convexity is undefined.",
+      "Bond price is zero or non-finite; convexity is undefined.",
       call. = FALSE
     )
   }
 
-  numer <- sum(cf_tbl$cf * period * (period + 1) * v^period)
-  discrete_convexity_periods <- (numer / price) / (1 + j)^2
-  discrete_convexity_years <- discrete_convexity_periods / (k^2)
+  moment <- sum((pv / price) * as.double(period) * (period + 1))
+  discrete_convexity_periods <- .cash_flow_value(moment, -2 * yield$log_period)
+  discrete_convexity_years <- .cash_flow_value(
+    moment, -2 * yield$log_period - 2 * log(k))
+  if (any(!is.finite(c(discrete_convexity_periods, discrete_convexity_years)))) {
+    stop("Convexity measures are non-finite; check the yield and term.", call. = FALSE)
+  }
 
   tibble::tibble(
     price = price,

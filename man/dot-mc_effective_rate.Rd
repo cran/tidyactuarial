@@ -16,16 +16,16 @@
 \item{i}{Numeric scalar. Interest-rate input.}
 
 \item{i_type}{Character string. Interest-rate convention. One of
-\code{"effective"}, \code{"nominal_interest"}, \code{"nominal_discount"}, or \code{"force"}.
-The legacy value \code{"nominal"} is accepted internally and treated as
-\code{"nominal_interest"}.}
+`"effective"`, `"nominal_interest"`, `"nominal_discount"`, or `"force"`.
+The legacy value `"nominal"` is accepted internally and treated as
+`"nominal_interest"`.}
 
 \item{m}{Numeric scalar. Number of interest conversion periods per year for
-nominal annual rates. Default is \code{1}.}
+nominal annual rates. Default is `1`.}
 
-\item{rate}{Deprecated internal alias for \code{i}.}
+\item{rate}{Deprecated internal alias for `i`.}
 
-\item{interest_type}{Deprecated internal alias for \code{i_type}.}
+\item{interest_type}{Deprecated internal alias for `i_type`.}
 }
 \value{
 Numeric scalar with the equivalent annual effective interest rate.
@@ -36,13 +36,13 @@ an equivalent annual effective interest rate.
 }
 \details{
 This helper follows the compact actuarial notation used throughout
-\code{tidyactuarial}: \code{i} is the interest-rate input, \code{i_type} is the
-interest-rate type, and \code{m} is the conversion frequency for nominal rates.
+`tidyactuarial`: `i` is the interest-rate input, `i_type` is the
+interest-rate type, and `m` is the conversion frequency for nominal rates.
 
-The argument \code{m} is used only to convert nominal annual rates into equivalent
+The argument `m` is used only to convert nominal annual rates into equivalent
 annual effective rates. It does not represent annuity payment frequency.
 
 Transitional compatibility is intentionally retained for older internal Monte
-Carlo calls using \verb{rate =} and \verb{interest_type =}.
+Carlo calls using `rate =` and `interest_type =`.
 }
 \keyword{internal}

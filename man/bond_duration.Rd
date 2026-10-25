@@ -41,24 +41,25 @@ or \code{"force"}.}
 \item{R}{Numeric scalar. Redemption value at maturity. If \code{NULL},
 defaults to \code{face}.}
 
-\item{tol}{Numeric scalar. Tolerance used to check maturity alignment.}
+\item{tol}{Finite positive numeric scalar. Tolerance used to check maturity
+alignment with integer coupon periods, not a monetary price threshold.}
 
 \item{check}{Logical scalar. If \code{TRUE}, performs input validation.}
 }
 \value{
 A one-row tibble with:
 \describe{
-\item{price}{Dirty price at the given yield.}
-\item{macaulay_duration_periods}{Macaulay duration in coupon periods.}
-\item{macaulay_duration_years}{Macaulay duration in years.}
-\item{modified_duration_periods_j}{Modified duration with respect to the
-effective yield per coupon period, expressed in coupon periods.}
-\item{modified_duration_years_i}{Modified duration with respect to the
-annual effective yield, expressed in years.}
-\item{yield_per_period}{Effective yield per coupon period.}
-\item{yield_effective_annual}{Annual effective yield.}
-\item{k}{Coupon frequency.}
-\item{n_periods}{Total number of coupon periods.}
+  \item{price}{Dirty price at the given yield.}
+  \item{macaulay_duration_periods}{Macaulay duration in coupon periods.}
+  \item{macaulay_duration_years}{Macaulay duration in years.}
+  \item{modified_duration_periods_j}{Modified duration with respect to the
+  effective yield per coupon period, expressed in coupon periods.}
+  \item{modified_duration_years_i}{Modified duration with respect to the
+  annual effective yield, expressed in years.}
+  \item{yield_per_period}{Effective yield per coupon period.}
+  \item{yield_effective_annual}{Annual effective yield.}
+  \item{k}{Coupon frequency.}
+  \item{n_periods}{Total number of coupon periods.}
 }
 }
 \description{
@@ -69,21 +70,22 @@ actuarial notation.
 \details{
 Assumptions:
 \itemize{
-\item Coupons are paid in arrears at regular intervals.
-\item \code{n * k} must be an integer.
-\item Stub periods are not supported.
-\item Valuation is at a coupon date with no accrued interest.
-\item A single flat yield is used to discount all cash flows.
+  \item Coupons are paid in arrears at regular intervals.
+  \item \code{n * k} must be an integer.
+  \item Stub periods are not supported.
+  \item Valuation is at a coupon date with no accrued interest.
+  \item A single flat yield is used to discount all cash flows.
 }
 
 Yield input conventions:
 \itemize{
-\item If \code{y_effective_per_period} is supplied, it is interpreted as the
-effective yield per coupon period.
-\item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
-yield specification, which is converted first to annual effective
-yield and then to effective yield per coupon period.
+  \item If \code{y_effective_per_period} is supplied, it is interpreted as the
+        effective yield per coupon period.
+  \item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
+        yield specification. Calculations retain its original log growth;
+        reported effective equivalents remain subject to numeric range.
 }
+
 
 This function follows the compact bond notation used in
 \code{tidyactuarial}: \code{face} is the face value, \code{c} is the annual
@@ -112,6 +114,15 @@ years, is \eqn{D^*_i = D / (1 + i)}, where
 Modified duration measures the first-order sensitivity of the bond price to
 yield changes. Together with \code{\link{bond_convexity}}, it forms the
 second-order Taylor approximation of price changes.
+The two coefficients must use the same yield coordinate: pair
+\code{modified_duration_periods_j} with the period convexity for changes
+in \eqn{j}. Annual effective duration requires annual effective convexity,
+obtained using the chain rule or \code{convexity_cash_flow()} on year times.
+Prices use original log yields and moments use relative present values.
+Nonzero-term bonds require a positive finite price and finite risk measures;
+calendar tolerance does not define a monetary zero. Reported equivalent
+yields may reach -1 or Inf by rounding while the specification remains usable.
+At zero term, immediate redemption and zero risk follow the existing convention.
 }
 \examples{
 bond_duration(
@@ -134,16 +145,17 @@ bond_duration(
 }
 \seealso{
 \code{\link{bond_convexity}}, \code{\link{bond_price}},
-\code{\link{bond_cash_flows}}, \code{\link{bond_book_value}},
-\code{\link{bond_ytm}}
+  \code{\link{bond_cash_flows}}, \code{\link{bond_book_value}},
+  \code{\link{bond_ytm}}
 
-Other bonds: 
-\code{\link{bond_book_value}()},
-\code{\link{bond_callable_price}()},
-\code{\link{bond_convexity}()},
-\code{\link{bond_price}()},
-\code{\link{bond_ytm}()},
-\code{\link{portfolio_convexity}()},
-\code{\link{portfolio_duration}()}
+Other bonds:
+\code{\link[=accrued_interest]{accrued_interest()}},
+\code{\link[=bond_book_value]{bond_book_value()}},
+\code{\link[=bond_callable_price]{bond_callable_price()}},
+\code{\link[=bond_convexity]{bond_convexity()}},
+\code{\link[=bond_price]{bond_price()}},
+\code{\link[=bond_ytm]{bond_ytm()}},
+\code{\link[=portfolio_convexity]{portfolio_convexity()}},
+\code{\link[=portfolio_duration]{portfolio_duration()}}
 }
 \concept{bonds}

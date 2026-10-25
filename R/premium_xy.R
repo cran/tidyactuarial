@@ -87,8 +87,13 @@
 #' }
 #'
 #' Standard whole-life, term, and endowment benefits are valued through
-#' \code{\link{insurance_xy}}. A pure endowment is obtained as the difference
-#' between the corresponding endowment and term insurance values.
+#' \code{\link{insurance_xy}}. A pure endowment is valued directly as the
+#' discounted benefit times status survival at maturity, retaining the
+#' issue-age conditioning, including for deferred last-survivor benefits.
+#' The identity endowment minus term remains a mathematical check, rather
+#' than the numerical calculation. Tables and horizons are validated without
+#' inventing terminal mortality. The premium annuity must have a positive
+#' finite representable APV; the output is one contract, not parallel scenarios.
 #'
 #' A contract assembled with pipes may be valued directly:
 #'
@@ -558,6 +563,7 @@ premium_xy <- function(
         length(x) != 1L ||
         is.na(x) ||
         !is.finite(x) ||
+        abs(x) > .Machine$integer.max ||
         abs(x - round(x)) > tol) {
       stop("`x` must be a single integer age.", call. = FALSE)
     }
@@ -566,6 +572,7 @@ premium_xy <- function(
         length(y) != 1L ||
         is.na(y) ||
         !is.finite(y) ||
+        abs(y) > .Machine$integer.max ||
         abs(y - round(y)) > tol) {
       stop("`y` must be a single integer age.", call. = FALSE)
     }
@@ -658,6 +665,7 @@ premium_xy <- function(
          n_prem <= 0 ||
          (!is.infinite(n_prem) &&
           (!is.finite(n_prem) ||
+           !is.finite(n_prem*k) ||
            abs(n_prem * k - round(n_prem * k)) > tol)))) {
       stop(
         "`n_prem` must be NULL, Inf, or a positive value satisfying ",
@@ -669,12 +677,16 @@ premium_xy <- function(
 
   x <- as.integer(round(x))
   y <- as.integer(round(y))
-  m <- as.integer(round(m))
-  h <- as.integer(round(h))
-  k <- as.integer(round(k))
+  store_integer<-function(z) {
+    z<-round(z)
+    if(abs(z)<=.Machine$integer.max) as.integer(z) else z
+  }
+  m <- store_integer(m)
+  h <- store_integer(h)
+  k <- store_integer(k)
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    n <- store_integer(n)
   }
 
   if (!is.null(n_prem) && !is.infinite(n_prem)) {
@@ -722,18 +734,7 @@ premium_xy <- function(
   )
 
   if (identical(type, "pure_endowment")) {
-    endowment_args <- benefit_args
-    endowment_args$type <- "endowment"
-
-    term_args <- benefit_args
-    term_args$type <- "term"
-
-    apv_benefits <- do.call(insurance_xy, endowment_args) -
-      do.call(insurance_xy, term_args)
-
-    if (apv_benefits < 0 && abs(apv_benefits) <= tol) {
-      apv_benefits <- 0
-    }
+    apv_benefits <- .two_life_pure_endowment(lt,x,y,n,h,benefit,i,i_type,m,status)
   } else {
     benefit_args$type <- type
     apv_benefits <- do.call(insurance_xy, benefit_args)

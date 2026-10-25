@@ -36,13 +36,18 @@ conversion frequency for nominal rates.
 
 The conversion formulas are:
 \describe{
-\item{effective:}{\eqn{i = i}{i = i} (identity)}
-\item{nominal_interest:}{\eqn{i_e = (1 + j^{(m)}/m)^m - 1}{i_e = (1 + j(m)/m)^m - 1}}
-\item{nominal_discount:}{\eqn{i_e = (1 - d^{(m)}/m)^{-m} - 1}{i_e = (1 - d(m)/m)^(-m) - 1}}
-\item{force:}{\eqn{i_e = e^{\delta} - 1}{i_e = exp(delta) - 1}}
+  \item{effective:}{\eqn{i = i}{i = i} (identity)}
+  \item{nominal_interest:}{\eqn{i_e = (1 + j^{(m)}/m)^m - 1}{i_e = (1 + j(m)/m)^m - 1}}
+  \item{nominal_discount:}{\eqn{i_e = (1 - d^{(m)}/m)^{-m} - 1}{i_e = (1 - d(m)/m)^(-m) - 1}}
+  \item{force:}{\eqn{i_e = e^{\delta} - 1}{i_e = exp(delta) - 1}}
 }
 
 Input vectors must have length 1 or a common length.
+Conversions use log1p and expm1 to retain precision near zero.
+A missing rate type produces a missing equivalent rate.
+At extreme inputs, an annual equivalent can round to -1 or overflow to
+Inf. This is a limit of its numeric representation; interval factors and
+basic cash-flow valuations retain the original log accumulation rate.
 }
 \examples{
 # Scalar cases
@@ -80,14 +85,17 @@ if (requireNamespace("dplyr", quietly = TRUE) &&
 }
 \seealso{
 \code{\link{interest_equivalents}},
-\code{\link{discount_factor_spot}}
+  \code{\link{discount_factor_spot}}
 
-Other interest: 
-\code{\link{accumulation_factor}()},
-\code{\link{discount_factor}()},
-\code{\link{discount_factor_spot}()},
-\code{\link{forward_rate}()},
-\code{\link{interest_equivalents}()},
-\code{\link{yield_curve}()}
+Other interest:
+\code{\link[=accumulation_factor]{accumulation_factor()}},
+\code{\link[=bootstrap_spot_curve]{bootstrap_spot_curve()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=discount_factor_spot]{discount_factor_spot()}},
+\code{\link[=forward_curve]{forward_curve()}},
+\code{\link[=forward_rate]{forward_rate()}},
+\code{\link[=interest_equivalents]{interest_equivalents()}},
+\code{\link[=par_rate]{par_rate()}},
+\code{\link[=yield_curve]{yield_curve()}}
 }
 \concept{interest}

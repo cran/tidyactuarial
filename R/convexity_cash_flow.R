@@ -74,6 +74,13 @@
 #' For streams containing both positive and negative cash flows, convexity
 #' remains a yield-sensitivity measure, but it may be negative and may not
 #' have the usual interpretation associated with conventional bonds.
+#' Relative contributions retain log weights rather than first forming a
+#' monetary convexity numerator. Representable products can be recovered when
+#' a standalone discount factor underflows; its audit column can then be zero
+#' while present value is positive. Discount factors, present values, their
+#' total/absolute sum, and the contributions/result must remain finite. Signed
+#' streams with absolute total value at most `sqrt(.Machine$double.eps)` times
+#' the sum of absolute present values are rejected as numerically cancelled.
 #'
 #' @examples
 #' convexity_cash_flow(
@@ -200,8 +207,8 @@ convexity_cash_flow <- function(
     -remaining_time * log1p(rate)
   )
 
-  present_value <- future_cash_flow *
-    discount_factor
+  present_value <- .cash_flow_value(
+    future_cash_flow, -remaining_time * log1p(rate))
 
   if (
     any(!is.finite(discount_factor)) ||
@@ -248,51 +255,23 @@ convexity_cash_flow <- function(
     )
   }
 
-  convexity_weight <- (
-    remaining_time *
-      (remaining_time + 1)
-  ) / (1 + rate)^2
+  log_weight <- log(remaining_time) + log1p(remaining_time) -
+    2 * log1p(rate) - log(abs(total_present_value))
+  convexity_contribution <- sign(total_present_value) *
+    .cash_flow_value(present_value, log_weight)
 
-  if (any(!is.finite(convexity_weight))) {
+  if (any(!is.finite(convexity_contribution))) {
     stop(
       paste0(
-        "The convexity weights are non-finite. Check the magnitude ",
-        "of `rate`, `t`, and `valuation_time`."
-      ),
-      call. = FALSE
-    )
-  }
-
-  convexity_numerator_component <- present_value *
-    convexity_weight
-
-  if (any(!is.finite(convexity_numerator_component))) {
-    stop(
-      paste0(
-        "The convexity numerator is non-finite. Check the magnitude ",
+        "The convexity weights are non-finite, or their contributions ",
+        "cannot be represented. Check the magnitude ",
         "of `cf`, `rate`, `t`, and `valuation_time`."
       ),
       call. = FALSE
     )
   }
 
-  convexity_numerator <- sum(
-    convexity_numerator_component
-  )
-
-  if (!is.finite(convexity_numerator)) {
-    stop(
-      paste0(
-        "Aggregating the convexity contributions produced a ",
-        "non-finite result. Check the magnitude of `cf`, `rate`, ",
-        "`t`, and `valuation_time`."
-      ),
-      call. = FALSE
-    )
-  }
-
-  convexity_value <- convexity_numerator /
-    total_present_value
+  convexity_value <- sum(convexity_contribution)
 
   if (!is.finite(convexity_value)) {
     stop(
@@ -307,10 +286,6 @@ convexity_cash_flow <- function(
   if (output == "value") {
     return(as.numeric(convexity_value))
   }
-
-  convexity_contribution <-
-    convexity_numerator_component /
-      total_present_value
 
   tibble::tibble(
     time = future_time,

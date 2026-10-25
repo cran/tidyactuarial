@@ -7,22 +7,22 @@
 \format{
 A tibble with 19 rows and 5 variables:
 \describe{
-\item{scenario_id}{Scenario identifier.}
-\item{t}{Payment time.}
-\item{C}{Cash-flow amount. Negative values represent outflows and
-positive values represent inflows.}
-\item{cashflow_type}{Type of cash flow.}
-\item{description}{Short description of the cash flow.}
+  \item{scenario_id}{Scenario identifier.}
+  \item{t}{Payment time.}
+  \item{C}{Cash-flow amount. Negative values represent outflows and
+  positive values represent inflows.}
+  \item{cashflow_type}{Type of cash flow.}
+  \item{description}{Short description of the cash flow.}
 }
 
 A tibble with 19 rows and 5 variables:
 \describe{
-\item{scenario_id}{Scenario identifier.}
-\item{t}{Payment time.}
-\item{C}{Cash-flow amount. Negative values represent outflows and
-positive values represent inflows.}
-\item{cashflow_type}{Type of cash flow.}
-\item{description}{Short description of the cash flow.}
+  \item{scenario_id}{Scenario identifier.}
+  \item{t}{Payment time.}
+  \item{C}{Cash-flow amount. Negative values represent outflows and
+  positive values represent inflows.}
+  \item{cashflow_type}{Type of cash flow.}
+  \item{description}{Short description of the cash flow.}
 }
 }
 \source{

@@ -39,7 +39,8 @@
 #'   be a scalar or a numeric vector of length \code{n}. Defaults to zero.
 #' @param output Character scalar. Either \code{"schedule"} for the complete
 #'   amortization table or \code{"summary"} for a compact actuarial summary.
-#' @param tol Positive numeric scalar used for zero-balance detection.
+#' @param tol Finite positive numeric scalar in monetary units used for
+#'   zero-balance detection and the negative-amortization threshold.
 #'
 #' @return
 #' With \code{output = "schedule"}, a tibble with one row per realized period.
@@ -49,6 +50,12 @@
 #' balance, and an indicator of negative amortization.
 #'
 #' @details
+#' Original log accumulation rates are converted directly to period rates.
+#' Level-payment discount factors use cumulative log growth, rather than
+#' products of rounded accumulation factors. Period rates must remain finite
+#' and greater than -1; a displayed annual equivalent may overflow even when
+#' the period rate is representable. The term is \code{n / k} years.
+#'
 #' Each value of \code{i} is interpreted as an annual rate under its associated
 #' \code{i_type} and \code{m}. It is first converted to an annual effective
 #' rate and then to the effective rate for one amortization period:
@@ -65,6 +72,25 @@
 #'
 #' A payment smaller than the interest charged may produce negative
 #' amortization. The schedule identifies such periods explicitly.
+#'
+#' Negative amortization means that interest exceeds the total payment,
+#' including extras, by more than \code{tol}. This condition applies to both
+#' timings, including interest accrued after an advance payment. Under due
+#' timing, the principal columns continue to record payments before interest;
+#' the negative-amortization flag refers to the net debt movement.
+#'
+#' On a payoff row the regular payment is applied first and extras are capped
+#' at the remaining debt; no callback is evaluated after full payoff. This
+#' allocation differs from \code{\link{amort_schedule}}, which preserves the
+#' requested extra first. Both cap total cash flow at the amount due.
+#' Automatically calculated level payments are determined before extras and
+#' are not recast by this function. The discount sum is evaluated in log space
+#' before combining it with the principal. Active balances require a positive,
+#' representable calculated payment; non-finite monetary ledgers cause errors.
+#' A principal below \code{tol} may produce an empty schedule, and small
+#' residual balances may be treated as zero within that absolute tolerance.
+#' Storage grows with \code{n}; feasible terms are limited by integer indexing
+#' and available memory.
 #'
 #' @seealso \code{\link{amort_schedule}}, \code{\link{a_angle}},
 #'   \code{\link{standardize_interest}}
@@ -226,11 +252,12 @@ amort_schedule_general <- function(
   i_type_input <- rep_len(i_type, n)
   m_input <- rep_len(m, n)
 
-  i_effective_annual <- standardize_interest(
+  basis <- .interest_basis(
     i_type = i_type_input,
     i = i_input,
     m = m_input
   )
+  i_effective_annual <- basis$effective
 
   if (any(is.na(i_effective_annual))) {
     stop(
@@ -240,7 +267,7 @@ amort_schedule_general <- function(
   }
 
   i_effective_period <-
-    (1 + i_effective_annual)^(1 / k) - 1
+    expm1(basis$growth / k)
 
   if (any(!is.finite(i_effective_period)) ||
       any(i_effective_period <= -1)) {
@@ -265,25 +292,29 @@ amort_schedule_general <- function(
   }
 
   if (is.null(payment)) {
-    period_growth <- cumprod(1 + i_effective_period)
+    log_growth <- cumsum(basis$growth / k)
 
-    discount_payments <- if (timing == "immediate") {
-      1 / period_growth
+    log_discount <- if (timing == "immediate") {
+      -log_growth
     } else {
       c(
-        1,
+        0,
         if (n > 1L) {
-          1 / period_growth[seq_len(n - 1L)]
+          -log_growth[seq_len(n - 1L)]
         } else {
           numeric(0)
         }
       )
     }
 
-    payment_vec <- rep(
-      principal / sum(discount_payments),
-      n
-    )
+    anchor <- max(log_discount)
+    log_factor <- anchor + log(sum(exp(log_discount - anchor)))
+    level_payment <- .cash_flow_value(principal, -log_factor)
+    if (principal > tol && (!is.finite(level_payment) || level_payment <= 0)) {
+      stop("Calculated level payment is outside the finite positive monetary range.",
+        call. = FALSE)
+    }
+    payment_vec <- rep(level_payment, n)
     payment_function <- NULL
   } else if (is.function(payment)) {
     payment_vec <- rep(NA_real_, n)
@@ -380,12 +411,17 @@ amort_schedule_general <- function(
       total_principal <- payment_used + extra_used
     }
 
+    if (any(!is.finite(c(interest_period, payment_used, extra_used,
+                        principal_regular, total_principal, cashflow_period, ob_new)))) {
+      stop("The amortization schedule exceeds the finite monetary range.", call. = FALSE)
+    }
+
     if (abs(ob_new) <= tol) {
       ob_new <- 0
     }
 
     negative_amortization <-
-      total_principal < -tol
+      (interest_period - cashflow_period) > tol
 
     n_realized <- n_realized + 1L
 

@@ -44,8 +44,9 @@ Must contain columns \code{x}, \code{p_total}, and the requested
 
 \item{x}{Integer age(s) at issue.}
 
-\item{i}{Annual interest-rate input. Must produce an annual effective rate
-greater than \code{-1}.}
+\item{i}{Finite annual interest-rate input in the valid domain of its
+original rate specification. Extreme annual equivalents may round to -1
+or overflow, while the original log accumulation remains usable.}
 
 \item{cause}{Character scalar. Name of the cause column in \code{md}, for
 example \code{"q_death"}.}
@@ -89,6 +90,7 @@ that pays \code{benefit} at the end of the year of decrement by a specified
 cause \code{j}, using a multiple decrement table produced by
 \code{\link{md_table}}.
 
+
 Let \eqn{q_{x+k}^{(j)}} be the one-year decrement probability for cause
 \eqn{j} at age \eqn{x+k}, and let \eqn{p_{x+r}^{(\tau)}} be the one-year
 total survival probability against all decrements at age \eqn{x+r}.
@@ -107,6 +109,22 @@ interest rate obtained from \code{i}, \code{i_type}, and \code{m}.
 
 If \code{type = "whole"}, the function sets \code{n} to the remaining length
 of the table after deferment, that is, whole life over the available ages.
+With an open table this is a truncated value, not a complete whole-life APV;
+completeness requires that no active survivors remain beyond the last row.
+Cause probabilities are dependent probabilities of exit from the active
+state in a competing-decrement model, not independent/net decrement rates.
+Survival to each year's start uses all decrements. The payment is at year
+end, not the moment of exit; the cause-specific probability is not multiplied
+by survival to year end. Values are conditional on active status at issue.
+
+The selected probabilities must be finite, in [0,1], with cause probability
+no greater than total decrement. Ages must be consecutive annual ages.
+Optional `q_total` is checked against `p_total`; redundant cohort counts
+are not the valuation basis. `q_total` itself can be selected to value all
+exits. Original log accumulation and cumulative log survival retain
+representable values despite overflowing annual equivalent rates or
+underflowing intermediate survival. Scalar inputs recycle to a common
+positive scenario length; `cause` and `type` select one model per call.
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{md} is a multiple decrement table, \code{x} is
@@ -146,7 +164,7 @@ insurance_xj(
 }
 \seealso{
 \code{\link{t_qxj}} for cause-specific decrement probabilities,
-\code{\link{lt_tau}} to build a single-decrement life table for the total
-decrement.
+  \code{\link{lt_tau}} to build a single-decrement life table for the total
+  decrement.
 }
 \concept{multiple-decrements}

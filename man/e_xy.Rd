@@ -30,16 +30,18 @@ the maximum horizon allowed by the table.}
 \item{type}{Character: \code{"curtate"} or \code{"complete"}.}
 
 \item{frac}{Fractional-age assumption for \code{type = "complete"},
-passed to \code{\link{t_pxy}}: \code{"UDD"}, \code{"CF"},
+as in \code{\link{t_pxy}}: \code{"UDD"}, \code{"CF"},
 \code{"CML"}, or \code{"Balducci"}. If not specified and \code{lt}
-carries a \code{frac} attribute, that value is used.}
+carries a \code{frac} attribute, that value is used.
+An inherited \code{"CML"} attribute is normalized to \code{"CF"}.}
 
 \item{cohort}{Two-life cohort: \code{"first"} (joint-life) or
 \code{"last"} (last survivor).}
 
 \item{tidy}{Logical. If \code{TRUE}, returns a tibble.}
 
-\item{check}{Logical. If \code{TRUE}, performs basic input checks.}
+\item{check}{Logical. If \code{TRUE}, performs basic input checks.
+Table consistency and scalar logical controls are always checked.}
 
 \item{tol}{Numeric tolerance for integer checks.}
 }
@@ -59,12 +61,26 @@ last-survivor (second death).
 \strong{Complete expectation} (Finan, Section 56.4):
 \deqn{\mathring{e}_{xy} = \int_0^{\infty} {}_tp_{xy} \, dt.}
 
-The integral is decomposed year-by-year. Within each year, the survival
-integral for the two-life status is computed numerically via composite
-trapezoid (80-point grid), since closed-form expressions for joint/last
-survivor under fractional-age assumptions are complex.
+The integral is decomposed year-by-year and evaluated analytically under
+UDD, constant force, or Balducci, retaining small survival in log form.
+Observed annual \code{lx} ratios determine the fractional survival.
+Survival is always
+measured from the initial ages, conditional on both lives being alive
+at time zero. In particular, last-survivor survival at later times does
+not imply that both lives remain alive.
 
-\strong{Key identity} (Finan, Example 57.4):
+Horizons end at the last recorded age: the older life limits joint-life
+expectation and the younger life limits last-survivor expectation.
+Survival beyond that age is taken as zero, as in \code{t_px}; an open
+table therefore gives a truncated expectation. Missing initial ages or
+zero initial survivors give \code{NA}, including when \code{t = 0}.
+Tables must have unique consecutive annual integer ages and finite,
+nonnegative, nonincreasing \code{lx}. Observed \code{px}/\code{qx} must
+be probabilities consistent with annual \code{lx} ratios within
+\code{1e-10}; unknown probabilities may be \code{NA}. The age tolerance
+\code{tol} does not relax this mortality consistency threshold.
+
+**Key identity** (Finan, Example 57.4):
 \deqn{\mathring{e}_{\overline{xy}} = \mathring{e}_x + \mathring{e}_y
   - \mathring{e}_{xy}.}
 
@@ -102,6 +118,6 @@ e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first", tidy = TRUE)
 }
 \seealso{
 \code{\link{e_x}} for single-life expectancy,
-\code{\link{t_pxy}} for two-life survival probabilities,
-\code{\link{annuity_xy}} for two-life annuity APVs.
+  \code{\link{t_pxy}} for two-life survival probabilities,
+  \code{\link{annuity_xy}} for two-life annuity APVs.
 }

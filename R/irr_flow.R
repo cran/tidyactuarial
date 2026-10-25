@@ -48,6 +48,11 @@
 #' \code{irr = NA_real_}.
 #'
 #' @details
+#' Root finding scales the cash flows by their largest absolute amount;
+#' this preserves roots across monetary units. The reported NPV remains in
+#' the original currency. Scaling that would erase a nonzero amount through
+#' underflow is rejected. The tolerance controls the rate-coordinate solve.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
 #' and \code{m} denotes the conversion frequency used to report the equivalent
@@ -184,10 +189,18 @@ irr_flow <- function(
     return(make_na_result())
   }
 
+  # Positive rescaling preserves roots and prevents monetary units from
+  # controlling sign tests or the numerical root solve.
+  scaled_cf <- cf / max(abs(cf))
+  if (any(cf != 0 & scaled_cf == 0)) {
+    stop("Cash-flow scaling would lose nonzero amounts at machine precision.",
+         call. = FALSE)
+  }
+
   # --- NPV as a function of annual effective rate ---
   npv_fun <- function(r) {
     pv_flow(
-      cf = cf,
+      cf = scaled_cf,
       i = r,
       i_type = "effective",
       t = t,
@@ -199,7 +212,8 @@ irr_flow <- function(
   f_left <- npv_fun(interval[1L])
   f_right <- npv_fun(interval[2L])
 
-  if (is.na(f_left) || is.na(f_right) || f_left * f_right > 0) {
+  if (is.na(f_left) || is.na(f_right) ||
+      (f_left != 0 && f_right != 0 && sign(f_left) == sign(f_right))) {
     return(make_na_result())
   }
 
@@ -212,11 +226,12 @@ irr_flow <- function(
   )
 
   irr_est <- root$root
-  npv_est <- root$f.root
+  npv_est <- pv_flow(cf = cf, i = irr_est, t = t, date = date,
+                     day_count = day_count)
 
   i_annual <- irr_est
   delta <- log1p(i_annual)
-  j_nom <- m * ((1 + i_annual)^(1 / m) - 1)
+  j_nom <- m * expm1(log1p(i_annual) / m)
 
   tibble::tibble(
     irr = irr_est,

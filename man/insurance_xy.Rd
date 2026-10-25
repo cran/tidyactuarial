@@ -78,18 +78,19 @@ independent future lifetimes and using compact actuarial notation.
 \details{
 Supported contracts:
 \itemize{
-\item \code{"whole"}: whole-life two-life insurance.
-\item \code{"term"}: n-year two-life term insurance.
-\item \code{"endowment"}: n-year two-life endowment insurance.
+  \item \code{"whole"}: whole-life two-life insurance.
+  \item \code{"term"}: n-year two-life term insurance.
+  \item \code{"endowment"}: n-year two-life endowment insurance.
 }
 
 The \code{status} argument determines the two-life status:
 \itemize{
-\item \code{status = "joint"}: first-death insurance, based on the
-joint-life status.
-\item \code{status = "last"}: second-death insurance, based on the
-last-survivor status.
+  \item \code{status = "joint"}: first-death insurance, based on the
+  joint-life status.
+  \item \code{status = "last"}: second-death insurance, based on the
+  last-survivor status.
 }
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{lt} is the life table input, \code{x} and
@@ -98,8 +99,23 @@ This function follows the compact actuarial notation used throughout
 frequency for nominal rates, \code{n} is the insurance term, and \code{h} is
 the deferment period.
 
-The function uses the standard fully discrete identities that express
-insurance values through two-life annuity-due values.
+Both lives are alive at issue (state 11). Internal states 10 and 01 mean
+only x or only y is alive; 00 is absorbing. The API does not take an
+observed single-survivor initial state. In a joint-life contract, leaving
+11 triggers the first-death benefit once. A last-survivor contract continues
+through 10 or 01 and pays on entering 00. Both deaths within one annual
+interval trigger one benefit, payable at the end of that year.
+
+Valuation sums discounted annual transition masses from the issue ages;
+it does not subtract rounded annuity values. With marginal survival Sx, Sy,
+cumulative death Qx, Qy, and interval death masses Dx, Dy, the first-death
+mass in (t,t+1] is Dx(t) Sy(t) + Sx(t+1) Dy(t); the second-death mass is
+Dx(t) Qy(t) + Qx(t) Dy(t) + Dx(t) Dy(t). Counts supply the decrements
+directly. Original log interest and monetary amounts are combined before
+exponentiating when necessary. The annual payment model is independent of
+fractional interpolation; frac is retained as an audit assumption.
+
+The following fully discrete identities remain checks on the result:
 
 For a whole-life contract:
 \deqn{A = 1 - d \ddot{a}.}
@@ -112,10 +128,27 @@ For an n-year endowment insurance:
 \deqn{A_{:\overline{n}|} =
 1 - d\ddot{a}_{:\overline{n}|}.}
 
-A deferred insurance is valued by multiplying the value at deferred ages
-\code{x + h} and \code{y + h} by the deferment factor
+Whole-life valuation requires observed mortality through extinction of the
+selected status: at least one marginal must reach zero within the joint
+horizon, and both must reach zero for last-survivor insurance. An open
+table cannot imply a terminal death or maturity benefit. Use an explicit
+term or endowment for the observed horizon, or extend the table.
+No missing annual interval of an open marginal table is extrapolated.
+A zero-term endowment pays benefit at h if the status survives; a zero-term
+term insurance has no death coverage and pays zero. Annual tables must
+satisfy the consistency requirements of \code{\link{t_pxy}}, and issue
+ages must have positive lx. One call values one contract, not scenarios.
+
+A deferred insurance retains survival probabilities from the issue ages.
+Its continuation value conditional on the selected status surviving to
+\code{h} is multiplied by the deferment factor
 \deqn{v^h\,{}_hp_{xy}}
 for the selected two-life status.
+For last-survivor insurance, this conditioning includes paths with only
+one survivor at \code{h}; it does not restart both lives at deferred ages.
+In tidy output, \code{annuity_due_value} is the annuity at time \code{h}
+conditional on that status surviving to \code{h}, and
+\code{survival_to_maturity}, when reported, uses the same conditioning.
 }
 \examples{
 lt <- data.frame(
@@ -154,23 +187,23 @@ lt |>
 }
 \seealso{
 \code{\link{annuity_xy}}, \code{\link{premium_xy}},
-\code{\link{insurance_x}}, \code{\link{t_pxy}}
+  \code{\link{insurance_x}}, \code{\link{t_pxy}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

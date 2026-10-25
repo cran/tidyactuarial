@@ -9,8 +9,8 @@ t_pxy(lt, x, y, t, frac, status = c("joint", "last"))
 \arguments{
 \item{lt}{Either:
 \itemize{
-\item a single life table data frame, used for both lives; or
-\item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
+  \item a single life table data frame, used for both lives; or
+  \item a list of two life tables \code{list(lt_x, lt_y)}, one for each life.
 }
 Each life table must contain columns \code{x} and \code{lx}.}
 
@@ -24,7 +24,10 @@ Each life table must contain columns \code{x} and \code{lx}.}
 \code{"CML"} (alias of CF), or \code{"Balducci"}. If not specified and
 the supplied life table(s) carry a \code{frac} attribute, that value is
 used. If two tables are supplied and their \code{frac} attributes differ,
-\code{frac} must be supplied explicitly. Passed to \code{\link{t_px}}.}
+\code{frac} must be supplied explicitly. Uses the same assumptions as
+\code{\link{t_px}}.
+Inherited \code{"CML"} is normalized to \code{"CF"} before comparing
+the two tables' assumptions.}
 
 \item{status}{Two-life status: \code{"joint"} or \code{"last"}.}
 }
@@ -39,17 +42,27 @@ status.
 \details{
 Independence is assumed throughout (Finan, Sections 56--57).
 
-\strong{Joint-life status} (Finan, Section 56): the status survives as long as
+**Joint-life status** (Finan, Section 56): the status survives as long as
 \emph{both} lives are alive.
 \deqn{{}_tp_{xy} = {}_tp_x \cdot {}_tp_y.}
 
-\strong{Last-survivor status} (Finan, Section 57): the status survives as long
+**Last-survivor status** (Finan, Section 57): the status survives as long
 as \emph{at least one} life is alive.
 \deqn{{}_tp_{\overline{xy}} = {}_tp_x + {}_tp_y - {}_tp_x \cdot {}_tp_y.}
 
-Individual survival probabilities \eqn{{}_tp_x} and \eqn{{}_tp_y} are
-computed via \code{\link{t_px}}, which supports fractional ages under UDD,
-constant force, and Balducci assumptions (Finan, Section 24).
+Individual survival probabilities \eqn{{}_tp_x} and \eqn{{}_tp_y} use
+observed \code{lx} ratios and fractional survival under UDD, constant
+force, or Balducci (Finan, Section 24). Logarithmic calculations retain
+small annual survival without subtracting a rounded death probability
+from one. Last-survivor survival is evaluated as
+\eqn{\max(p_x,p_y)+(1-\max(p_x,p_y))\min(p_x,p_y)}.
+Tables must have unique consecutive annual integer ages and finite,
+nonnegative, nonincreasing \code{lx}. Supplied \code{px}/\code{qx} must
+lie in [0,1] and agree with each other and observed annual \code{lx}
+ratios within \code{1e-10}; unknown probabilities may be \code{NA}.
+Ages must fit R's integer range and durations must be finite.
+The established \code{t_px} horizon and zero-duration conventions apply;
+survival beyond the last recorded age is a truncation, not extrapolation.
 }
 \examples{
 lt <- data.frame(
@@ -103,7 +116,7 @@ c(q_joint = q_joint, q_sum = qx + qy - qx * qy)  # should match
 }
 \seealso{
 \code{\link{t_px}} for single-life survival,
-\code{\link{e_xy}} for joint-life expectancy,
-\code{\link{annuity_xy}} for two-life annuity APVs,
-\code{\link{insurance_xy}} for two-life insurance APVs.
+  \code{\link{e_xy}} for joint-life expectancy,
+  \code{\link{annuity_xy}} for two-life annuity APVs,
+  \code{\link{insurance_xy}} for two-life insurance APVs.
 }

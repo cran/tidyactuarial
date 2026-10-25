@@ -48,6 +48,15 @@
 #' functions not yet migrated can continue to read the contract. These internal
 #' fields are not part of the preferred user-facing notation.
 #'
+#' The original rate and table are retained, without converting the stored
+#' rate to an annual effective rate or altering the table. Rate domains require
+#' `i > -1` for effective rates, `1 + i/m > 0` for nominal interest and
+#' `1 - i/m > 0` for nominal discount; any finite force is allowed.
+#' Table validation here checks structure and numeric `x`/`lx` columns.
+#' Valuation functions additionally check mortality consistency, supported ages,
+#' horizons and payment grids for their particular models. Integer-valued
+#' specifications outside R's integer range are stored as doubles, never `NA`.
+#'
 #' @return An object of class `"tidyact_life_contract"`.
 #'
 #' @family life-contingencies
@@ -211,7 +220,8 @@ life_contract <- function(
     stop("`m` must be a single positive integer.", call. = FALSE)
   }
 
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
+  invisible(standardize_interest(i_type = i_type, i = i, m = m))
 
   if (identical(lives, "single")) {
     if (is.null(x)) {
@@ -226,7 +236,7 @@ life_contract <- function(
       stop("`x` must be a single integer age.", call. = FALSE)
     }
 
-    x <- as.integer(round(x))
+    x <- if (abs(x) <= .Machine$integer.max) as.integer(round(x)) else round(x)
     y <- NULL
   } else {
     if (is.null(x) || is.null(y)) {
@@ -252,8 +262,8 @@ life_contract <- function(
       stop("`y` must be a single integer age.", call. = FALSE)
     }
 
-    x <- as.integer(round(x))
-    y <- as.integer(round(y))
+    x <- if (abs(x) <= .Machine$integer.max) as.integer(round(x)) else round(x)
+    y <- if (abs(y) <= .Machine$integer.max) as.integer(round(y)) else round(y)
   }
 
   out <- list(

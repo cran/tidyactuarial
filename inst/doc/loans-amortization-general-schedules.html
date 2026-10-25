@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Julian Mauricio Fajardo" />
+
+
+<title>Loans, Amortization, and General Payment Schedules</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Loans, Amortization, and General Payment
+Schedules</h1>
+<h4 class="author">Julian Mauricio Fajardo</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>Loan amortization is a direct application of equations of value and
+annuities. A loan is not merely an initial debt followed by periodic
+payments. Actuarially, it is a cash-flow system that must remain
+consistent with an interest-rate basis, a payment frequency, and a rule
+for reducing the outstanding balance.</p>
+<p>The central object is therefore not the amortization table itself,
+but the financial identity that each row must satisfy.</p>
+<p>If <span class="math inline">\(B_{t-1}\)</span> is the outstanding
+balance at the beginning of period <span class="math inline">\(t\)</span>, <span class="math inline">\(I_t\)</span> the interest charged during the
+period, <span class="math inline">\(R_t\)</span> the regular payment,
+<span class="math inline">\(E_t\)</span> an extra principal payment, and
+<span class="math inline">\(B_t\)</span> the ending balance, then</p>
+<p><span class="math display">\[
+B_t
+=
+B_{t-1}+I_t-R_t-E_t.
+\]</span></p>
+<p>If <span class="math inline">\(i_t\)</span> is the effective rate for
+period <span class="math inline">\(t\)</span>,</p>
+<p><span class="math display">\[
+I_t=i_tB_{t-1},
+\]</span></p>
+<p>so</p>
+<p><span class="math display">\[
+\boxed{
+B_t
+=
+B_{t-1}(1+i_t)-R_t-E_t
+}.
+\]</span></p>
+<p>This recurrence is the basis of every schedule developed in this
+vignette. <code>tidyactuarial</code> is used after the financial
+structure has been established, so that the schedule remains an
+auditable sequence of equations rather than an automatic table.</p>
+</div>
+<div id="a-level-payment-loan" class="section level2">
+<h2>A level-payment loan</h2>
+<p>Suppose a loan of amount <span class="math inline">\(L\)</span> is
+repaid by <span class="math inline">\(n\)</span> equal end-of-period
+payments <span class="math inline">\(R\)</span> at effective rate <span class="math inline">\(i\)</span> per payment period.</p>
+<p>At origination,</p>
+<p><span class="math display">\[
+L
+=
+R\,a_{\overline{n}|i},
+\]</span></p>
+<p>hence</p>
+<p><span class="math display">\[
+\boxed{
+R
+=
+\frac{L}{a_{\overline{n}|i}}
+=
+L
+\frac{
+i
+}{
+1-(1+i)^{-n}
+}
+}.
+\]</span></p>
+<p>Consider a loan of 50,000 repaid monthly over five years. The
+contractual rate is a nominal annual interest rate of <span class="math inline">\(12\%\)</span> convertible monthly.</p>
+<p>The effective monthly rate is</p>
+<p><span class="math display">\[
+i_p
+=
+\frac{0.12}{12}
+=
+0.01,
+\]</span></p>
+<p>and the number of payments is</p>
+<p><span class="math display">\[
+n=5(12)=60.
+\]</span></p>
+<p>Therefore,</p>
+<p><span class="math display">\[
+50{,}000
+=
+R\,a_{\overline{60}|0.01},
+\]</span></p>
+<p>and</p>
+<p><span class="math display">\[
+R
+\approx
+1{,}112.22.
+\]</span></p>
+<p>The annuity factor can be reproduced directly:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>loan_principal <span class="ot">&lt;-</span> <span class="dv">50000</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>loan_term_years <span class="ot">&lt;-</span> <span class="dv">5</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>payments_per_year <span class="ot">&lt;-</span> <span class="dv">12</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>nominal_rate <span class="ot">&lt;-</span> <span class="fl">0.12</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>number_payments <span class="ot">&lt;-</span> <span class="dv">60</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>annuity_factor <span class="ot">&lt;-</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="fu">a_angle</span>(</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>    <span class="at">n =</span> loan_term_years,</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>    <span class="at">k =</span> payments_per_year,</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>    <span class="at">i =</span> nominal_rate,</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;nominal_interest&quot;</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>    <span class="at">m =</span> <span class="dv">12</span>,</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>    <span class="at">timing =</span> <span class="st">&quot;immediate&quot;</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>  )</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>level_payment <span class="ot">&lt;-</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>  loan_principal <span class="sc">/</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>  annuity_factor</span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>level_payment</span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a><span class="co">#&gt; [1] 1112.222</span></span></code></pre></div>
+<p>The payment is determined by the equation of value. The schedule
+comes later.</p>
+</div>
+<div id="interest-principal-repayment-and-the-balance-recurrence" class="section level2">
+<h2>Interest, principal repayment, and the balance recurrence</h2>
+<p>For a level-payment loan without extra principal payments,</p>
+<p><span class="math display">\[
+B_t
+=
+B_{t-1}(1+i)-R.
+\]</span></p>
+<p>The interest charged in period <span class="math inline">\(t\)</span>
+is</p>
+<p><span class="math display">\[
+I_t
+=
+iB_{t-1},
+\]</span></p>
+<p>while the principal repaid through the regular payment is</p>
+<p><span class="math display">\[
+A_t
+=
+R-I_t.
+\]</span></p>
+<p>Therefore,</p>
+<p><span class="math display">\[
+B_t
+=
+B_{t-1}-A_t.
+\]</span></p>
+<p>For the first month of the loan above,</p>
+<p><span class="math display">\[
+I_1
+=
+50{,}000(0.01)
+=
+500,
+\]</span></p>
+<p>so</p>
+<p><span class="math display">\[
+A_1
+=
+1{,}112.22-500
+=
+612.22,
+\]</span></p>
+<p>and</p>
+<p><span class="math display">\[
+B_1
+=
+50{,}000-612.22
+=
+49{,}387.78.
+\]</span></p>
+<p>In the second month, interest is calculated on the new outstanding
+balance, not on the original principal.</p>
+<p>The regular payment remains constant, but its composition changes
+through time: interest decreases while principal repayment
+increases.</p>
+</div>
+<div id="prospective-and-retrospective-balances" class="section level2">
+<h2>Prospective and retrospective balances</h2>
+<p>The outstanding balance after <span class="math inline">\(t\)</span>
+payments can be obtained prospectively by valuing the remaining
+payments:</p>
+<p><span class="math display">\[
+\boxed{
+B_t
+=
+R\,a_{\overline{n-t}|i}
+}.
+\]</span></p>
+<p>The same balance can be obtained retrospectively by accumulating the
+original loan and subtracting the accumulated value of the payments
+already made:</p>
+<p><span class="math display">\[
+\boxed{
+B_t
+=
+L(1+i)^t
+-
+R\,s_{\overline{t}|i}
+}.
+\]</span></p>
+<p>For the 50,000 loan, after 12 monthly payments,</p>
+<p><span class="math display">\[
+B_{12}
+\approx
+42{,}235.49.
+\]</span></p>
+<p>These two formulas are not different valuation methods. They are two
+views of the same financial position.</p>
+<p>The computational schedule provides a third audit:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>level_schedule <span class="ot">&lt;-</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>  <span class="fu">amort_schedule</span>(</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>    <span class="at">principal =</span> loan_principal,</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>    <span class="at">n =</span> number_payments,</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>    <span class="at">i =</span> nominal_rate,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;nominal_interest&quot;</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>    <span class="at">m =</span> <span class="dv">12</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>    <span class="at">k =</span> payments_per_year,</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>    <span class="at">timing =</span> <span class="st">&quot;immediate&quot;</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>  )</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>level_schedule <span class="sc">|&gt;</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>    period <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">12</span>, <span class="dv">24</span>, <span class="dv">60</span>)</span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(</span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>    period,</span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a>    ob_start,</span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>    interest,</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>    payment,</span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a>    principal,</span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a>    ob_end</span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a>  )</span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co">#&gt; # A tibble: 5 x 6</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="co">#&gt;   period ob_start interest payment principal ob_end</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co">#&gt;    &lt;int&gt;    &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;  &lt;dbl&gt;</span></span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a><span class="co">#&gt; 1      1   50000     500     1112.      612. 49388.</span></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a><span class="co">#&gt; 2      2   49388.    494.    1112.      618. 48769.</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a><span class="co">#&gt; 3     12   42919.    429.    1112.      683. 42235.</span></span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a><span class="co">#&gt; 4     24   34256.    343.    1112.      770. 33486.</span></span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a><span class="co">#&gt; 5     60    1101.     11.0   1112.     1101.     0</span></span></code></pre></div>
+<p>Each row should satisfy</p>
+<p><span class="math display">\[
+B_t
+=
+B_{t-1}+I_t-R_t.
+\]</span></p>
+<p>That identity is the primary audit of the schedule.</p>
+</div>
+<div id="extra-principal-payments" class="section level2">
+<h2>Extra principal payments</h2>
+<p>An extra principal payment changes the outstanding balance
+immediately.</p>
+<p>If an extra payment <span class="math inline">\(E_t\)</span> is made
+together with the regular payment,</p>
+<p><span class="math display">\[
+B_t
+=
+B_{t-1}(1+i)-R_t-E_t.
+\]</span></p>
+<p>Once the balance has been reduced, there are at least two common
+policies:</p>
+<ul>
+<li>keep the regular payment and shorten the remaining term;</li>
+<li>keep the contractual term and recalculate the future regular
+payment.</li>
+</ul>
+<p>Consider the same 50,000 loan with extra principal payments of 5,000
+at month 12 and 3,000 at month 24.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>extra_principal <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="st">&quot;12&quot;</span> <span class="ot">=</span> <span class="dv">5000</span>,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="st">&quot;24&quot;</span> <span class="ot">=</span> <span class="dv">3000</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>)</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>schedule_term <span class="ot">&lt;-</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="fu">amort_schedule</span>(</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>    <span class="at">principal =</span> loan_principal,</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>    <span class="at">n =</span> number_payments,</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>    <span class="at">i =</span> nominal_rate,</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;nominal_interest&quot;</span>,</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>    <span class="at">m =</span> <span class="dv">12</span>,</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>    <span class="at">k =</span> payments_per_year,</span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a>    <span class="at">timing =</span> <span class="st">&quot;immediate&quot;</span>,</span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>    <span class="at">extra_principal =</span> extra_principal,</span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a>    <span class="at">adjust =</span> <span class="st">&quot;term&quot;</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>  )</span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a>schedule_payment <span class="ot">&lt;-</span></span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a>  <span class="fu">amort_schedule</span>(</span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a>    <span class="at">principal =</span> loan_principal,</span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a>    <span class="at">n =</span> number_payments,</span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a>    <span class="at">i =</span> nominal_rate,</span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;nominal_interest&quot;</span>,</span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a>    <span class="at">m =</span> <span class="dv">12</span>,</span>
+<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a>    <span class="at">k =</span> payments_per_year,</span>
+<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a>    <span class="at">timing =</span> <span class="st">&quot;immediate&quot;</span>,</span>
+<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a>    <span class="at">extra_principal =</span> extra_principal,</span>
+<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a>    <span class="at">adjust =</span> <span class="st">&quot;payment&quot;</span></span>
+<span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a>  )</span></code></pre></div>
+<p>Under <code>adjust = &quot;term&quot;</code>, the regular payment is maintained
+and the loan ends earlier.</p>
+<p>Under <code>adjust = &quot;payment&quot;</code>, the contractual horizon is
+maintained and the future payment is recalculated after each extra
+principal payment.</p>
+<p>For this example, the main financial results are approximately:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Scenario</th>
+<th align="right">Number of payments</th>
+<th align="right">Total interest</th>
+<th align="right">Total paid</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>No extra principal</td>
+<td align="right">60</td>
+<td align="right">16,733.34</td>
+<td align="right">66,733.34</td>
+</tr>
+<tr class="even">
+<td>Shorter term</td>
+<td align="right">50</td>
+<td align="right">12,961.91</td>
+<td align="right">62,961.91</td>
+</tr>
+<tr class="odd">
+<td>Lower payment</td>
+<td align="right">60</td>
+<td align="right">14,826.08</td>
+<td align="right">64,826.08</td>
+</tr>
+</tbody>
+</table>
+<p>Both policies reduce total interest relative to the original
+schedule. The shorter-term policy generates the larger interest saving
+because the balance remains exposed to interest for less time. The
+lower-payment policy has a different objective: it reduces the
+borrower’s future cash-flow burden.</p>
+<p>The choice is therefore not only an arithmetic comparison. It may
+also be a liquidity and risk-management decision.</p>
+<p>A compact audit can be produced directly from the schedules:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>summary_original <span class="ot">&lt;-</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  level_schedule <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>    <span class="at">scenario =</span> <span class="st">&quot;No extra principal&quot;</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>    <span class="at">number_payments =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(),</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>    <span class="at">total_interest =</span> <span class="fu">sum</span>(interest),</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>    <span class="at">total_paid =</span> <span class="fu">sum</span>(cashflow),</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>    <span class="at">ending_balance =</span> dplyr<span class="sc">::</span><span class="fu">last</span>(ob_end)</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  )</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>summary_term <span class="ot">&lt;-</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  schedule_term <span class="sc">|&gt;</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(</span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a>    <span class="at">scenario =</span> <span class="st">&quot;Shorter term&quot;</span>,</span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a>    <span class="at">number_payments =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(),</span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a>    <span class="at">total_interest =</span> <span class="fu">sum</span>(interest),</span>
+<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a>    <span class="at">total_paid =</span> <span class="fu">sum</span>(cashflow),</span>
+<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a>    <span class="at">ending_balance =</span> dplyr<span class="sc">::</span><span class="fu">last</span>(ob_end)</span>
+<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a>  )</span>
+<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a>summary_payment <span class="ot">&lt;-</span></span>
+<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a>  schedule_payment <span class="sc">|&gt;</span></span>
+<span id="cb4-23"><a href="#cb4-23" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">summarise</span>(</span>
+<span id="cb4-24"><a href="#cb4-24" tabindex="-1"></a>    <span class="at">scenario =</span> <span class="st">&quot;Lower payment&quot;</span>,</span>
+<span id="cb4-25"><a href="#cb4-25" tabindex="-1"></a>    <span class="at">number_payments =</span> dplyr<span class="sc">::</span><span class="fu">n</span>(),</span>
+<span id="cb4-26"><a href="#cb4-26" tabindex="-1"></a>    <span class="at">total_interest =</span> <span class="fu">sum</span>(interest),</span>
+<span id="cb4-27"><a href="#cb4-27" tabindex="-1"></a>    <span class="at">total_paid =</span> <span class="fu">sum</span>(cashflow),</span>
+<span id="cb4-28"><a href="#cb4-28" tabindex="-1"></a>    <span class="at">ending_balance =</span> dplyr<span class="sc">::</span><span class="fu">last</span>(ob_end)</span>
+<span id="cb4-29"><a href="#cb4-29" tabindex="-1"></a>  )</span>
+<span id="cb4-30"><a href="#cb4-30" tabindex="-1"></a></span>
+<span id="cb4-31"><a href="#cb4-31" tabindex="-1"></a>dplyr<span class="sc">::</span><span class="fu">bind_rows</span>(</span>
+<span id="cb4-32"><a href="#cb4-32" tabindex="-1"></a>  summary_original,</span>
+<span id="cb4-33"><a href="#cb4-33" tabindex="-1"></a>  summary_term,</span>
+<span id="cb4-34"><a href="#cb4-34" tabindex="-1"></a>  summary_payment</span>
+<span id="cb4-35"><a href="#cb4-35" tabindex="-1"></a>)</span>
+<span id="cb4-36"><a href="#cb4-36" tabindex="-1"></a><span class="co">#&gt; # A tibble: 3 x 5</span></span>
+<span id="cb4-37"><a href="#cb4-37" tabindex="-1"></a><span class="co">#&gt;   scenario           number_payments total_interest total_paid ending_balance</span></span>
+<span id="cb4-38"><a href="#cb4-38" tabindex="-1"></a><span class="co">#&gt;   &lt;chr&gt;                        &lt;int&gt;          &lt;dbl&gt;      &lt;dbl&gt;          &lt;dbl&gt;</span></span>
+<span id="cb4-39"><a href="#cb4-39" tabindex="-1"></a><span class="co">#&gt; 1 No extra principal              60         16733.     66733.              0</span></span>
+<span id="cb4-40"><a href="#cb4-40" tabindex="-1"></a><span class="co">#&gt; 2 Shorter term                    50         12962.     62962.              0</span></span>
+<span id="cb4-41"><a href="#cb4-41" tabindex="-1"></a><span class="co">#&gt; 3 Lower payment                   60         14826.     64826.              0</span></span></code></pre></div>
+</div>
+<div id="general-payment-schedules" class="section level2">
+<h2>General payment schedules</h2>
+<p>The level-payment model is only one possible structure.</p>
+<p>More generally, a loan may have:</p>
+<ul>
+<li>period-specific interest rates;</li>
+<li>non-level regular payments;</li>
+<li>extra principal payments that vary by period;</li>
+<li>payment rules that depend on the current outstanding balance.</li>
+</ul>
+<p>The recurrence remains</p>
+<p><span class="math display">\[
+\boxed{
+B_t
+=
+B_{t-1}(1+i_t)-R_t-E_t
+}.
+\]</span></p>
+<p>What changes is the rule used to define <span class="math inline">\(i_t\)</span>, <span class="math inline">\(R_t\)</span>, and <span class="math inline">\(E_t\)</span>.</p>
+<p><code>amort_schedule_general()</code> represents this broader problem
+directly. In <code>tidyactuarial</code>, the interest-rate input may be
+a scalar or a vector with one rate specification per period, while
+<code>payment</code> may be calculated automatically, supplied as a
+scalar or vector, or defined as a function of the current loan
+state.</p>
+</div>
+<div id="a-loan-with-changing-interest-rates" class="section level2">
+<h2>A loan with changing interest rates</h2>
+<p>Suppose a six-year loan of 120,000 is repaid by equal annual
+payments, but the annual effective interest rate changes each year:</p>
+<p><span class="math display">\[
+4\%,\;5\%,\;6\%,\;7\%,\;8\%,\;9\%.
+\]</span></p>
+<p>The usual level-annuity formula cannot be applied with a single rate.
+Instead, the payment <span class="math inline">\(R\)</span> must
+satisfy</p>
+<p><span class="math display">\[
+120{,}000
+=
+R
+\sum_{t=1}^{6}
+\prod_{h=1}^{t}
+(1+i_h)^{-1}.
+\]</span></p>
+<p>For these rates, the sum of discount factors is approximately</p>
+<p><span class="math display">\[
+4.982057,
+\]</span></p>
+<p>so</p>
+<p><span class="math display">\[
+R
+\approx
+24{,}086.43.
+\]</span></p>
+<p>The changing-rate schedule can be built directly:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>variable_rates <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fl">0.04</span>,</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="fl">0.05</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="fl">0.06</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="fl">0.07</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="fl">0.08</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="fl">0.09</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>)</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>variable_rate_schedule <span class="ot">&lt;-</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>  <span class="fu">amort_schedule_general</span>(</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>    <span class="at">principal =</span> <span class="dv">120000</span>,</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>    <span class="at">n =</span> <span class="dv">6</span>,</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>    <span class="at">i =</span> variable_rates,</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;effective&quot;</span>,</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>    <span class="at">k =</span> <span class="dv">1</span>,</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>    <span class="at">payment =</span> <span class="cn">NULL</span>,</span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>    <span class="at">timing =</span> <span class="st">&quot;immediate&quot;</span></span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a>  )</span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a></span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a>variable_rate_schedule <span class="sc">|&gt;</span></span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(</span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a>    period,</span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a>    ob_start,</span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a>    interest,</span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a>    payment,</span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a>    principal,</span>
+<span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a>    ob_end</span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a>  )</span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a><span class="co">#&gt; # A tibble: 6 x 6</span></span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a><span class="co">#&gt;   period ob_start interest payment principal  ob_end</span></span>
+<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a><span class="co">#&gt;    &lt;int&gt;    &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;</span></span>
+<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a><span class="co">#&gt; 1      1  120000     4800   24086.    19286. 100714.</span></span>
+<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a><span class="co">#&gt; 2      2  100714.    5036.  24086.    19051.  81663.</span></span>
+<span id="cb5-35"><a href="#cb5-35" tabindex="-1"></a><span class="co">#&gt; 3      3   81663.    4900.  24086.    19187.  62476.</span></span>
+<span id="cb5-36"><a href="#cb5-36" tabindex="-1"></a><span class="co">#&gt; 4      4   62476.    4373.  24086.    19713.  42763.</span></span>
+<span id="cb5-37"><a href="#cb5-37" tabindex="-1"></a><span class="co">#&gt; 5      5   42763.    3421.  24086.    20665.  22098.</span></span>
+<span id="cb5-38"><a href="#cb5-38" tabindex="-1"></a><span class="co">#&gt; 6      6   22098.    1989.  24086.    22098.      0</span></span></code></pre></div>
+<p>The software is useful here because the financial structure is no
+longer a single geometric annuity. Each payment is discounted through
+the sequence of rates that precedes it.</p>
+</div>
+<div id="a-payment-rule-that-depends-on-the-outstanding-balance" class="section level2">
+<h2>A payment rule that depends on the outstanding balance</h2>
+<p>A particularly useful case is a constant-principal amortization
+system.</p>
+<p>Let a loan of principal <span class="math inline">\(L\)</span> be
+repaid over <span class="math inline">\(n\)</span> periods with the same
+amount of principal repaid each period:</p>
+<p><span class="math display">\[
+A
+=
+\frac{L}{n}.
+\]</span></p>
+<p>At period <span class="math inline">\(t\)</span>,</p>
+<p><span class="math display">\[
+R_t
+=
+A+i_tB_{t-1}.
+\]</span></p>
+<p>Thus the regular payment is not level. It is a rule that depends on
+the current outstanding balance.</p>
+<p>For the 50,000 loan over 60 months at a monthly effective rate of
+<span class="math inline">\(1\%\)</span>,</p>
+<p><span class="math display">\[
+A
+=
+\frac{50{,}000}{60}
+=
+833.33.
+\]</span></p>
+<p>The first payment is</p>
+<p><span class="math display">\[
+R_1
+=
+833.33+0.01(50{,}000)
+=
+1{,}333.33,
+\]</span></p>
+<p>while the final payment is approximately</p>
+<p><span class="math display">\[
+R_{60}
+=
+841.67.
+\]</span></p>
+<p>This structure can be expressed directly as a payment function:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>fixed_principal <span class="ot">&lt;-</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  loan_principal <span class="sc">/</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  number_payments</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>constant_principal_rule <span class="ot">&lt;-</span> <span class="cf">function</span>(</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  period,</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  ob_start,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  i_effective_period</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>) {</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>  fixed_principal <span class="sc">+</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>    i_effective_period <span class="sc">*</span> ob_start</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>}</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a>constant_principal_schedule <span class="ot">&lt;-</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a>  <span class="fu">amort_schedule_general</span>(</span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>    <span class="at">principal =</span> loan_principal,</span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>    <span class="at">n =</span> number_payments,</span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>    <span class="at">i =</span> nominal_rate,</span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a>    <span class="at">i_type =</span> <span class="st">&quot;nominal_interest&quot;</span>,</span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a>    <span class="at">m =</span> <span class="dv">12</span>,</span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a>    <span class="at">k =</span> payments_per_year,</span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a>    <span class="at">payment =</span> constant_principal_rule,</span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a>    <span class="at">timing =</span> <span class="st">&quot;immediate&quot;</span></span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a>  )</span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a></span>
+<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a>constant_principal_schedule <span class="sc">|&gt;</span></span>
+<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(</span>
+<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a>    period <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">12</span>, <span class="dv">24</span>, <span class="dv">60</span>)</span>
+<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(</span>
+<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a>    period,</span>
+<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a>    ob_start,</span>
+<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a>    interest,</span>
+<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a>    payment,</span>
+<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a>    principal,</span>
+<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a>    ob_end</span>
+<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a>  )</span>
+<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="co">#&gt; # A tibble: 5 x 6</span></span>
+<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a><span class="co">#&gt;   period ob_start interest payment principal ob_end</span></span>
+<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="co">#&gt;    &lt;int&gt;    &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;     &lt;dbl&gt;  &lt;dbl&gt;</span></span>
+<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a><span class="co">#&gt; 1      1   50000    500      1333.      833. 49167.</span></span>
+<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="co">#&gt; 2      2   49167.   492.     1325       833. 48333.</span></span>
+<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a><span class="co">#&gt; 3     12   40833.   408.     1242.      833. 40000 </span></span>
+<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a><span class="co">#&gt; 4     24   30833.   308.     1142.      833. 30000 </span></span>
+<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="co">#&gt; 5     60     833.     8.33    842.      833.     0</span></span></code></pre></div>
+<p>This example is important because the code states the financial rule
+directly:</p>
+<p><span class="math display">\[
+\text{payment}
+=
+\text{fixed principal}
++
+\text{interest on current balance}.
+\]</span></p>
+<p>The schedule is generated from the definition of the system rather
+than from a precalculated vector of payments.</p>
+</div>
+<div id="level-payment-versus-constant-principal" class="section level2">
+<h2>Level payment versus constant principal</h2>
+<p>The two amortization systems repay the same original principal under
+the same interest-rate basis, but the timing of principal repayment
+differs.</p>
+<p>Under level payments, principal repayment begins relatively slowly
+and increases through time.</p>
+<p>Under constant principal, the same amount of principal is repaid
+every period, so the outstanding balance decreases linearly and interest
+falls more quickly.</p>
+<p>For the 50,000 loan considered above, total interest under the
+level-payment system is approximately</p>
+<p><span class="math display">\[
+16{,}733.34,
+\]</span></p>
+<p>while total interest under constant principal is</p>
+<p><span class="math display">\[
+15{,}250.00.
+\]</span></p>
+<p>The difference is approximately</p>
+<p><span class="math display">\[
+1{,}483.34.
+\]</span></p>
+<p>The reason is not the name of the repayment system. It is the time
+profile of the outstanding balance: faster principal reduction produces
+a smaller balance on which future interest is calculated.</p>
+</div>
+<div id="negative-amortization" class="section level2">
+<h2>Negative amortization</h2>
+<p>The recurrence also identifies when a payment is insufficient to
+cover the interest charged.</p>
+<p>If</p>
+<p><span class="math display">\[
+R_t&lt;i_tB_{t-1},
+\]</span></p>
+<p>then</p>
+<p><span class="math display">\[
+A_t
+=
+R_t-i_tB_{t-1}
+&lt;
+0
+\]</span></p>
+<p>and</p>
+<p><span class="math display">\[
+B_t&gt;B_{t-1}.
+\]</span></p>
+<p>The unpaid portion of interest is added to the outstanding balance.
+This is negative amortization.</p>
+<p><code>amort_schedule_general()</code> permits this situation when the
+supplied payment rule or payment vector produces payments below the
+interest charged. The financial interpretation should remain explicit:
+the loan balance is growing because the contractual cash outflow is
+insufficient to cover current interest.</p>
+<p>Negative amortization is therefore not a software anomaly. It follows
+directly from the balance recurrence.</p>
+</div>
+<div id="final-actuarial-reading" class="section level2">
+<h2>Final actuarial reading</h2>
+<p>Loan amortization can be summarized through a single dynamic
+identity:</p>
+<p><span class="math display">\[
+B_t
+=
+B_{t-1}(1+i_t)-R_t-E_t.
+\]</span></p>
+<p>The familiar level-payment loan is obtained when <span class="math inline">\(i_t=i\)</span>, <span class="math inline">\(R_t=R\)</span>, and <span class="math inline">\(E_t=0\)</span>.</p>
+<p>Extra principal payments modify <span class="math inline">\(E_t\)</span> and may lead either to a shorter term
+or to a lower future payment.</p>
+<p>Variable-rate loans replace the single interest rate by a sequence
+<span class="math inline">\(i_1,\ldots,i_n\)</span>.</p>
+<p>General payment systems replace the constant payment by a rule <span class="math inline">\(R_t=R(t,B_{t-1},i_t)\)</span>.</p>
+<p>The progression is therefore</p>
+<p><span class="math display">\[
+\text{equation of value}
+\longrightarrow
+\text{balance recurrence}
+\longrightarrow
+\text{level schedule}
+\longrightarrow
+\text{prepayment policy}
+\longrightarrow
+\text{general payment rule}.
+\]</span></p>
+<p><code>amort_schedule()</code> is appropriate when the rate
+specification is fixed and the main extension is an extra-principal
+policy.</p>
+<p><code>amort_schedule_general()</code> becomes useful when rates,
+payments, or payment rules vary through time.</p>
+<p>The package does not replace the loan equation. It makes the
+recurrence reproducible when the schedule becomes too complex to
+reconstruct manually period by period.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

@@ -17,7 +17,7 @@ containing columns \code{x} and \code{q_total}.}
 A lifetable object as produced by \code{\link{lifetable}}.
 }
 \description{
-Builds a single-decrement lifetable for the \emph{total} decrement (any cause),
+Builds a single-decrement lifetable for the *total* decrement (any cause),
 using \eqn{q_x^{(\tau)}} from a multiple decrement table produced by
 \code{\link{md_table}}. This enables direct re-use of single-life functions
 (e.g., \code{t_px}, \code{t_qx}, \code{t_Ex}, annuities, insurances) under the

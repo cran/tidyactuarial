@@ -19,13 +19,13 @@
 
 \item{type}{Character string. Canonical annuity type.}
 
-\item{n}{Numeric scalar or \code{NULL}.}
+\item{n}{Numeric scalar or `NULL`.}
 
 \item{h}{Numeric scalar. Deferral period.}
 
-\item{n_guar}{Numeric scalar or \code{NULL}.}
+\item{n_guar}{Numeric scalar or `NULL`.}
 
-\item{timing}{Character string. Either \code{"immediate"} or \code{"due"}.}
+\item{timing}{Character string. Either `"immediate"` or `"due"`.}
 
 \item{payment_interval}{Numeric scalar. Time between payments.}
 }

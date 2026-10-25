@@ -18,8 +18,11 @@
 #'   assets, evaluated on the same yield basis.
 #' @param D Numeric vector with the Macaulay duration of each asset, expressed
 #'   in the same time units as \code{t}.
-#' @param C Numeric vector with the discrete convexity of each asset, expressed
-#'   in the same time units as \code{t}.
+#' @param C Numeric vector with each asset's relative second derivative
+#'   \eqn{P_j''(i_e)/P_j(i_e)} with respect to the annual effective yield
+#'   \eqn{i_e}, using the same time units as \code{t}. A coupon-period
+#'   convexity divided by squared coupon frequency generally uses a different
+#'   yield variable and must be converted before use here.
 #' @param i Numeric scalar. Interest-rate input used to discount the
 #'   liabilities.
 #' @param i_type Character string indicating the interest-rate type. Allowed
@@ -75,6 +78,32 @@
 #' w = A^T(AA^T)^{-1}b
 #' }
 #' is computed.
+#' It is evaluated by singular value decomposition of the row-scaled
+#' constraint matrix, without forming normal equations. The norm is over
+#' asset units \code{w}, not market-value fractions; short positions are allowed.
+#'
+#' All asset sensitivities must use the same annual effective yield as the
+#' liabilities, even when \code{i_type} specifies a nominal rate or a force.
+#' For coupon frequency \eqn{k}, let \eqn{j=(1+i_e)^{1/k}-1}. If
+#' \eqn{C_j=P''(j)/P} and \eqn{D_j^*=-P'(j)/P}, the required convexity is
+#' \deqn{C_{i_e}=C_j[j'(i_e)]^2-D_j^*j''(i_e).}
+#' The outputs \code{discrete_convexity_periods} from \code{bond_convexity()}
+#' and \code{modified_duration_periods_j} from \code{bond_duration()} give
+#' \eqn{C_j} and \eqn{D_j^*}. Alternatively, use \code{convexity_cash_flow()}
+#' on the asset cash flows at the annual effective yield.
+#'
+#' Matching convexity makes the surplus's second derivative zero at the
+#' base yield. This differs from Redington's strict positive-curvature
+#' condition and does not guarantee a nonnegative surplus after rate shifts.
+#' Liability values retain the original log accumulation rate; convexity is
+#' still with respect to the annual effective yield. Relative moments and row
+#' scaling before monetary products prevent avoidable overflow. Scaling uses
+#' common monetary and moment magnitudes, preserving the minimum norm over
+#' asset units, without rescaling asset columns independently. Time-zero
+#' liabilities contribute value but zero duration and convexity. Final values,
+#' weights and sensitivities must be finite; nearly cancelled liability values
+#' are rejected. Rank and cancellation tests remain subject to double precision;
+#' reported portfolio moments should be inspected for ill-conditioned systems.
 #'
 #' @seealso \code{\link{immunize_duration}}, \code{\link{bond_duration}},
 #'   \code{\link{bond_convexity}}
@@ -88,7 +117,7 @@
 #'   t = c(3, 5, 7),
 #'   P = c(100, 150, 200),
 #'   D = c(2, 5, 8),
-#'   C = c(6, 30, 72),
+#'   C = c(6, 30, 72) / (1.05)^2,
 #'   i = 0.05
 #' )
 #'
@@ -98,7 +127,7 @@
 #'   t = c(3, 5, 7),
 #'   P = c(100, 120, 150, 200),
 #'   D = c(2, 4, 6, 8),
-#'   C = c(6, 20, 42, 72),
+#'   C = c(6, 20, 42, 72) / (1.05)^2,
 #'   i = 0.05
 #' )
 #'
@@ -108,7 +137,7 @@
 #'   t = c(3, 5, 7),
 #'   P = c(100, 150, 200),
 #'   D = c(2, 5, 8),
-#'   C = c(6, 30, 72),
+#'   C = c(6, 30, 72) / (1 + 0.06 / 12)^(2 * 12),
 #'   i = 0.06,
 #'   i_type = "nominal_interest",
 #'   m = 12
@@ -215,46 +244,45 @@ immunize_duration_convexity <- function(
     stop("`m` must be a single positive integer.", call. = FALSE)
   }
 
-  m <- as.integer(round(m))
-
-  i_effective <- standardize_interest(
-    type = i_type,
-    rate = i,
-    m = m
-  )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
+  m <- round(m)
+  growth <- .interest_basis(i_type, i, m)$growth
+  if (length(growth) != 1L || !is.finite(growth)) {
+    stop("The original log accumulation rate must be finite.", call. = FALSE)
   }
 
   # --- Liabilities: PV, duration, convexity ---
-  v <- 1 / (1 + i_effective)
-  disc <- v^t
+  discounted <- .cash_flow_value(L, -t * growth)
+  pv_L <- sum(discounted)
+  pv_scale <- sum(abs(discounted))
 
-  pv_L <- sum(L * disc)
-
-  if (abs(pv_L) < .Machine$double.eps * 100) {
+  if (!is.finite(pv_L) || !is.finite(pv_scale)) {
+    stop("Discounting liabilities produced non-finite values.", call. = FALSE)
+  }
+  if (pv_scale == 0 || abs(pv_L) <= .Machine$double.eps * 100 * pv_scale) {
     stop("Present value of liabilities is zero; immunization is not meaningful.",
          call. = FALSE)
   }
 
-  D_L <- sum(t * L * disc) / pv_L
-  C_L <- sum(L * t * (t + 1) * v^(t + 2)) / pv_L
+  D_L <- sign(pv_L) * sum(.cash_flow_value(
+    discounted, log(t) - log(abs(pv_L))))
+  C_L <- sign(pv_L) * sum(.cash_flow_value(
+    discounted, log(t) + log1p(t) - 2 * growth - log(abs(pv_L))))
+  if (!is.finite(D_L) || !is.finite(C_L)) {
+    stop("Liability duration or convexity is non-finite.", call. = FALSE)
+  }
 
   # --- Build linear system A w = b (3 x n_assets) ---
-  A <- rbind(
-    P,
-    P * D,
-    P * C
-  )
-  b <- c(pv_L, pv_L * D_L, pv_L * C_L)
+  price_scale <- max(P, abs(pv_L))
+  duration_scale <- max(abs(D), abs(D_L))
+  convexity_scale <- max(abs(C), abs(C_L))
+  if (duration_scale == 0) duration_scale <- 1
+  if (convexity_scale == 0) convexity_scale <- 1
+  scaled_prices <- P / price_scale
+  scaled_durations <- D / duration_scale
+  scaled_convexities <- C / convexity_scale
+  A <- rbind(scaled_prices, scaled_prices * scaled_durations,
+             scaled_prices * scaled_convexities)
+  b <- (pv_L / price_scale) * c(1, D_L / duration_scale, C_L / convexity_scale)
 
   # --- Solve for weights ---
   if (n_assets == 3L) {
@@ -267,24 +295,26 @@ immunize_duration_convexity <- function(
       }
     )
   } else {
-    # Minimum-norm solution for n_assets >= 4:
-    # w = t(A) %*% solve(A %*% t(A), b)
-    At <- t(A)
-    M  <- A %*% At
-    M_solve <- tryCatch(
-      solve(M, b),
-      error = function(e) {
-        stop("System matrix is singular; cannot compute minimum-norm solution.",
-             call. = FALSE)
-      }
-    )
-    w <- as.numeric(At %*% M_solve)
+    w <- .immunization_min_norm(A, b)
+  }
+  if (any(!is.finite(w))) {
+    stop("Immunization weights are non-finite. Check input magnitudes.", call. = FALSE)
   }
 
   # --- Portfolio measures ---
-  pv_A <- sum(w * P)
-  D_A  <- sum(w * P * D) / pv_A
-  C_A  <- sum(w * P * C) / pv_A
+  market_scaled <- w * scaled_prices
+  portfolio_scaled <- sum(market_scaled)
+  if (any(!is.finite(market_scaled)) || !is.finite(portfolio_scaled) || portfolio_scaled == 0) {
+    stop("Resulting portfolio present value is zero or non-finite.", call. = FALSE)
+  }
+  pv_A <- .cash_flow_value(portfolio_scaled, log(price_scale))
+  D_A <- sign(portfolio_scaled) * .cash_flow_value(
+    sum(market_scaled * scaled_durations), log(duration_scale) - log(abs(portfolio_scaled)))
+  C_A <- sign(portfolio_scaled) * .cash_flow_value(
+    sum(market_scaled * scaled_convexities), log(convexity_scale) - log(abs(portfolio_scaled)))
+  if (any(!is.finite(c(pv_A, D_A, C_A)))) {
+    stop("Resulting portfolio measures are non-finite.", call. = FALSE)
+  }
 
   tibble::tibble(
     w = w,

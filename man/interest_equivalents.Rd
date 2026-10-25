@@ -23,13 +23,13 @@ rates.}
 \value{
 A tibble with columns:
 \describe{
-\item{family}{Rate family: \code{"effective"}, \code{"discount"},
-\code{"force"}, \code{"nominal_interest"}, or
-\code{"nominal_discount"}.}
-\item{notation}{Actuarial notation for the equivalent rate.}
-\item{m}{Conversion frequency used for nominal rates.}
-\item{description}{Human-readable description.}
-\item{value}{Equivalent rate value.}
+  \item{family}{Rate or factor family: \code{"effective"}, \code{"discount"},
+    \code{"discount_factor"}, \code{"force"}, \code{"nominal_interest"}, or
+    \code{"nominal_discount"}.}
+  \item{notation}{Actuarial notation for the equivalent rate.}
+  \item{m}{Conversion frequency used for nominal rates.}
+  \item{description}{Human-readable description.}
+  \item{value}{Equivalent rate value.}
 }
 }
 \description{
@@ -40,18 +40,23 @@ rates for the same conversion frequency \code{m}.
 Internally, the supplied rate is first converted to the annual effective
 interest rate \eqn{i} using \code{\link{standardize_interest}}.
 
+
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{i} denotes the interest-rate value,
 \code{i_type} denotes the type of interest rate, and \code{m} denotes the
 conversion frequency for nominal rates.
 
+Calculations retain the log accumulation rate of the original input.
+An extreme annual effective equivalent may round to -1 or overflow to Inf
+while other equivalent quantities remain representable.
+
 Given the annual effective interest rate \eqn{i}, the equivalents are:
 \describe{
-\item{Effective discount rate:}{\eqn{d = i/(1+i)}{d = i/(1+i)}}
-\item{Discount factor:}{\eqn{v = 1/(1+i)}{v = 1/(1+i)}}
-\item{Force of interest:}{\eqn{\delta = \ln(1+i)}{delta = ln(1+i)}}
-\item{Nominal interest:}{\eqn{j^{(m)} = m[(1+i)^{1/m} - 1]}{j(m) = m*((1+i)^(1/m) - 1)}}
-\item{Nominal discount:}{\eqn{d^{(m)} = m[1 - (1+i)^{-1/m}]}{d(m) = m*(1 - (1+i)^(-1/m))}}
+  \item{Effective discount rate:}{\eqn{d = i/(1+i)}{d = i/(1+i)}}
+  \item{Discount factor:}{\eqn{v = 1/(1+i)}{v = 1/(1+i)}}
+  \item{Force of interest:}{\eqn{\delta = \ln(1+i)}{delta = ln(1+i)}}
+  \item{Nominal interest:}{\eqn{j^{(m)} = m[(1+i)^{1/m} - 1]}{j(m) = m*((1+i)^(1/m) - 1)}}
+  \item{Nominal discount:}{\eqn{d^{(m)} = m[1 - (1+i)^{-1/m}]}{d(m) = m*(1 - (1+i)^(-1/m))}}
 }
 }
 \examples{
@@ -75,14 +80,17 @@ if (requireNamespace("purrr", quietly = TRUE) &&
 }
 \seealso{
 \code{\link{standardize_interest}},
-\code{\link{discount_factor_spot}}
+  \code{\link{discount_factor_spot}}
 
-Other interest: 
-\code{\link{accumulation_factor}()},
-\code{\link{discount_factor}()},
-\code{\link{discount_factor_spot}()},
-\code{\link{forward_rate}()},
-\code{\link{standardize_interest}()},
-\code{\link{yield_curve}()}
+Other interest:
+\code{\link[=accumulation_factor]{accumulation_factor()}},
+\code{\link[=bootstrap_spot_curve]{bootstrap_spot_curve()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=discount_factor_spot]{discount_factor_spot()}},
+\code{\link[=forward_curve]{forward_curve()}},
+\code{\link[=forward_rate]{forward_rate()}},
+\code{\link[=par_rate]{par_rate()}},
+\code{\link[=standardize_interest]{standardize_interest()}},
+\code{\link[=yield_curve]{yield_curve()}}
 }
 \concept{interest}

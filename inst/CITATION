@@ -1,0 +1,13 @@
+citHeader("To cite tidyactuarial in publications use:")
+
+bibentry(
+  bibtype = "Manual",
+  title = "{tidyactuarial}: Tidy Tools for Actuarial Mathematics and Life Contingencies",
+  author = person(
+    given = "Julian",
+    family = "Fajardo"
+  ),
+  year = "2026",
+  note = "R package version 0.1.6",
+  url = "https://CRAN.R-project.org/package=tidyactuarial"
+)

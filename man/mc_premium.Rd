@@ -56,23 +56,24 @@ inferred from \code{payment_per_payment}, \code{payment}, or
 \code{benefit_col}, \code{annuity_col}, and \code{premium_col}.}
 }
 \value{
-A tibble containing the original simulations and standardized
+A data frame or tibble containing the original simulations and standardized
 premium columns:
 \describe{
-\item{premium_annualized}{Estimated annualized premium
-\eqn{\widehat P^{(k)}}.}
-\item{premium_per_payment}{Amount collected at each premium date.}
-\item{payments_per_year}{Premium payment frequency \code{k}.}
-\item{premium_annuity_scale}{Coefficient \eqn{\widehat q} multiplying
-\code{col_Y}.}
-\item{mc_equivalence_residual}{Difference
-\eqn{\overline Z-\widehat q\overline{Y_c}} within the estimation group.}
+  \item{premium_annualized}{Estimated annualized premium
+  \eqn{\widehat P^{(k)}}.}
+  \item{premium_per_payment}{Amount collected at each premium date.}
+  \item{payments_per_year}{Premium payment frequency \code{k}.}
+  \item{premium_annuity_scale}{Coefficient \eqn{\widehat q} multiplying
+  \code{col_Y}.}
+  \item{mc_equivalence_residual}{Difference
+  \eqn{\overline Z-\widehat q\overline{Y_c}} within the estimation group.}
 }
 
 The column selected by \code{col_P} stores
 \code{premium_annuity_scale} for backward compatibility. Unless
 \code{col_P = "premium"}, a compatibility column \code{premium} is also
 created with the same scale coefficient.
+Existing grouping is used for estimation and removed from the result.
 }
 \description{
 Estimates net premiums from simulated present values of benefits and premium
@@ -116,6 +117,17 @@ When \code{na_rm = TRUE}, missing values are removed jointly: a simulation
 contributes only if both \code{col_Z} and \code{col_Y} are observed. This
 prevents the numerator and denominator from being estimated from different
 simulated samples.
+Monetary premium amounts retain the ratio before intermediate overflow or
+underflow. A displayed annuity-scale coefficient may still be zero or
+infinite when the coefficient itself is outside double precision, while
+the per-payment and annualized amounts remain representable. The
+equivalence residual uses the ratio before that loss of range.
+Positive subnormal observations are retained using scaled means when an
+ordinary mean rounds to zero. A genuinely zero annuity exposure is rejected.
+A positive infinite \code{payment_annualized} metadata value is accepted
+only when it agrees with the product of a finite payment basis and finite
+frequency. The payment basis cannot be inferred from that infinite value
+alone; retain \code{payment_per_payment} or supply \code{annuity_payment}.
 }
 \examples{
 simulated <- tibble::tibble(
@@ -155,14 +167,14 @@ Society of Actuaries.
 \code{\link{mc_loss}}, \code{\link{mc_reserve}},
 \code{\link{premium_x}}, \code{\link{premium_xy}}
 
-Other monte-carlo: 
-\code{\link{mc_annuity}()},
-\code{\link{mc_insurance}()},
-\code{\link{mc_loss}()},
-\code{\link{mc_multilife_status}()},
-\code{\link{mc_reserve}()},
-\code{\link{simulate_lifetime}()},
-\code{\link{simulate_lifetimes}()},
-\code{\link{summary_mc}()}
+Other monte-carlo:
+\code{\link[=mc_annuity]{mc_annuity()}},
+\code{\link[=mc_insurance]{mc_insurance()}},
+\code{\link[=mc_loss]{mc_loss()}},
+\code{\link[=mc_multilife_status]{mc_multilife_status()}},
+\code{\link[=mc_reserve]{mc_reserve()}},
+\code{\link[=simulate_lifetime]{simulate_lifetime()}},
+\code{\link[=simulate_lifetimes]{simulate_lifetimes()}},
+\code{\link[=summary_mc]{summary_mc()}}
 }
 \concept{monte-carlo}

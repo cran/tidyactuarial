@@ -63,9 +63,9 @@ actuarial notation.
 \details{
 Supported timing conventions:
 \itemize{
-\item \code{"immediate"}: annuity-immediate with discrete payments.
-\item \code{"due"}: annuity-due with discrete payments.
-\item \code{"continuous"}: continuous annuity.
+  \item \code{"immediate"}: annuity-immediate with discrete payments.
+  \item \code{"due"}: annuity-due with discrete payments.
+  \item \code{"continuous"}: continuous annuity.
 }
 
 For discrete annuities, \code{k} is the number of payments per year, so
@@ -78,16 +78,17 @@ integer.
 
 If \code{perpetuity = TRUE}, the infinite-term annuity factor is returned.
 
+
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}:
 
 \itemize{
-\item \code{n}: annuity term;
-\item \code{k}: payment frequency;
-\item \code{i}: interest rate;
-\item \code{i_type}: interest-rate type;
-\item \code{m}: conversion frequency for nominal rates;
-\item \code{h}: deferment period.
+  \item \code{n}: annuity term;
+  \item \code{k}: payment frequency;
+  \item \code{i}: interest rate;
+  \item \code{i_type}: interest-rate type;
+  \item \code{m}: conversion frequency for nominal rates;
+  \item \code{h}: deferment period.
 }
 
 The function first converts the supplied rate to the equivalent annual
@@ -101,6 +102,21 @@ For due annuities:
 
 For continuous annuities:
 \deqn{\bar{a}_{\overline{n|}} = \frac{1 - e^{-\delta n}}{\delta}}
+
+More generally, let \eqn{N=nk}, let \eqn{b=0} for immediate payments and
+\eqn{b=1} for due payments. The deferred discrete factor is
+\deqn{\sum_{j=1}^{N} \exp\{-\delta[h+(j-b)/k]\}.}
+Each discrete payment is one unit, whereas a continuous annuity pays one
+unit per year. The continuous deferred factor is
+\eqn{\int_h^{h+n} e^{-\delta t}\,dt}.
+
+The original log accumulation rate is retained even if its annual
+effective equivalent rounds to -1 or overflows. Geometric sums and
+continuous integrals use stable logarithmic formulas with exact zero-rate
+limits, rather than replacing a small nonzero rate by zero. Perpetuities
+require a strictly positive rate, without a numerical lower cutoff.
+Monetary values combine payments with log factors before declaring range
+loss; a reported annuity factor or equivalent rate may still be non-finite.
 
 Input vectors must have length 1 or a common length. Missing values are
 propagated.
@@ -149,11 +165,11 @@ a_angle(
 }
 \seealso{
 \code{\link{s_angle}}, \code{\link{standardize_interest}},
-\code{\link{present_value}}
+  \code{\link{present_value}}
 
-Other annuities: 
-\code{\link{annuity_arith}()},
-\code{\link{annuity_geom}()},
-\code{\link{s_angle}()}
+Other annuities:
+\code{\link[=annuity_arith]{annuity_arith()}},
+\code{\link[=annuity_geom]{annuity_geom()}},
+\code{\link[=s_angle]{s_angle()}}
 }
 \concept{annuities}

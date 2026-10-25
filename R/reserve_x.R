@@ -90,6 +90,27 @@
 #' }{p_{x+t}}.
 #' }
 #'
+#' The implementation evaluates its algebraically equivalent backward form
+#' \deqn{{}_tV_x = v(p_{x+t}{}_{t+1}V_x + q_{x+t}b_{t+1}) - P_t.}
+#' This avoids amplification by repeated division by small survival
+#' probabilities. The boundary value is the prospective value at the last
+#' supported positive cohort within the contract horizon; it is not generally
+#' zero for whole-life insurance. Already defined maturity payments are retained.
+#' Unrequested extinct conditioning states are not traversed. A requested
+#' intermediate reserve conditional on an extinct cohort remains undefined.
+#'
+#' Tables must have nonincreasing finite \code{lx} on an annual age grid.
+#' The recursive calculation retains the original log accumulation rate and
+#' forms death decrements before dividing survivor counts. Positive survival is
+#' obtained directly from counts, not as \eqn{1-q_x}. The whole-life output
+#' horizon remains the last recorded age with positive \code{lx}; finite
+#' coverage must be supported by recorded table ages. These local conventions
+#' are retained separately from the implicit final interval in insurance APVs.
+#' \code{t} indexes durations of one contract, not independent policy scenarios.
+#' No clipping or zeroing of small/negative reserves is applied. Nonfinite
+#' future APV components do not in general identify their difference; exact
+#' recovery of arbitrary cancellations between infinite components is not promised.
+#'
 #' @seealso \code{\link{premium_x}}, \code{\link{insurance_x}},
 #'   \code{\link{annuity_x}}, \code{\link{life_contract}},
 #'   \code{\link{add_insurance}}, \code{\link{add_premium_schedule}}
@@ -470,7 +491,7 @@ reserve_x <- function(
         length(x) != 1L ||
         is.na(x) ||
         !is.finite(x) ||
-        abs(x - round(x)) > 1e-10) {
+        abs(x - round(x)) > 1e-10 || abs(x) > .Machine$integer.max) {
       stop("`x` must be a single integer age.", call. = FALSE)
     }
 
@@ -527,7 +548,7 @@ reserve_x <- function(
         is.na(h) ||
         !is.finite(h) ||
         h < 0 ||
-        abs(h - round(h)) > 1e-10) {
+        abs(h - round(h)) > 1e-10 || h > .Machine$integer.max) {
       stop("`h` must be a single nonnegative integer.", call. = FALSE)
     }
 
@@ -566,6 +587,7 @@ reserve_x <- function(
          n_prem <= 0 ||
          (!is.infinite(n_prem) &&
           (!is.finite(n_prem) ||
+           !is.finite(n_prem * k) ||
            abs(n_prem * k - round(n_prem * k)) > 1e-10)))) {
       stop(
         "`n_prem` must be NULL, Inf, or a positive value satisfying ",
@@ -576,12 +598,12 @@ reserve_x <- function(
   }
 
   x <- as.integer(round(x))
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
   h <- as.integer(round(h))
-  k <- as.integer(round(k))
+  k <- if (k <= .Machine$integer.max) as.integer(round(k)) else round(k)
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    n <- if (n <= .Machine$integer.max) as.integer(round(n)) else round(n)
   }
 
   if (!is.null(n_prem) && !is.infinite(n_prem)) {
@@ -596,6 +618,7 @@ reserve_x <- function(
 
   if (any(is.na(lt$x)) ||
       any(!is.finite(lt$x)) ||
+      !nrow(lt) || any(abs(lt$x) > .Machine$integer.max) ||
       any(abs(lt$x - round(lt$x)) > 1e-10)) {
     stop("Column `x` must contain finite integer ages.", call. = FALSE)
   }
@@ -612,6 +635,12 @@ reserve_x <- function(
 
   ages <- as.integer(round(lt$x))
   lx_values <- as.numeric(lt$lx)
+  if (any(diff(lx_values) > 0)) {
+    stop("Column `lx` must be nonincreasing.", call. = FALSE)
+  }
+  if (any(diff(as.double(ages)) != 1)) {
+    stop("Life table ages must form an annual age grid.", call. = FALSE)
+  }
 
   if (!x %in% ages) {
     stop("Age `x` is not available in the life table.", call. = FALSE)
@@ -626,12 +655,13 @@ reserve_x <- function(
   max_supported_age <- max(positive_ages)
 
   coverage_end <- if (identical(type, "whole")) {
-    max_supported_age - x
+    as.double(max_supported_age) - x
   } else {
-    h + n
+    as.double(h) + n
   }
+  if (coverage_end <= .Machine$integer.max) coverage_end <- as.integer(coverage_end)
 
-  if (!identical(type, "whole") && x + coverage_end > max(ages)) {
+  if (!identical(type, "whole") && as.double(x) + coverage_end > max(ages)) {
     stop(
       "The requested coverage horizon exceeds the available life table.",
       call. = FALSE
@@ -668,6 +698,7 @@ reserve_x <- function(
         length(t) < 1L ||
         any(is.na(t)) ||
         any(!is.finite(t)) ||
+        any(t < 0 | t > .Machine$integer.max) ||
         any(abs(t - round(t)) > 1e-10)) {
       stop("`t` must be an integer vector of policy durations.", call. = FALSE)
     }
@@ -683,7 +714,7 @@ reserve_x <- function(
   }
 
   future_benefit_apv <- function(tt) {
-    current_age <- x + tt
+    current_age <- as.double(x) + tt
 
     if (identical(type, "whole")) {
       remaining_h <- max(0L, h - tt)
@@ -747,7 +778,7 @@ reserve_x <- function(
   }
 
   future_premium_factor <- function(tt) {
-    current_age <- x + tt
+    current_age <- as.double(x) + tt
 
     if (tt < premium_start_time) {
       return(
@@ -845,17 +876,14 @@ reserve_x <- function(
     numeric(1L)
   )
 
-  apv_premiums_vec <- P * premium_factors_vec
+  apv_premiums_vec <- .cash_flow_value(rep(P, length(premium_factors_vec)),
+                                      log(premium_factors_vec))
   prospective_reserves <- apv_benefits_vec - apv_premiums_vec
 
   if (identical(method, "prospective")) {
     reserves <- prospective_reserves
   } else {
-    i_effective <- standardize_interest(
-      i_type = i_type,
-      i = i,
-      m = m
-    )
+    basis <- .interest_basis(i_type, i, m)
 
     age_index <- stats::setNames(seq_along(ages), ages)
 
@@ -866,49 +894,31 @@ reserve_x <- function(
         return(lx_values[[age_index[[key]]]])
       }
 
-      if (age_value == max(ages) + 1L) {
+      if (age_value == as.double(max(ages)) + 1) {
         return(0)
       }
 
       NA_real_
     }
 
-    one_year_qx <- function(age_value) {
-      l0 <- get_lx(age_value)
-      l1 <- get_lx(age_value + 1L)
-
-      if (is.na(l0) || is.na(l1) || l0 <= 0) {
-        return(NA_real_)
-      }
-
-      1 - l1 / l0
-    }
-
-    full_t <- seq.int(0L, as.integer(coverage_end))
+    # Backward form of the same reserve identity. Stop at a supported positive
+    # cohort, with its prospective terminal condition, rather than traversing
+    # unrequested impossible conditioning states or dividing by tiny p_x.
+    recursion_end <- min(coverage_end, as.double(max_supported_age) - x)
+    full_t <- seq.int(0L, as.integer(recursion_end))
     full_reserves <- numeric(length(full_t))
-    full_reserves[[1L]] <- future_benefit_apv(0) -
-      P * future_premium_factor(0)
+    full_reserves[[length(full_t)]] <- future_benefit_apv(recursion_end) -
+      .cash_flow_value(P, log(future_premium_factor(recursion_end)))
 
     if (length(full_t) > 1L) {
-      for (idx in seq_len(length(full_t) - 1L)) {
+      for (idx in rev(seq_len(length(full_t) - 1L))) {
         tt <- full_t[[idx]]
-        current_age <- x + tt
-
-        qx_t <- one_year_qx(current_age)
-
-        if (is.na(qx_t)) {
+        current_age <- as.double(x) + tt
+        l0 <- get_lx(current_age)
+        l1 <- get_lx(current_age + 1)
+        if (is.na(l0) || is.na(l1) || l0 <= 0) {
           stop(
             "The life table does not support recursive reserve computation.",
-            call. = FALSE
-          )
-        }
-
-        px_t <- 1 - qx_t
-
-        if (px_t <= 0) {
-          stop(
-            "The recursive reserve is undefined after survival probability ",
-            "reaches zero.",
             call. = FALSE
           )
         }
@@ -928,16 +938,16 @@ reserve_x <- function(
           if (tt >= h && tt < h + n) benefit else 0
         }
 
-        full_reserves[[idx + 1L]] <-
-          (
-            (full_reserves[[idx]] + premium_due) *
-              (1 + i_effective) -
-              death_benefit * qx_t
-          ) / px_t
+        full_reserves[[idx]] <- .cash_flow_sum(
+          c(full_reserves[[idx + 1L]], death_benefit, -premium_due),
+          c(.single_life_log_ratio(l1, l0) - basis$growth,
+            .single_life_log_ratio(l0 - l1, l0) - basis$growth, 0))
       }
     }
 
-    reserves <- full_reserves[match(t_vec, full_t)]
+    reserves <- prospective_reserves
+    supported <- t_vec <= recursion_end
+    reserves[supported] <- full_reserves[match(t_vec[supported], full_t)]
   }
 
   names(reserves) <- paste0("t=", t_vec)

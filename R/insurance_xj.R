@@ -30,6 +30,22 @@
 #'
 #' If \code{type = "whole"}, the function sets \code{n} to the remaining length
 #' of the table after deferment, that is, whole life over the available ages.
+#' With an open table this is a truncated value, not a complete whole-life APV;
+#' completeness requires that no active survivors remain beyond the last row.
+#' Cause probabilities are dependent probabilities of exit from the active
+#' state in a competing-decrement model, not independent/net decrement rates.
+#' Survival to each year's start uses all decrements. The payment is at year
+#' end, not the moment of exit; the cause-specific probability is not multiplied
+#' by survival to year end. Values are conditional on active status at issue.
+#'
+#' The selected probabilities must be finite, in [0,1], with cause probability
+#' no greater than total decrement. Ages must be consecutive annual ages.
+#' Optional `q_total` is checked against `p_total`; redundant cohort counts
+#' are not the valuation basis. `q_total` itself can be selected to value all
+#' exits. Original log accumulation and cumulative log survival retain
+#' representable values despite overflowing annual equivalent rates or
+#' underflowing intermediate survival. Scalar inputs recycle to a common
+#' positive scenario length; `cause` and `type` select one model per call.
 #'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{md} is a multiple decrement table, \code{x} is
@@ -41,8 +57,9 @@
 #'   Must contain columns \code{x}, \code{p_total}, and the requested
 #'   \code{cause}.
 #' @param x Integer age(s) at issue.
-#' @param i Annual interest-rate input. Must produce an annual effective rate
-#'   greater than \code{-1}.
+#' @param i Finite annual interest-rate input in the valid domain of its
+#'   original rate specification. Extreme annual equivalents may round to -1
+#'   or overflow, while the original log accumulation remains usable.
 #' @param cause Character scalar. Name of the cause column in \code{md}, for
 #'   example \code{"q_death"}.
 #' @param type Character scalar. Insurance type: \code{"whole"} or
@@ -127,10 +144,12 @@ insurance_xj <- function(
     stop("`x`, `i`, and `cause` are required.", call. = FALSE)
   }
 
-  if (!is.character(cause) || length(cause) != 1L) {
+  if (!is.character(cause) || length(cause) != 1L || is.na(cause)) {
     stop("`cause` must be a single character string.", call. = FALSE)
   }
   if (!cause %in% names(md)) stop("`cause` not found in `md`.", call. = FALSE)
+  if (cause %in% c("x", "lx", "p_total", "d_total"))
+    stop("`cause` must select decrement probabilities, not a reserved count or survival column.", call. = FALSE)
 
   if (!is.logical(tidy) || length(tidy) != 1L || is.na(tidy)) {
     stop("`tidy` must be a logical scalar.", call. = FALSE)
@@ -139,6 +158,30 @@ insurance_xj <- function(
   if (!is.logical(check) || length(check) != 1L || is.na(check)) {
     stop("`check` must be a logical scalar.", call. = FALSE)
   }
+  if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol <= 0)
+    stop("`tol` must be finite and positive.", call. = FALSE)
+  inputs <- list(x = x, i = i, h = h, m = m, benefit = benefit)
+  if (!is.null(n)) inputs$n <- n
+  if (any(!vapply(inputs, function(z) is.numeric(z) && length(z) > 0L,
+                   logical(1))))
+    stop("Numeric inputs must be nonempty numeric vectors.", call. = FALSE)
+  if (!is.numeric(md$x) || !nrow(md) || any(!is.finite(md$x)) ||
+      any(md$x != round(md$x)) || any(abs(md$x) > .Machine$integer.max) ||
+      anyDuplicated(md$x))
+    stop("`md$x` must contain unique finite integer ages.", call. = FALSE)
+  for (column in c("p_total", cause)) {
+    z <- md[[column]]
+    if (!is.numeric(z) || any(!is.finite(z)) || any(z < 0 | z > 1))
+      stop("Invalid probabilities in `", column, "`.", call. = FALSE)
+  }
+  if (any(md[[cause]] - (1 - md$p_total) > tol))
+    stop("Cause probability cannot exceed the total decrement probability.", call. = FALSE)
+  if ("q_total" %in% names(md) &&
+      (!is.numeric(md$q_total) || any(!is.finite(md$q_total)) ||
+       any(md$q_total < 0 | md$q_total > 1) ||
+       any(abs(md$p_total + md$q_total - 1) > tol) ||
+       any(md[[cause]] - md$q_total > tol)))
+    stop("Inconsistent total decrement probabilities.", call. = FALSE)
 
   x <- as.numeric(x)
   i <- as.numeric(i)
@@ -148,7 +191,8 @@ insurance_xj <- function(
 
   if (check) {
     if (any(!is.finite(x))) stop("`x` must be finite.", call. = FALSE)
-    if (any(abs(x - round(x)) > tol)) stop("`x` must be integer ages.", call. = FALSE)
+    if (any(abs(x - round(x)) > tol) || any(abs(x) > .Machine$integer.max))
+      stop("`x` must be supported integer ages.", call. = FALSE)
 
     if (any(!is.finite(i))) stop("`i` must be finite.", call. = FALSE)
 
@@ -163,7 +207,7 @@ insurance_xj <- function(
       "force"
     )
 
-    bad_i_type <- !is.na(i_type) & !(i_type %in% valid_i_type)
+    bad_i_type <- is.na(i_type) | !(i_type %in% valid_i_type)
     if (any(bad_i_type)) {
       stop(
         "`i_type` must contain only: ",
@@ -197,14 +241,21 @@ insurance_xj <- function(
   }
 
   x <- as.integer(round(x))
-  h <- as.integer(round(h))
-  m <- as.integer(round(m))
-  if (!is.null(n)) n <- as.integer(round(n))
+  h <- round(h)
+  if (all(h <= .Machine$integer.max)) h <- as.integer(h)
+  m <- round(m)
+  if (all(m <= .Machine$integer.max)) m <- as.integer(m)
+  if (!is.null(n)) {
+    n <- round(n)
+    if (all(n <= .Machine$integer.max)) n <- as.integer(n)
+  }
 
   md <- dplyr::as_tibble(md) |>
     dplyr::arrange(.data$x)
 
   ages <- md$x
+  if (any(diff(as.double(ages)) != 1))
+    stop("`md` must contain consecutive annual ages.", call. = FALSE)
   p_tot <- md$p_total
   q_j   <- md[[cause]]
 
@@ -232,24 +283,17 @@ insurance_xj <- function(
   if (length(benefit) == 1L && L > 1L) benefit <- rep.int(benefit, L)
   if (!is.null(n) && length(n) == 1L && L > 1L) n <- rep.int(n, L)
 
-  i_effective <- standardize_interest(
-    type = i_type,
-    rate = i,
+  basis <- .interest_basis(
+    i_type = i_type,
+    i = i,
     m = m
   )
 
-  if (any(is.na(i_effective)) ||
-      any(!is.finite(i_effective)) ||
-      any(i_effective <= -1)) {
-    stop(
-      "The standardized annual effective interest rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
+  if (anyNA(basis$growth)) stop("Interest assumptions cannot be missing.", call. = FALSE)
 
   apv <- vapply(seq_len(L), function(idx) {
     x_idx <- x[idx]
-    i_idx <- i_effective[idx]
+    growth <- basis$growth[idx]
     h_idx <- h[idx]
     benefit_idx <- benefit[idx]
 
@@ -267,7 +311,7 @@ insurance_xj <- function(
       n[idx]
     }
 
-    if (is.na(n_idx)) n_idx <- 0L
+    if (is.na(n_idx)) stop("`n` cannot be missing.", call. = FALSE)
     if (n_idx < 0L) stop("`n` must be nonnegative.", call. = FALSE)
     if (n_idx == 0L) return(0)
 
@@ -280,13 +324,12 @@ insurance_xj <- function(
     pvec <- p_tot[idx0:idx_end]
     qvec <- q_j[idx0:idx_end]
 
-    v <- (1 + i_idx)^(-1)
-
-    surv_to_start <- cumprod(c(1, pvec))[1:K]  # survival to start of each year
-    disc_endyear  <- v^(1:K)                   # discount to end of each year
-
+    log_surv <- c(0, cumsum(log(pvec)))[seq_len(K)]
     idx_sum <- (h_idx + 1L):(h_idx + n_idx)    # years h..h+n-1 (1-based)
-    benefit_idx * sum(disc_endyear[idx_sum] * surv_to_start[idx_sum] * qvec[idx_sum])
+    log_mass <- log_surv[idx_sum] + log(qvec[idx_sum])
+    log_factor <- log_mass - growth * idx_sum
+    log_factor[log_mass == -Inf] <- -Inf
+    .cash_flow_sum(rep(benefit_idx, length(idx_sum)), log_factor)
   }, numeric(1))
 
   if (!tidy) return(apv)

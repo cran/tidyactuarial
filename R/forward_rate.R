@@ -64,9 +64,13 @@
 #' conversion frequency for nominal spot rates. The output column \code{f}
 #' denotes the implied annual effective forward rate.
 #'
-#' Spot-rate inputs are converted to annual effective form using
-#' \code{\link{standardize_interest}} before interpolation and forward-rate
-#' calculation.
+#' Exact extraction retains the original log accumulation rates and evaluates
+#' the spot-forward identity without forming powers or their ratio. Reported
+#' annual equivalents and the final forward rate can reach double precision
+#' limits. Linear extraction interpolates annual effective spot rates, not log
+#' discounts, and requires finite annual equivalents greater than -1.
+#' With \code{.na = "propagate"}, an incomplete row keeps its position and has
+#' a \code{NULL} plot entry when plotting is requested.
 #'
 #' @seealso \code{\link{yield_curve}}, \code{\link{discount_factor_spot}},
 #'   \code{\link{standardize_interest}}
@@ -360,7 +364,7 @@ forward_rate <- function(
       ))
     }
 
-    if (!is.na(s1) && s1 <= s0) {
+    if (!is.na(s0) && !is.na(s1) && s1 <= s0) {
       abort(paste0(
         "`", t_end_name,
         "` must be strictly greater than `",
@@ -499,21 +503,23 @@ forward_rate <- function(
       out_forward[row_idx] <- NA_real_
 
       if (plot) {
-        out_plot_list[[row_idx]] <- NULL
+        out_plot_list[row_idx] <- list(NULL)
       }
 
       next
     }
 
-    ii_eff <- standardize_interest(
+    basis <- .interest_basis(
       i_type = rep_len(i_type, length(ii)),
       i = ii,
       m = rep_len(m, length(ii))
     )
 
-    if (any(!is.finite(ii_eff) | ii_eff <= -1)) {
+    ii_eff <- basis$effective
+    if (any(!is.finite(basis$growth)) ||
+        (method == "linear" && any(!is.finite(ii_eff) | ii_eff <= -1))) {
       abort(paste0(
-        "The standardized annual effective spot rates must be greater than -1. ",
+        "Spot log growth must be finite; linear interpolation requires finite annual effective rates greater than -1. ",
         "Problem at row ", row_idx, "."
       ))
     }
@@ -530,7 +536,18 @@ forward_rate <- function(
       linear = extract_linear(tt, ii_eff, s1, row_idx, t_end_name)
     )
 
-    fwd <- ((1 + i_end)^s1 / (1 + i_start)^s0)^(1 / (s1 - s0)) - 1
+    if (method == "exact") {
+      g_start <- extract_exact(tt, basis$growth, s0, row_idx, t_start_name)
+      g_end <- extract_exact(tt, basis$growth, s1, row_idx, t_end_name)
+    } else {
+      g_start <- log1p(i_start)
+      g_end <- log1p(i_end)
+    }
+    # Algebraically (s1*g_end - s0*g_start)/(s1-s0), preserving flat curves
+    # and avoiding products of a large common origin with equal growth rates.
+    forward_growth <- if (s0 == 0) g_end else
+      g_end + s0 * ((g_end - g_start) / (s1 - s0))
+    fwd <- expm1(forward_growth)
 
     out_forward[row_idx] <- fwd
     out_i_start[row_idx] <- i_start
@@ -547,7 +564,7 @@ forward_rate <- function(
   } else if (.keep == "used") {
     out <- data_in[, c(t_name, i_name, t_start_name, t_end_name), drop = FALSE]
   } else {
-    out <- tibble::tibble()
+    out <- tibble::tibble(.rows = n_rows)
   }
 
   out[[.out]] <- out_forward

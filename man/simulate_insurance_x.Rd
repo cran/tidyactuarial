@@ -51,12 +51,16 @@ simulate_insurance_x(
 }
 \value{
 A tibble with one row per simulation, or a summary. Simulation
-output includes \code{benefit_indicator}, \code{benefit_time},
-\code{present_value}, and \code{pv_benefit}.
+  output includes \code{benefit_indicator}, \code{benefit_time},
+  \code{present_value}, and \code{pv_benefit}.
 }
 \description{
 Simulates present values of a discrete single-life insurance payable at the
 end of the year of death, or at maturity for an endowment insurance.
+Monetary values retain the original log interest rate, even when the
+displayed annual effective rate loses range. Finite-horizon survivors
+are censored: \code{Kx = n} is a placeholder and
+\code{died_within_horizon = FALSE}, not an observed death at that duration.
 }
 \examples{
 lt <- data.frame(
@@ -77,25 +81,25 @@ simulate_insurance_x(
 
 }
 \seealso{
-Other simulation: 
-\code{\link{simulate_annuity_x}()}
+Other simulation:
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_x}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_x]{annuity_x()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}}
 }
 \concept{life-contingencies}
 \concept{simulation}

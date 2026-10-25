@@ -24,10 +24,10 @@ annuity_x(
 \code{tidyact_life_contract} object created by \code{\link{life_contract}}.
 A life table must contain columns \code{x} and \code{lx}.}
 
-\item{x}{Integer actuarial age. Optional when \code{lt} is a single-life
+\item{x}{Integer actuarial age, or a vector of scenario ages. Optional when \code{lt} is a single-life
 \code{tidyact_life_contract}.}
 
-\item{i}{Numeric scalar. Annual interest-rate input. Optional when \code{lt}
+\item{i}{Numeric annual interest-rate input, scalar or by scenario. Optional when \code{lt}
 is a single-life \code{tidyact_life_contract}.}
 
 \item{i_type}{Character string indicating the interest-rate type. Allowed
@@ -68,13 +68,13 @@ Woolhouse approximation.}
 otherwise \code{"UDD"} is used.}
 
 \item{tidy}{Logical. If \code{FALSE}, returns a numeric APV. If \code{TRUE},
-returns a one-row tibble with intermediate quantities.}
+returns one tibble row per scenario with intermediate quantities.}
 }
 \value{
-If \code{tidy = FALSE}, a numeric scalar containing the actuarial present
-value.
+If \code{tidy = FALSE}, a numeric vector of actuarial present values,
+of length one for a single scenario.
 
-If \code{tidy = TRUE}, a one-row tibble with the main input values,
+If \code{tidy = TRUE}, a tibble with one row per scenario, the main input values,
 equivalent interest rate, deferment factor, pure endowment factor, and APV.
 }
 \description{
@@ -84,26 +84,27 @@ actuarial notation.
 \details{
 The function supports:
 \itemize{
-\item whole-life annuities,
-\item temporary annuities,
-\item integer deferment,
-\item annual or k-thly payments,
-\item exact fractional survival for k-thly payments,
-\item first- and second-order Woolhouse approximations.
+  \item whole-life annuities,
+  \item temporary annuities,
+  \item integer deferment,
+  \item annual or k-thly payments,
+  \item exact fractional survival for k-thly payments,
+  \item first- and second-order Woolhouse approximations.
 }
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}:
 
 \itemize{
-\item \code{lt}: life table;
-\item \code{x}: actuarial age;
-\item \code{i}: interest rate;
-\item \code{i_type}: interest-rate type;
-\item \code{m}: interest conversion frequency;
-\item \code{n}: annuity term;
-\item \code{h}: deferment period;
-\item \code{k}: payment frequency.
+  \item \code{lt}: life table;
+  \item \code{x}: actuarial age;
+  \item \code{i}: interest rate;
+  \item \code{i_type}: interest-rate type;
+  \item \code{m}: interest conversion frequency;
+  \item \code{n}: annuity term;
+  \item \code{h}: deferment period;
+  \item \code{k}: payment frequency.
 }
 
 For annual annuities-due,
@@ -129,6 +130,31 @@ normalization is essential when the function is used as the premium
 annuity in the equivalence principle: the resulting premium is annualized,
 and the amount paid at each installment is the annualized premium divided
 by \eqn{k}.
+
+\strong{Scenarios and tidy workflows.} All arguments except \code{lt} and
+\code{tidy} may have a common positive length; only length-one arguments
+recycle. \code{n = NULL} and \code{frac = NULL} keep their scalar default
+meanings. Scenarios are paired by position, not expanded to a Cartesian
+product, and each describes one life under the shared table. Invalid or
+missing inputs are rejected with the scenario number; no partial result is
+returned. Use \code{dplyr::mutate()} with \code{tidy = FALSE} for portfolios,
+or \code{tidy = TRUE} for an auditable scenario table. Different mortality
+tables require separate calls, for example in a list-column workflow.
+
+\strong{Model and numerical limits.} Discounting retains the original log
+accumulation rate; exact payments are valued from the issue age, avoiding
+products of separately rounded deferment and conditional values. Intermediate
+diagnostic values can be zero or infinite while the APV remains finite.
+Tables must have an annual age grid and nonincreasing finite \code{lx},
+with a positive count at issue. For compatibility, a count of zero is assumed
+at one year beyond the last recorded age, even for an open input table.
+Known extinct tails contribute zero. Woolhouse is an approximation using
+annual survival estimates of boundary forces, not an exact integral; its
+second order requires positive survival where a boundary force is needed.
+Negative approximations generate a warning and are not clamped. Prefer
+\code{woolhouse = "none"} for exact payments under the chosen fractional
+assumption. At \code{n = 0}, APV and the annuity value at start are zero,
+while the zero-term pure endowment factor is one.
 }
 \examples{
 lt <- data.frame(
@@ -184,26 +210,32 @@ annuity_x(
 life_contract(lt = lt, lives = "single", x = 60, i = 0.06) |>
   annuity_x(n = 3, timing = "due")
 
+# Parallel single-life scenarios, suitable for mutate()
+policies <- tibble::tibble(age = c(60, 61, 62), rate = c(0.03, 0.04, 0.05))
+dplyr::mutate(policies,
+  apv = annuity_x(lt, x = age, i = rate, n = 2, k = 12, timing = "due"))
+annuity_x(lt, x = c(60, 61), i = 0.04, n = c(2, 3), tidy = TRUE)
+
 }
 \seealso{
 \code{\link{insurance_x}}, \code{\link{premium_x}},
-\code{\link{reserve_x}}, \code{\link{t_px}}, \code{\link{t_Ex}}
+  \code{\link{reserve_x}}, \code{\link{t_px}}, \code{\link{t_Ex}}
 
-Other life-contingencies: 
-\code{\link{add_insurance}()},
-\code{\link{add_premium_schedule}()},
-\code{\link{annuity_multi}()},
-\code{\link{annuity_xy}()},
-\code{\link{insurance_variable_k}()},
-\code{\link{insurance_x}()},
-\code{\link{insurance_xy}()},
-\code{\link{life_contract}()},
-\code{\link{premium_gross}()},
-\code{\link{premium_x}()},
-\code{\link{premium_xy}()},
-\code{\link{reserve_x}()},
-\code{\link{reserve_xy}()},
-\code{\link{simulate_annuity_x}()},
-\code{\link{simulate_insurance_x}()}
+Other life-contingencies:
+\code{\link[=add_insurance]{add_insurance()}},
+\code{\link[=add_premium_schedule]{add_premium_schedule()}},
+\code{\link[=annuity_multi]{annuity_multi()}},
+\code{\link[=annuity_xy]{annuity_xy()}},
+\code{\link[=insurance_variable_k]{insurance_variable_k()}},
+\code{\link[=insurance_x]{insurance_x()}},
+\code{\link[=insurance_xy]{insurance_xy()}},
+\code{\link[=life_contract]{life_contract()}},
+\code{\link[=premium_gross]{premium_gross()}},
+\code{\link[=premium_x]{premium_x()}},
+\code{\link[=premium_xy]{premium_xy()}},
+\code{\link[=reserve_x]{reserve_x()}},
+\code{\link[=reserve_xy]{reserve_xy()}},
+\code{\link[=simulate_annuity_x]{simulate_annuity_x()}},
+\code{\link[=simulate_insurance_x]{simulate_insurance_x()}}
 }
 \concept{life-contingencies}

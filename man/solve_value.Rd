@@ -19,44 +19,47 @@ solve_value(
   maxiter = 1000L,
   scan_points = 401L,
   max_expand = 6L,
-  output = c("value", "summary", "audit")
+  output = c("value", "summary", "audit"),
+  residual_tol = tol
 )
 }
 \arguments{
 \item{fn}{A function, or the name of a function, whose scalar result is to be
-matched to \code{target}.}
+matched to `target`.}
 
 \item{solve_for}{Character scalar. Name of the scalar argument to solve for.}
 
 \item{target}{Finite numeric scalar. Desired value of the selected result.}
 
-\item{args}{Named list containing all known arguments passed to \code{fn}. Do not
-supply a non-\code{NULL} value for the argument named in \code{solve_for}.}
+\item{args}{Named list containing all known arguments passed to `fn`. Do not
+supply a non-`NULL` value for the argument named in `solve_for`.}
 
-\item{result}{Optional result extractor. Use \code{NULL} when \code{fn} returns a
+\item{result}{Optional result extractor. Use `NULL` when `fn` returns a
 numeric scalar; a character scalar naming a column or list element; or a
-function that extracts a numeric scalar from the object returned by \code{fn}.}
+function that extracts a numeric scalar from the object returned by `fn`.}
 
 \item{interval}{Optional finite numeric vector of length 2. It defines the
 admissible search interval. When omitted, a conservative interval is
-inferred from \code{solve_for}, \code{target}, and the numeric values in \code{args}.}
+inferred from `solve_for`, `target`, and the numeric values in `args`.}
 
 \item{start}{Optional finite numeric scalar used as the initial value for
 Newton--Raphson. It is also used as a fallback starting point when
-\code{method = "auto"} cannot bracket a root.}
+`method = "auto"` cannot bracket a root.}
 
 \item{derivative}{Optional function of one argument returning the derivative
 of the equation residual with respect to the unknown. When omitted under
 Newton--Raphson, a central finite-difference derivative is used.}
 
-\item{method}{Character scalar. One of \code{"auto"}, \code{"uniroot"}, or
-\code{"newton"}. The default first searches for bracketed roots and uses
-Newton--Raphson only when no bracket is found and \code{start} is available.}
+\item{method}{Character scalar. One of `"auto"`, `"uniroot"`, or
+`"newton"`. The default first searches for bracketed roots and uses
+Newton--Raphson only when no bracket is found and `start` is available.}
 
 \item{multiple}{Character scalar controlling multiple roots found inside the
-interval: \code{"error"}, \code{"all"}, or \code{"first"}.}
+interval: `"error"`, `"all"`, or `"first"`.}
 
-\item{tol}{Positive numeric scalar. Convergence and residual tolerance.}
+\item{tol}{Positive finite numeric scalar controlling unknown-coordinate
+precision: passed to `uniroot`, used relatively for Newton corrections,
+and used when identifying duplicate roots.}
 
 \item{maxiter}{Positive integer. Maximum number of iterations.}
 
@@ -67,34 +70,63 @@ changes and possible multiple roots.}
 expansions when an interval was inferred and a bracket is not found
 initially. An interval supplied explicitly by the user is never expanded.}
 
-\item{output}{Character scalar. One of \code{"value"}, \code{"summary"}, or
-\code{"audit"}.}
+\item{output}{Character scalar. One of `"value"`, `"summary"`, or
+`"audit"`.}
+
+\item{residual_tol}{Positive finite numeric scalar. Absolute residual
+tolerance in the units of the selected result of `fn`. Defaults to `tol`.}
 }
 \value{
-Depending on \code{output}:
+Depending on `output`:
 \itemize{
-\item \code{"value"}: numeric scalar or vector containing the solution(s).
-\item \code{"summary"}: compact tibble with the unknown, solution, target,
-achieved value, residual, and method.
-\item \code{"audit"}: detailed tibble with convergence diagnostics and search
-information.
+  \item `"value"`: numeric scalar or vector containing the solution(s).
+  \item `"summary"`: compact tibble with the unknown, solution, target,
+    achieved value, residual, and method.
+  \item `"audit"`: detailed tibble with convergence diagnostics and search
+    information.
 }
 }
 \description{
 Solves for one unknown scalar argument of an existing actuarial or financial
-function. The remaining arguments are supplied through \code{args}, and the
-unknown is chosen with \code{solve_for}.
+function. The remaining arguments are supplied through `args`, and the
+unknown is chosen with `solve_for`.
 }
 \details{
 The equation solved is
 \deqn{g(x) = f(\ldots, x, \ldots) - \mathrm{target} = 0,}
-where \code{f} is the function supplied in \code{fn} and \code{x} is the argument named in
-\code{solve_for}.
+where `f` is the function supplied in `fn` and `x` is the argument named in
+`solve_for`.
 
 This function is intended to reuse the stable calculation functions already
 available in tidyactuarial. It does not reproduce their actuarial formulas.
 
-\code{solve_value()} is restricted to one scalar unknown. It is appropriate for
+
+Newton iteration accepts an exact zero immediately. Otherwise, convergence
+requires both a small residual and a small Newton correction relative to
+the unknown: \code{abs(dx) <= tol * max(1, abs(x))}. The residual must
+satisfy \code{abs(achieved - target) <= residual_tol}.
+A nonzero derivative is not rejected merely
+because its units make its absolute magnitude small. A step clipped to an
+interval boundary does not by itself demonstrate convergence.
+
+The audit field `converged` requires successful solver termination and the
+explicit residual tolerance, without a hidden numerical floor. Exhausting
+`uniroot` iterations is an error. A bracketed approximation can satisfy
+coordinate precision while failing residual precision; `"value"` and
+`"summary"` still return that candidate, so use `"audit"` to inspect this
+distinction. Newton retains its error when it cannot meet both criteria.
+
+When changing the units of `fn` and `target` by a positive factor, scale
+`residual_tol` by the same factor and retain `tol`. For example, a root in
+years with a value in currency has a temporal coordinate tolerance and a
+monetary residual tolerance. No automatic scale is inferred from `target`.
+
+During interval scanning, only exact computed zeros are accepted directly
+as grid roots. Other candidates require a sign-changing bracket and are
+refined numerically. A small residual alone does not establish a root;
+tangential roots may require an appropriate Newton starting value.
+
+`solve_value()` is restricted to one scalar unknown. It is appropriate for
 quantities such as an effective interest rate, a payment, a principal, a
 present value, or another continuous scalar parameter.
 
@@ -148,20 +180,27 @@ solve_value(
   method = "newton"
 )
 
+# A term in years, allowing one cent of monetary residual
+solve_value(
+  fn = function(t) 1000 * 1.05^t,
+  solve_for = "t", target = 1500, interval = c(0, 20),
+  tol = 1e-10, residual_tol = 0.01, output = "audit"
+)
+
 }
 \seealso{
-\code{\link[stats:uniroot]{stats::uniroot()}}, \code{\link[=irr_flow]{irr_flow()}}, \code{\link[=irr_flow_multi]{irr_flow_multi()}},
-\code{\link[=bond_ytm]{bond_ytm()}}, \code{\link[=present_value]{present_value()}}, \code{\link[=a_angle]{a_angle()}}
+[stats::uniroot()], [irr_flow()], [irr_flow_multi()],
+  [bond_ytm()], [present_value()], [a_angle()]
 
-Other time-value: 
-\code{\link{accumulation_factor}()},
-\code{\link{discount_factor}()},
-\code{\link{future_value}()},
-\code{\link{fv_flow}()},
-\code{\link{irr_flow}()},
-\code{\link{irr_flow_multi}()},
-\code{\link{plot_cash_flow}()},
-\code{\link{present_value}()},
-\code{\link{pv_flow}()}
+Other time-value:
+\code{\link[=accumulation_factor]{accumulation_factor()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=future_value]{future_value()}},
+\code{\link[=fv_flow]{fv_flow()}},
+\code{\link[=irr_flow]{irr_flow()}},
+\code{\link[=irr_flow_multi]{irr_flow_multi()}},
+\code{\link[=plot_cash_flow]{plot_cash_flow()}},
+\code{\link[=present_value]{present_value()}},
+\code{\link[=pv_flow]{pv_flow()}}
 }
 \concept{time-value}

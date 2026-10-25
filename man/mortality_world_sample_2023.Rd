@@ -7,19 +7,19 @@
 \format{
 A tibble with 3,939 rows and 13 variables:
 \describe{
-\item{country}{Country name.}
-\item{country_code}{Numeric ISO country code.}
-\item{continent}{Continent.}
-\item{region}{Geographic region.}
-\item{year}{Calendar year.}
-\item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
-\item{x}{Integer actuarial age, from 0 to 100.}
-\item{mx}{Central death rate at age \code{x}.}
-\item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
-\item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
-\item{lx}{Number of survivors at exact age \code{x}, based on \code{l0 = 100000}.}
-\item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
-\item{source}{Data source.}
+  \item{country}{Country name.}
+  \item{country_code}{Numeric ISO country code.}
+  \item{continent}{Continent.}
+  \item{region}{Geographic region.}
+  \item{year}{Calendar year.}
+  \item{sex}{Sex category: \code{"male"}, \code{"female"}, or \code{"both"}.}
+  \item{x}{Integer actuarial age, from 0 to 100.}
+  \item{mx}{Central death rate at age \code{x}.}
+  \item{qx}{One-year death probability between ages \code{x} and \code{x + 1}.}
+  \item{px}{One-year survival probability between ages \code{x} and \code{x + 1}.}
+  \item{lx}{Number of survivors at exact age \code{x}, based on \code{l0 = 100000}.}
+  \item{dx}{Expected number of deaths between ages \code{x} and \code{x + 1}.}
+  \item{source}{Data source.}
 }
 }
 \source{

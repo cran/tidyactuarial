@@ -12,6 +12,9 @@
 #' @param .data A data frame or tibble containing simulated future lifetimes,
 #'   typically returned by \code{\link{simulate_lifetime}} or by
 #'   \code{\link{mc_multilife_status}} when working with multiple-life statuses.
+#'   For life-contingent calculations, observed curtate lifetimes must be
+#'   finite nonnegative integers and observed complete lifetimes finite and
+#'   nonnegative. Paired observations must satisfy \eqn{K_x \le T_x < K_x+1}.
 #' @param i Numeric scalar. Interest-rate input used for discounting.
 #' @param payment Numeric scalar. Amount paid at each annuity payment date.
 #'   Default is \code{1}. This is a per-payment amount, not an annualized
@@ -29,6 +32,8 @@
 #' @param h Numeric scalar. Deferral period in years. Default is \code{0}.
 #'   Required to be positive for \code{"deferred"} and
 #'   \code{"deferred_temporary"} annuities.
+#'   For fractional payments, the calendar is anchored at \code{h}, which
+#'   need not be a multiple of \code{1 / k}.
 #' @param n_guar Numeric scalar. Guaranteed payment period in years. Required
 #'   for \code{type = "guaranteed"}.
 #' @param timing Character string specifying the annuity payment timing.
@@ -77,6 +82,16 @@
 #' \eqn{K_x}. For fractional payments, such as monthly, quarterly, or
 #' semiannual payments, the function uses \eqn{T_x} to determine whether the
 #' life is alive at each fractional payment time.
+#' Missing lifetimes produce missing life-contingent present values and
+#' payment counts; certain annuities remain independent of lifetime data.
+#' Fractional due payments use dates strictly before death; fractional
+#' immediate payments include a date exactly equal to the complete lifetime.
+#' Guaranteed payments remain payable throughout the guarantee period.
+#' Discounting retains the log accumulation rate from the original interest
+#' convention and combines monetary amounts with discount factors before
+#' losing their numerical range. At extreme rates, the displayed effective
+#' rate or annual discount factor may be infinite or rounded to a boundary;
+#' these metadata are not used to value the payments.
 #'
 #' For annual whole-life annuity-immediate, the simulated present value is
 #' \deqn{
@@ -437,6 +452,10 @@ mc_annuity <- function(
   .mc_assert_numeric_scalar(payment, "payment", min = 0)
   .mc_assert_positive_integer(k, "k")
   .mc_assert_positive_integer(m, "m")
+  if (k > .Machine$integer.max || round(k) < 1)
+    stop("`k` must round to a positive integer within the supported range.", call. = FALSE)
+  if (round(m) < 1)
+    stop("`m` must round to a positive integer.", call. = FALSE)
   .mc_assert_numeric_column(.data, col_K, "col_K")
   .mc_assert_character_scalar(col_T, "col_T")
   .mc_assert_character_scalar(col_pv, "col_pv")
@@ -468,7 +487,7 @@ mc_annuity <- function(
   }
 
   k <- as.integer(round(k))
-  m <- as.integer(round(m))
+  m <- if (m <= .Machine$integer.max) as.integer(round(m)) else round(m)
 
   assert_payment_grid <- function(value, name) {
     if (!is.null(value) &&
@@ -506,20 +525,13 @@ mc_annuity <- function(
     }
   }
 
-  i_effective <- .mc_effective_rate(
+  interest <- .interest_basis(
     i = i,
     i_type = i_type,
     m = m
   )
 
-  if (!is.finite(i_effective) || i_effective <= -1) {
-    stop(
-      "The annual effective interest rate implied by `i`, `i_type`, and `m` ",
-      "must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
+  i_effective <- interest$effective
   v <- 1 / (1 + i_effective)
 
   Kx <- .data[[col_K]]
@@ -533,6 +545,7 @@ mc_annuity <- function(
   } else {
     rep(NA_real_, length(Kx))
   }
+  if (type != "certain") .mc_validate_lifetimes(Kx, Tx)
 
   if (needs_T && any(Tx < 0, na.rm = TRUE)) {
     stop("`col_T` must contain non-negative simulated lifetimes.", call. = FALSE)
@@ -574,12 +587,20 @@ mc_annuity <- function(
   pv_annuity <- vapply(
     payment_times,
     function(times) {
-      payment_per_payment * sum(v^times)
+      log_discount <- numeric(length(times))
+      nonzero <- times != 0
+      log_discount[nonzero] <- -interest$growth * times[nonzero]
+      .cash_flow_sum(rep(payment_per_payment, length(times)), log_discount)
     },
     numeric(1)
   )
 
   n_payments <- vapply(payment_times, length, integer(1))
+  if (type != "certain") {
+    unknown_lifetime <- if (k == 1L) is.na(Kx) else is.na(Tx)
+    pv_annuity[unknown_lifetime] <- NA_real_
+    n_payments[unknown_lifetime] <- NA_integer_
+  }
 
   first_payment_time <- vapply(
     payment_times,
@@ -762,8 +783,6 @@ mc_annuity <- function(
     timing,
     payment_interval
 ) {
-  eps <- sqrt(.Machine$double.eps)
-
   if (type == "certain") {
     if (timing == "immediate") {
       return(.mc_payment_times(payment_interval, n, by = payment_interval))
@@ -784,13 +803,21 @@ mc_annuity <- function(
     return(numeric(0))
   }
 
-  last_alive_time <- if (timing == "immediate") {
-    floor(T / payment_interval + eps) * payment_interval
-  } else {
-    floor((T - eps) / payment_interval) * payment_interval
+  origin <- if (type %in% c("deferred", "deferred_temporary")) h else 0
+  last_index <- floor((T - origin) / payment_interval)
+  # Compare actual grid dates with T. A fixed time epsilon can remove a
+  # payment before death or introduce one after death for nearby lifetimes.
+  next_date <- origin + (last_index + 1) * payment_interval
+  if (next_date < T || (timing == "immediate" && next_date == T)) {
+    last_index <- last_index + 1
   }
+  last_date <- origin + last_index * payment_interval
+  if (last_date > T || (timing == "due" && last_date == T)) {
+    last_index <- last_index - 1
+  }
+  last_alive_time <- origin + last_index * payment_interval
 
-  if (last_alive_time < 0) {
+  if (last_index < 0 && type != "guaranteed") {
     return(numeric(0))
   }
 

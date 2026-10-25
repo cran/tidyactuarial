@@ -24,6 +24,8 @@
 #'   \code{"nominal_discount"}, and \code{"force"}.
 #' @param m Positive integer vector giving the conversion frequency for nominal
 #'   spot-rate inputs.
+#'   Observed values are validated as positive integers for every family,
+#'   even when the conversion itself does not use \code{m}.
 #' @param tidy Logical scalar. If \code{FALSE}, returns a numeric discount
 #'   factor. If \code{TRUE}, returns a tibble with intermediate calculations.
 #'
@@ -40,6 +42,9 @@
 #' conversion frequency for nominal rates.
 #'
 #' If \eqn{t = 0}, the discount factor is 1.
+#' Valuation retains the original log accumulation rate. In tidy output, an
+#' extreme annual equivalent can round to -1 or overflow to Inf without
+#' invalidating a representable discount factor.
 #'
 #' Input vectors must have length 1 or a common length. Missing values are
 #' propagated.
@@ -152,20 +157,14 @@ discount_factor_spot <- function(
   }
 
   # --- Compute ---
-  i_effective <- standardize_interest(
+  basis <- .interest_basis(
     i_type = i_type,
     i = i,
     m = m
   )
+  i_effective <- basis$effective
 
-  if (any(!is.na(i_effective) & (!is.finite(i_effective) | i_effective <= -1))) {
-    stop(
-      "The standardized annual effective spot rates must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  discount_factor <- (1 + i_effective)^(-t)
+  discount_factor <- exp(-t * basis$growth)
 
   if (!tidy) {
     return(discount_factor)

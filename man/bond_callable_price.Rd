@@ -49,7 +49,9 @@ or \code{"force"}.}
 \item{R}{Numeric scalar. Redemption value at final maturity. If \code{NULL},
 defaults to \code{face}.}
 
-\item{tol}{Numeric scalar. Tolerance used in alignment checks.}
+\item{tol}{Finite positive numeric scalar. Absolute tolerance for alignment
+of \code{n * k} and \code{call_t * k} with integer periods. It is not a
+monetary tolerance and does not define ties between scenario prices.}
 
 \item{check}{Logical scalar. If \code{TRUE}, performs input validation.}
 
@@ -62,7 +64,9 @@ If \code{tidy = FALSE}, a numeric scalar: the worst-case callable-bond price
 consistent with the target yield.
 
 If \code{tidy = TRUE}, a tibble with one row per redemption scenario,
-including scenario prices and the worst-case indicator.
+including scenario prices and the worst-case indicator. \code{is_worst_case}
+is \code{TRUE} exactly when a computed scenario price equals the computed
+minimum, including all exact computed ties. Near ties are not marked.
 }
 \description{
 Computes the maximum price an investor should pay for a callable bond in
@@ -72,8 +76,8 @@ notation.
 \details{
 The bond is evaluated under each possible redemption scenario:
 \itemize{
-\item each callable date with its associated call price, and
-\item final maturity with its final redemption value.
+  \item each callable date with its associated call price, and
+  \item final maturity with its final redemption value.
 }
 
 For each scenario, the bond price is computed using the target yield. The
@@ -88,22 +92,23 @@ that is least favorable to the investor at the required yield.
 
 Assumptions:
 \itemize{
-\item Coupons are paid in arrears at regular intervals.
-\item \code{n * k} must be an integer.
-\item Each \code{call_t * k} must be an integer.
-\item Stub periods are not supported.
-\item Pricing is performed at a coupon date; no accrued interest is included.
+  \item Coupons are paid in arrears at regular intervals.
+  \item \code{n * k} must be an integer.
+  \item Each \code{call_t * k} must be an integer.
+  \item Stub periods are not supported.
+  \item Pricing is performed at a coupon date; no accrued interest is included.
 }
 
 Yield input conventions:
 \itemize{
-\item If \code{y_effective_per_period} is supplied, it takes precedence over
-\code{y}, \code{y_type}, and \code{y_m}, and is interpreted as the
-effective yield per coupon period.
-\item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
-yield specification, which is converted first to annual effective
-yield and then to effective yield per coupon period.
+  \item If \code{y_effective_per_period} is supplied, it takes precedence over
+        \code{y}, \code{y_type}, and \code{y_m}, and is interpreted as the
+        effective yield per coupon period.
+  \item Otherwise, \code{y}, \code{y_type}, and \code{y_m} define an annual
+        yield specification. Scenario prices retain its original log
+        accumulation rate even if a reported equivalent loses numeric range.
 }
+
 
 This function follows the compact bond notation used in
 \code{tidyactuarial}: \code{face} is the face value, \code{c} is the annual
@@ -123,6 +128,13 @@ when \code{tidy = FALSE}.
 
 This is the maximum price an investor can pay while still guaranteeing at
 least the target yield under the least favorable redemption scenario.
+A scenario pays all coupons through its redemption date, including the coupon
+on that date, plus its specified redemption value. There is no assumption of
+reinvestment at the target yield after early redemption and no stochastic
+model of interest rates or the issuer's exercise decision.
+Call dates must remain distinct and strictly inside maturity after alignment
+to integer coupon periods; two dates cannot represent the same coupon date.
+Rows are sorted by time and retain their original \code{scenario_id}.
 }
 \examples{
 # Callable bond with two possible call dates
@@ -164,15 +176,16 @@ bond_callable_price(
 }
 \seealso{
 \code{\link{bond_price}}, \code{\link{bond_cash_flows}},
-\code{\link{bond_book_value}}, \code{\link{bond_ytm}}
+  \code{\link{bond_book_value}}, \code{\link{bond_ytm}}
 
-Other bonds: 
-\code{\link{bond_book_value}()},
-\code{\link{bond_convexity}()},
-\code{\link{bond_duration}()},
-\code{\link{bond_price}()},
-\code{\link{bond_ytm}()},
-\code{\link{portfolio_convexity}()},
-\code{\link{portfolio_duration}()}
+Other bonds:
+\code{\link[=accrued_interest]{accrued_interest()}},
+\code{\link[=bond_book_value]{bond_book_value()}},
+\code{\link[=bond_convexity]{bond_convexity()}},
+\code{\link[=bond_duration]{bond_duration()}},
+\code{\link[=bond_price]{bond_price()}},
+\code{\link[=bond_ytm]{bond_ytm()}},
+\code{\link[=portfolio_convexity]{portfolio_convexity()}},
+\code{\link[=portfolio_duration]{portfolio_duration()}}
 }
 \concept{bonds}

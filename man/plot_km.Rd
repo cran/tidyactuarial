@@ -37,7 +37,7 @@ in which case the \code{$km} component is extracted automatically.}
 }
 \value{
 A \code{ggplot} object that can be further customised with
-additional ggplot2 layers.
+  additional ggplot2 layers.
 }
 \description{
 Creates a step-function plot of the Kaplan--Meier survival estimate
@@ -82,5 +82,5 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
 }
 \seealso{
 \code{\link{km_lifetable}} for fitting the KM estimator and
-building the empirical life table.
+  building the empirical life table.
 }

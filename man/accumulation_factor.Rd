@@ -60,9 +60,9 @@ intermediate quantities, and accumulation factor.
 Computes the accumulation factor from time \code{s} to time \code{t} using
 exactly one of three interest specifications:
 \itemize{
-\item a conventional interest rate \code{i};
-\item an accumulation function \code{a(t)};
-\item a time-varying force of interest \code{delta(t)}.
+  \item a conventional interest rate \code{i};
+  \item an accumulation function \code{a(t)};
+  \item a time-varying force of interest \code{delta(t)}.
 }
 }
 \details{
@@ -74,6 +74,7 @@ for an accumulation function, and
 \deqn{A(s,t) = \exp\left(\int_s^t \delta(u)\,du\right)}
 for a time-varying force of interest.
 
+
 Exactly one of \code{i}, \code{a}, or \code{delta} must be supplied.
 
 Numeric arguments must have length 1 or a common length. Scalars are
@@ -82,10 +83,20 @@ use inside \code{dplyr::mutate()} pipelines.
 
 Times must satisfy \eqn{0 \le s \le t}. Missing times propagate as missing
 accumulation factors.
+Conventional inputs are valued using their original log accumulation rate.
+In tidy output, the annual equivalent may round to -1 or overflow to Inf
+even when the requested interval factor is positive and finite.
 }
 \examples{
 # Constant annual effective interest
 accumulation_factor(t = 5, i = 0.07)
+
+# The same financial law in three representations
+c(
+  rate = accumulation_factor(t = 5, i = 0.03, i_type = "force"),
+  accumulation = accumulation_factor(t = 5, a = function(t) exp(0.03 * t)),
+  varying_force = accumulation_factor(t = 5, delta = function(t) 0.03)
+)
 
 # One rate recycled over several times
 accumulation_factor(
@@ -135,26 +146,29 @@ if (requireNamespace("dplyr", quietly = TRUE) &&
 }
 \seealso{
 \code{\link{standardize_interest}},
-\code{\link{present_value}}, \code{\link{future_value}}
+  \code{\link{present_value}}, \code{\link{future_value}}
 
-Other interest: 
-\code{\link{discount_factor}()},
-\code{\link{discount_factor_spot}()},
-\code{\link{forward_rate}()},
-\code{\link{interest_equivalents}()},
-\code{\link{standardize_interest}()},
-\code{\link{yield_curve}()}
+Other interest:
+\code{\link[=bootstrap_spot_curve]{bootstrap_spot_curve()}},
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=discount_factor_spot]{discount_factor_spot()}},
+\code{\link[=forward_curve]{forward_curve()}},
+\code{\link[=forward_rate]{forward_rate()}},
+\code{\link[=interest_equivalents]{interest_equivalents()}},
+\code{\link[=par_rate]{par_rate()}},
+\code{\link[=standardize_interest]{standardize_interest()}},
+\code{\link[=yield_curve]{yield_curve()}}
 
-Other time-value: 
-\code{\link{discount_factor}()},
-\code{\link{future_value}()},
-\code{\link{fv_flow}()},
-\code{\link{irr_flow}()},
-\code{\link{irr_flow_multi}()},
-\code{\link{plot_cash_flow}()},
-\code{\link{present_value}()},
-\code{\link{pv_flow}()},
-\code{\link{solve_value}()}
+Other time-value:
+\code{\link[=discount_factor]{discount_factor()}},
+\code{\link[=future_value]{future_value()}},
+\code{\link[=fv_flow]{fv_flow()}},
+\code{\link[=irr_flow]{irr_flow()}},
+\code{\link[=irr_flow_multi]{irr_flow_multi()}},
+\code{\link[=plot_cash_flow]{plot_cash_flow()}},
+\code{\link[=present_value]{present_value()}},
+\code{\link[=pv_flow]{pv_flow()}},
+\code{\link[=solve_value]{solve_value()}}
 }
 \concept{interest}
 \concept{time-value}

@@ -28,6 +28,8 @@
 #'
 #' Internally, all supplied rates are converted to annual effective rates using
 #' \code{\link{standardize_interest}}.
+#' Discounting retains the original log accumulation rates, including when
+#' annual effective equivalents round to -1 or overflow to Inf.
 #'
 #' @param cf Numeric vector of cash flows.
 #' @param i Numeric scalar or numeric vector of interest-rate values.
@@ -46,6 +48,12 @@
 #' @return Numeric scalar: the present value of the cash flow.
 #'
 #' @details
+#' Products are evaluated in log space when separate factors lose range or
+#' precision; original cash-flow signs and known zero amounts are preserved.
+#' If individual values overflow, amounts with exactly equal finite log
+#' factors are netted before valuation. Cancellation between unequal factors
+#' is not recovered by this rule and may still produce non-finite results.
+#'
 #' This function follows the compact actuarial notation used throughout
 #' \code{tidyactuarial}: \code{cf} denotes cash flows, \code{t} denotes time,
 #' \code{i} denotes the interest rate, \code{i_type} denotes the interest-rate
@@ -201,14 +209,14 @@ pv_flow <- function(
   i_type <- rep_len(i_type, n_cf)
   m      <- rep_len(m, n_cf)
 
-  i_eff <- standardize_interest(type = i_type, rate = i, m = m)
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
 
-  if (any(is.na(i_eff)) || any(!is.finite(i_eff)) || any(i_eff <= -1)) {
+  if (any(is.na(basis$growth))) {
     stop(
       "The standardized annual effective interest rates must be greater than -1.",
       call. = FALSE
     )
   }
 
-  sum(cf / (1 + i_eff)^t_cf)
+  .cash_flow_sum(cf, -basis$growth * t_cf)
 }

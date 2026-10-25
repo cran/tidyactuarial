@@ -39,8 +39,8 @@ avoids partial-matching conflicts with the Gompertz and Makeham parameter
 
 \item{params}{Named list of law parameters, or \code{NULL}.}
 
-\item{frac}{Character. Within-year assumption used to convert \eqn{\mu_x} to
-\eqn{q_x}. One of \code{"CF"}, \code{"UDD"}, \code{"Balducci"}, or
+\item{frac}{Character. Within-year interpolation label, independent of the
+annual probability calculation. One of \code{"CF"}, \code{"UDD"}, \code{"Balducci"}, or
 \code{"CML"}. \code{"CML"} is treated as \code{"CF"}.}
 
 \item{l0}{Numeric scalar. Initial radix, that is, the starting value
@@ -49,7 +49,9 @@ avoids partial-matching conflicts with the Gompertz and Makeham parameter
 \item{close}{Logical. If \code{TRUE}, forces the last age to close.}
 
 \item{a_x}{Numeric scalar. Average fraction of the year lived by those dying
-between age \eqn{x} and \eqn{x+1}. Default is \code{0.5}.}
+between age \eqn{x} and \eqn{x+1}. Default is \code{0.5}.
+Exposure uses \eqn{L_x = l_{x+1} + a_x d_x}; this is an approximation
+controlled by \code{a_x}, not an integration of continuous survival.}
 
 \item{check}{Logical. If \code{TRUE}, performs strict input validation.}
 
@@ -61,8 +63,8 @@ between age \eqn{x} and \eqn{x+1}. Default is \code{0.5}.}
 }
 \value{
 A tibble with columns \code{x}, \code{law}, \code{frac},
-\code{mu_x}, \code{qx}, \code{px}, \code{lx}, \code{dx}, \code{Lx},
-\code{Tx}, \code{ex}, and \code{mx}.
+  \code{mu_x}, \code{qx}, \code{px}, \code{lx}, \code{dx}, \code{Lx},
+  \code{Tx}, \code{ex}, and \code{mx}.
 }
 \description{
 Creates a tidy life table with one row per integer age from a parametric
@@ -73,11 +75,22 @@ The output follows tidyactuarial conventions and includes columns such as
 \code{x}, \code{qx}, \code{px}, \code{lx}, \code{dx}, \code{Lx},
 \code{Tx}, \code{ex}, and \code{mx}.
 
+
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}: \code{x} denotes age, \code{l0} denotes the starting
 radix, \code{a_x} denotes the average fraction of the year lived by those
 dying during the age interval, \code{qx} denotes the one-year death
 probability, and \code{px = 1 - qx}.
+Ratios use their actual denominators: \code{mx = dx / Lx} and
+\code{ex = Tx / lx}. Positive deaths with zero exposure give infinite
+\code{mx}; extinct cohorts with zero numerators and denominators give
+\code{NaN} for these undefined ratios.
+
+Heligman-Pollard follows the eight-parameter odds specification in
+Heligman and Pollard (1980), section 2.1, equation (1),
+\doi{10.1017/S0020268100040257}. Earlier seven-parameter calls must be
+respecified: the previous implementation omitted the childhood exponent
+and assigned different meanings to \code{C} through \code{G}.
 
 The parameter \code{F_hp} is used for the Heligman-Pollard law instead of
 \code{F}, because \code{F} is historically associated with \code{FALSE} in
@@ -87,16 +100,18 @@ still accepted as a transitional alias.
 \section{Supported laws}{
 
 \itemize{
-\item \strong{Exponential}: \eqn{\mu_x = \lambda}.
-\item \strong{Gompertz}: \eqn{\mu_x = Bc^x}.
-\item \strong{Makeham}: \eqn{\mu_x = A + Bc^x}.
-\item \strong{Weibull}: \eqn{\mu_x = (shape/scale)(x/scale)^{shape-1}}.
-\item \strong{Logistic}: \eqn{\mu_x = (A + Bc^x)/(1 + Cc^x)}.
-\item \strong{DeMoivre}: finite lifetime law with
-\eqn{q_x = 1/(\omega - x)} for \eqn{x < \omega}.
-\item \strong{Beta}: scaled lifetime model
-\eqn{X/\omega \sim Beta(\alpha,\beta)}.
-\item \strong{HeligmanPollard}: odds model returning \eqn{q_x} directly.
+  \item \strong{Exponential}: \eqn{\mu_x = \lambda}.
+  \item \strong{Gompertz}: \eqn{\mu_x = Bc^x}.
+  \item \strong{Makeham}: \eqn{\mu_x = A + Bc^x}.
+  \item \strong{Weibull}: \eqn{\mu_x = (shape/scale)(x/scale)^{shape-1}}.
+  \item \strong{Logistic}: \eqn{\mu_x = (A + Bc^x)/(1 + Cc^x)}.
+  \item \strong{DeMoivre}: finite lifetime law with
+  \eqn{q_x = 1/(\omega - x)} for \eqn{x < \omega}.
+  \item \strong{Beta}: scaled lifetime model
+  \eqn{X/\omega \sim Beta(\alpha,\beta)}.
+  \item \strong{HeligmanPollard}: eight-parameter odds model
+  \eqn{q_x/p_x = A^{(x+B)^C} + D\exp(-E(\log x-\log F)^2) + GH^x},
+  with \code{F_hp} denoting \eqn{F}.
 }
 }
 
@@ -108,29 +123,37 @@ through the named list \code{params}. Direct parameters supplied through
 
 Required parameters:
 \itemize{
-\item \code{"Exponential"}: \code{lambda}.
-\item \code{"Gompertz"}: \code{B}, \code{c}.
-\item \code{"Makeham"}: \code{A}, \code{B}, \code{c}.
-\item \code{"Weibull"}: \code{shape}, \code{scale}. Transitional aliases
-\code{k} and \code{lambda} are accepted.
-\item \code{"Logistic"}: \code{A}, \code{B}, \code{c}, \code{C}.
-\item \code{"DeMoivre"}: \code{omega}.
-\item \code{"Beta"}: \code{alpha}, \code{beta}, \code{omega}.
-\item \code{"HeligmanPollard"}: \code{A}, \code{B}, \code{C},
-\code{D}, \code{E}, \code{F_hp}, and \code{G}. Transitional alias
-\code{F} is accepted and mapped to \code{F_hp}.
+  \item \code{"Exponential"}: \code{lambda}.
+  \item \code{"Gompertz"}: \code{B}, \code{c}.
+  \item \code{"Makeham"}: \code{A}, \code{B}, \code{c}.
+  \item \code{"Weibull"}: \code{shape}, \code{scale}. Transitional aliases
+  \code{k} and \code{lambda} are accepted.
+  \item \code{"Logistic"}: \code{A}, \code{B}, \code{c}, \code{C}.
+  \item \code{"DeMoivre"}: \code{omega}.
+  \item \code{"Beta"}: \code{alpha}, \code{beta}, \code{omega}.
+  \item \code{"HeligmanPollard"}: \code{A}, \code{B}, \code{C},
+  \code{D}, \code{E}, \code{F_hp}, \code{G}, and \code{H}.
+  \code{A}, \code{B}, \code{D}, and \code{G} must be nonnegative;
+  \code{C}, \code{E}, \code{F_hp}, and \code{H} must be positive.
+  At least one of \code{A}, \code{D}, or \code{G} must be positive.
+  Ages must be at least 1. Transitional alias
+  \code{F} is accepted and mapped to \code{F_hp}.
 }
 }
 
 \section{Converting mu(x) to qx}{
 
 For laws defined by a force of mortality \eqn{\mu_x}, the one-year death
-probability \eqn{q_x} is obtained using \code{frac}:
-\itemize{
-\item \code{"CF"} or \code{"CML"}: \eqn{q_x = 1 - \exp(-\mu_x)}.
-\item \code{"UDD"}: \eqn{q_x = \mu_x}.
-\item \code{"Balducci"}: \eqn{q_x = \mu_x/(1+\mu_x)}.
-}
+probability is \eqn{q_x = 1 - \exp(-\int_x^{x+1}\mu(s)\,ds)},
+independently of \code{frac}. The column \code{mu_x} contains the force
+evaluated at age \eqn{x}, not its annual integral. Exponential, Gompertz,
+Makeham and Weibull use analytic integrals; Logistic uses numerical
+integration with relative tolerance \code{1e-10}.
+The \code{frac} label records a within-year interpolation convention;
+it does not replace integration of the continuous law. Force products and
+Logistic ratios use logarithmic evaluation to avoid intermediate power
+overflow; Weibull annual increments use \code{log1p/expm1} instead of
+subtracting nearly equal cumulative hazards.
 }
 
 \section{Direct qx laws}{
@@ -173,11 +196,12 @@ mortality_law_table(
   1, 110,
   A = 0.0002,
   B = 0.1,
-  C = 0.03,
-  D = 10,
-  E = 20,
-  F_hp = 0.00005,
-  G = 1.08
+  C = 0.3,
+  D = 0.03,
+  E = 10,
+  F_hp = 20,
+  G = 0.00005,
+  H = 1.08
 )
 
 # Transitional compatibility with older names
@@ -188,11 +212,12 @@ mortality_law_table(
   1, 110,
   A = 0.0002,
   B = 0.1,
-  C = 0.03,
-  D = 10,
-  E = 20,
-  F = 0.00005,
-  G = 1.08
+  C = 0.3,
+  D = 0.03,
+  E = 10,
+  F = 20,
+  G = 0.00005,
+  H = 1.08
 )
 
 }

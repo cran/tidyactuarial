@@ -59,9 +59,9 @@ actuarial notation.
 \details{
 Supported timing conventions:
 \itemize{
-\item \code{"immediate"}: annuity-immediate with discrete payments.
-\item \code{"due"}: annuity-due with discrete payments.
-\item \code{"continuous"}: continuous annuity.
+  \item \code{"immediate"}: annuity-immediate with discrete payments.
+  \item \code{"due"}: annuity-due with discrete payments.
+  \item \code{"continuous"}: continuous annuity.
 }
 
 For discrete annuities, \code{k} is the number of payments per year, so
@@ -69,25 +69,28 @@ payments are made every \eqn{1/k} year. The function returns the accumulation
 factor, assuming a unit payment at each payment time.
 
 Horizon convention:
-the future value is measured at the time of the last payment. Under this
+the future value is measured at the end of the payment term, \eqn{h+n}.
+This is the last payment time for immediate annuities and one payment
+interval after the last payment for due annuities. Under this
 convention, a pure deferment that shifts the entire payment block forward in
 time does not change the accumulation factor when the payment pattern is
 otherwise unchanged. Therefore, \code{h} is recorded and validated, but it
 does not modify the factor.
 
-The future value of a perpetuity diverges, so perpetuities are not supported
-in \code{s_angle()}.
+Only finite payment terms are supported. A perpetuity has no finite terminal
+date at which this function defines an accumulated value.
+
 
 This function follows the compact actuarial notation used throughout
 \code{tidyactuarial}:
 
 \itemize{
-\item \code{n}: annuity term;
-\item \code{k}: payment frequency;
-\item \code{i}: interest rate;
-\item \code{i_type}: interest-rate type;
-\item \code{m}: conversion frequency for nominal rates;
-\item \code{h}: deferment period.
+  \item \code{n}: annuity term;
+  \item \code{k}: payment frequency;
+  \item \code{i}: interest rate;
+  \item \code{i_type}: interest-rate type;
+  \item \code{m}: conversion frequency for nominal rates;
+  \item \code{h}: deferment period.
 }
 
 The function first converts the supplied rate to the equivalent annual
@@ -101,6 +104,16 @@ For due annuities:
 
 For continuous annuities:
 \deqn{\bar{s}_{\overline{n|}} = \frac{e^{\delta n} - 1}{\delta}}
+
+For \eqn{N=nk}, let \eqn{b=0} for immediate payments and \eqn{b=1}
+for due payments. The discrete factor at horizon \eqn{h+n} is
+\deqn{\sum_{j=1}^{N} \exp\{\delta[n-(j-b)/k]\}.}
+Discrete payments are one unit each; continuous payments are one unit per
+year. The latter factor is \eqn{\int_0^n e^{\delta u}\,du}.
+Original log accumulation rates and stable logarithmic sums/integrals
+preserve small nonzero rates and saturated annual effective equivalents.
+Monetary values combine payments and log factors stably; standalone audit
+rates or factors may still overflow or underflow.
 
 Input vectors must have length 1 or a common length. Missing values are
 propagated.
@@ -148,11 +161,11 @@ s_angle(
 }
 \seealso{
 \code{\link{a_angle}}, \code{\link{standardize_interest}},
-\code{\link{future_value}}
+  \code{\link{future_value}}
 
-Other annuities: 
-\code{\link{a_angle}()},
-\code{\link{annuity_arith}()},
-\code{\link{annuity_geom}()}
+Other annuities:
+\code{\link[=a_angle]{a_angle()}},
+\code{\link[=annuity_arith]{annuity_arith()}},
+\code{\link[=annuity_geom]{annuity_geom()}}
 }
 \concept{annuities}

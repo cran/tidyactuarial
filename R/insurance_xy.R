@@ -56,8 +56,23 @@
 #' frequency for nominal rates, \code{n} is the insurance term, and \code{h} is
 #' the deferment period.
 #'
-#' The function uses the standard fully discrete identities that express
-#' insurance values through two-life annuity-due values.
+#' Both lives are alive at issue (state 11). Internal states 10 and 01 mean
+#' only x or only y is alive; 00 is absorbing. The API does not take an
+#' observed single-survivor initial state. In a joint-life contract, leaving
+#' 11 triggers the first-death benefit once. A last-survivor contract continues
+#' through 10 or 01 and pays on entering 00. Both deaths within one annual
+#' interval trigger one benefit, payable at the end of that year.
+#'
+#' Valuation sums discounted annual transition masses from the issue ages;
+#' it does not subtract rounded annuity values. With marginal survival Sx, Sy,
+#' cumulative death Qx, Qy, and interval death masses Dx, Dy, the first-death
+#' mass in (t,t+1] is Dx(t) Sy(t) + Sx(t+1) Dy(t); the second-death mass is
+#' Dx(t) Qy(t) + Qx(t) Dy(t) + Dx(t) Dy(t). Counts supply the decrements
+#' directly. Original log interest and monetary amounts are combined before
+#' exponentiating when necessary. The annual payment model is independent of
+#' fractional interpolation; frac is retained as an audit assumption.
+#'
+#' The following fully discrete identities remain checks on the result:
 #'
 #' For a whole-life contract:
 #' \deqn{A = 1 - d \ddot{a}.}
@@ -70,10 +85,27 @@
 #' \deqn{A_{:\overline{n}|} =
 #' 1 - d\ddot{a}_{:\overline{n}|}.}
 #'
-#' A deferred insurance is valued by multiplying the value at deferred ages
-#' \code{x + h} and \code{y + h} by the deferment factor
+#' Whole-life valuation requires observed mortality through extinction of the
+#' selected status: at least one marginal must reach zero within the joint
+#' horizon, and both must reach zero for last-survivor insurance. An open
+#' table cannot imply a terminal death or maturity benefit. Use an explicit
+#' term or endowment for the observed horizon, or extend the table.
+#' No missing annual interval of an open marginal table is extrapolated.
+#' A zero-term endowment pays benefit at h if the status survives; a zero-term
+#' term insurance has no death coverage and pays zero. Annual tables must
+#' satisfy the consistency requirements of \code{\link{t_pxy}}, and issue
+#' ages must have positive lx. One call values one contract, not scenarios.
+#'
+#' A deferred insurance retains survival probabilities from the issue ages.
+#' Its continuation value conditional on the selected status surviving to
+#' \code{h} is multiplied by the deferment factor
 #' \deqn{v^h\,{}_hp_{xy}}
 #' for the selected two-life status.
+#' For last-survivor insurance, this conditioning includes paths with only
+#' one survivor at \code{h}; it does not restart both lives at deferred ages.
+#' In tidy output, \code{annuity_due_value} is the annuity at time \code{h}
+#' conditional on that status surviving to \code{h}, and
+#' \code{survival_to_maturity}, when reported, uses the same conditioning.
 #'
 #' @return
 #' If \code{tidy = FALSE}, a numeric scalar.
@@ -367,6 +399,8 @@ insurance_xy <- function(
   if (missing(frac)) {
     frac_x <- attr(lt_x, "frac")
     frac_y <- attr(lt_y, "frac")
+    if (identical(frac_x, "CML")) frac_x <- "CF"
+    if (identical(frac_y, "CML")) frac_y <- "CF"
     ok_x <- !is.null(frac_x) && frac_x %in% c("UDD", "CF", "Balducci")
     ok_y <- !is.null(frac_y) && frac_y %in% c("UDD", "CF", "Balducci")
 
@@ -434,6 +468,7 @@ insurance_xy <- function(
       length(x) != 1L ||
       is.na(x) ||
       !is.finite(x) ||
+      abs(x) > .Machine$integer.max ||
       abs(x - round(x)) > 1e-10) {
     stop("`x` must be a single integer age.", call. = FALSE)
   }
@@ -443,6 +478,7 @@ insurance_xy <- function(
       length(y) != 1L ||
       is.na(y) ||
       !is.finite(y) ||
+      abs(y) > .Machine$integer.max ||
       abs(y - round(y)) > 1e-10) {
     stop("`y` must be a single integer age.", call. = FALSE)
   }
@@ -491,11 +527,15 @@ insurance_xy <- function(
 
   x <- as.integer(round(x))
   y <- as.integer(round(y))
-  m <- as.integer(round(m))
-  h <- as.integer(round(h))
+  store_integer <- function(z) {
+    z <- round(z)
+    if (abs(z) <= .Machine$integer.max) as.integer(z) else z
+  }
+  m <- store_integer(m)
+  h <- store_integer(h)
 
   if (!is.infinite(n)) {
-    n <- as.integer(round(n))
+    n <- store_integer(n)
   }
 
   if (!x %in% as.integer(round(lt_x$x))) {
@@ -506,162 +546,52 @@ insurance_xy <- function(
     stop("`y` must be present in the second life table.", call. = FALSE)
   }
 
-  # -------------------------------------------------------------------------
-  # Interest conversion
-  # -------------------------------------------------------------------------
+  # Annual transition masses and original log interest are the valuation basis.
+  basis <- .interest_basis(i_type = i_type, i = i, m = m)
+  i_effective <- basis$effective
+  growth <- basis$growth
+  d_effective <- -expm1(-growth)
+  state <- .two_life_insurance_basis(lt_x, lt_y, x, y, status)
+  if (type == "whole" && !state$complete)
+    stop("Whole-life insurance requires observed mortality through extinction of the selected status; extend the open table or use an explicit term/endowment.", call. = FALSE)
+  log_h <- state$survival(h)
+  deferment_factor <- if (log_h == -Inf) 0 else exp(log_h - growth * h)
+  annuity_due <- NA_real_
+  survival_to_maturity <- NA_real_
+  unit_apv <- result <- 0
 
-  i_effective <- standardize_interest(
-    i_type = i_type,
-    i = i,
-    m = m
-  )
-
-  if (!is.numeric(i_effective) ||
-      length(i_effective) != 1L ||
-      is.na(i_effective) ||
-      !is.finite(i_effective) ||
-      i_effective <= -1) {
-    stop(
-      "The standardized annual effective interest rate must be greater than -1.",
-      call. = FALSE
-    )
-  }
-
-  v_fun <- function(tt) {
-    (1 + i_effective)^(-tt)
-  }
-
-  d_effective <- i_effective / (1 + i_effective)
-
-  # -------------------------------------------------------------------------
-  # Deferment
-  # -------------------------------------------------------------------------
-
-  p_def <- t_pxy(
-    lt = table_use,
-    x = x,
-    y = y,
-    t = h,
-    frac = frac,
-    status = status
-  )
-
-  if (is.na(p_def)) {
-    stop("Cannot compute survival to deferment under the life table.", call. = FALSE)
-  }
-
-  deferment_factor <- v_fun(h) * p_def
-
-  start_x <- x + h
-  start_y <- y + h
-
-  # If the selected status does not survive to the deferred date, APV is zero.
-  if (deferment_factor == 0) {
-    result <- 0
-
-    if (!tidy) {
-      return(result)
-    }
-
-    return(tibble::tibble(
-      x = x,
-      y = y,
-      age_x = x,
-      age_y = y,
-      i = i,
-      rate = i,
-      i_type = i_type,
-      rate_type = i_type,
-      m = m,
-      i_effective = i_effective,
-      d_effective = d_effective,
-      type = type,
-      insurance_type = type,
-      status = status,
-      cohort = if (status == "joint") "first" else "last",
-      n = if (type == "whole") Inf else n,
-      term_years = if (type == "whole") Inf else n,
-      h = h,
-      deferment_years = h,
-      benefit = benefit,
-      frac = frac,
-      deferment_factor = deferment_factor,
-      annuity_due_value = NA_real_,
-      survival_to_maturity = NA_real_,
-      unit_apv = 0,
-      apv = result
-    ))
-  }
-
-  # -------------------------------------------------------------------------
-  # APV computation
-  # -------------------------------------------------------------------------
-
-  if (type == "whole") {
-    annuity_due <- annuity_xy(
-      lt = table_use,
-      x = start_x,
-      y = start_y,
-      i = i,
-      i_type = i_type,
-      m = m,
-      status = status,
-      n = Inf,
-      h = 0L,
-      k = 1L,
-      timing = "due",
-      woolhouse = "none",
-      frac = frac,
-      tidy = FALSE
-    )
-
-    survival_to_maturity <- NA_real_
-    unit_apv <- deferment_factor * (1 - d_effective * annuity_due)
-  } else if (n == 0L) {
-    annuity_due <- 0
-    survival_to_maturity <- 1
-    unit_apv <- 0
-  } else {
-    annuity_due <- annuity_xy(
-      lt = table_use,
-      x = start_x,
-      y = start_y,
-      i = i,
-      i_type = i_type,
-      m = m,
-      status = status,
-      n = n,
-      h = 0L,
-      k = 1L,
-      timing = "due",
-      woolhouse = "none",
-      frac = frac,
-      tidy = FALSE
-    )
-
-    if (type == "endowment") {
-      survival_to_maturity <- NA_real_
-      unit_apv <- deferment_factor * (1 - d_effective * annuity_due)
-    } else {
-      survival_to_maturity <- t_pxy(
-        lt = table_use,
-        x = start_x,
-        y = start_y,
-        t = n,
-        frac = frac,
-        status = status
-      )
-
-      if (is.na(survival_to_maturity)) {
-        stop("Cannot compute n-year survival at deferred ages.", call. = FALSE)
+  if (log_h != -Inf) {
+    years <- if (type == "whole") max(0, state$horizon - h) else n
+    if (h + years > state$horizon)
+      stop("`n` exceeds the horizon supported by the two life tables after deferment.", call. = FALSE)
+    if (years == 0 && type != "whole") {
+      # C14 authorized: an empty endowment matures at the deferred start.
+      annuity_due <- 0
+      survival_to_maturity <- 1
+      if (type == "endowment") {
+        unit_apv <- deferment_factor
+        result <- .cash_flow_value(benefit, log_h - growth * h)
       }
-
-      unit_apv <- deferment_factor *
-        (1 - d_effective * annuity_due - v_fun(n) * survival_to_maturity)
+    } else {
+      times <- if (years == 0) numeric() else h + seq_len(years) - 1
+      log_s <- vapply(times, state$survival, 0)
+      annuity_due <- sum(vapply(seq_along(times), function(j) {
+        if (log_s[j] == -Inf) 0 else exp(log_s[j] - log_h - growth * (times[j] - h))
+      }, 0))
+      log_mass <- vapply(times, state$death, 0)
+      log_factors <- log_mass - growth * (times + 1)
+      # A zero mass is exactly zero, even if the discount factor overflows.
+      log_factors[log_mass == -Inf] <- -Inf
+      maturity <- state$survival(h + years)
+      if (type == "term") survival_to_maturity <- exp(maturity - log_h)
+      if (type == "endowment") {
+        terminal <- if (maturity == -Inf) -Inf else maturity - growth * (h + years)
+        log_factors <- c(log_factors, terminal)
+      }
+      unit_apv <- sum(.cash_flow_value(rep(1, length(log_factors)), log_factors))
+      result <- sum(.cash_flow_value(rep(benefit, length(log_factors)), log_factors))
     }
   }
-
-  result <- benefit * unit_apv
 
   if (!tidy) {
     return(result)

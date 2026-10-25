@@ -83,6 +83,15 @@ plot_km <- function(
     stop("Column '", surv_col, "' not found in 'km'.")
   }
 
+  if (!is.logical(conf_int) || length(conf_int) != 1L || is.na(conf_int))
+    stop("`conf_int` must be TRUE or FALSE.", call. = FALSE)
+  if (!nrow(km) || !is.numeric(km[[time_col]]) || any(!is.finite(km[[time_col]])))
+    stop("KM times must be nonempty, numeric and finite.", call. = FALSE)
+  if (!is.numeric(km[[surv_col]]) || any(!is.finite(km[[surv_col]])) ||
+      any(km[[surv_col]] < 0 | km[[surv_col]] > 1))
+    stop("Survival estimates must be finite and in [0, 1].", call. = FALSE)
+  km <- km[order(km[[time_col]]), , drop = FALSE]
+
   # --- step-wise ribbon helper ---
   # Duplicates rows to create the stair pattern needed for a filled ribbon
   # that follows step-function jumps instead of interpolating linearly.
@@ -136,6 +145,12 @@ plot_km <- function(
   # --- step-wise confidence ribbon ---
   has_ci <- all(c(lower_col, upper_col) %in% names(km))
   if (conf_int && has_ci) {
+    lo <- km[[lower_col]]; hi <- km[[upper_col]]
+    if (!is.numeric(lo) || !is.numeric(hi) ||
+        any((!is.na(lo) & (!is.finite(lo) | lo < 0 | lo > 1))) ||
+        any((!is.na(hi) & (!is.finite(hi) | hi < 0 | hi > 1))) ||
+        any(lo > hi, na.rm = TRUE))
+      stop("Confidence bounds must be ordered probabilities in [0, 1] or NA.", call. = FALSE)
     ribbon_df <- make_step_ribbon_df(km, time_col, lower_col, upper_col)
 
     p <- p +
@@ -147,7 +162,8 @@ plot_km <- function(
           ymax = .data[[upper_col]]
         ),
         inherit.aes = FALSE,
-        alpha       = 0.2
+        alpha       = 0.2,
+        na.rm       = TRUE
       )
   }
 

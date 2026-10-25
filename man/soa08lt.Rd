@@ -7,13 +7,13 @@
 \format{
 A tibble with one row per integer age and the following columns:
 \describe{
-\item{x}{Integer actuarial age.}
-\item{lx}{Number of lives surviving to exact age \code{x}.}
-\item{dx}{Number of deaths between exact ages \code{x} and \code{x + 1}.}
-\item{qx}{One-year probability of death between exact ages \code{x} and
-\code{x + 1}.}
-\item{px}{One-year probability of survival from exact age \code{x} to
-\code{x + 1}.}
+  \item{x}{Integer actuarial age.}
+  \item{lx}{Number of lives surviving to exact age \code{x}.}
+  \item{dx}{Number of deaths between exact ages \code{x} and \code{x + 1}.}
+  \item{qx}{One-year probability of death between exact ages \code{x} and
+  \code{x + 1}.}
+  \item{px}{One-year probability of survival from exact age \code{x} to
+  \code{x + 1}.}
 }
 }
 \source{
@@ -34,6 +34,7 @@ benchmark tests for life-contingency functions such as \code{\link{annuity_x}},
 \details{
 A tidy version of the Society of Actuaries illustrative life table commonly
 used in life-contingencies examples and benchmark calculations.
+
 
 The table is included as a convenient benchmark table for actuarial
 calculations. The build script in \code{data-raw/soa08lt.R} constructs this
