@@ -14,29 +14,34 @@ e_xy(
   cohort = c("first", "last"),
   tidy = FALSE,
   check = TRUE,
-  tol = 1e-10
+  tol = 1e-10,
+  status = c("joint", "last")
 )
 }
 \arguments{
-\item{lt}{A life table data frame with columns \code{x} and \code{lx}.}
+\item{lt}{A life table data frame shared by both lives, or a list of two
+life tables \code{list(lt_x, lt_y)}, one for each life in that order.
+Each table must contain columns \code{x} and \code{lx}.}
 
 \item{x}{Integer actuarial age for life 1.}
 
 \item{y}{Integer actuarial age for life 2.}
 
 \item{t}{Optional nonnegative numeric duration(s). If \code{NULL}, uses
-the maximum horizon allowed by the table.}
+the maximum horizon allowed by the tables and selected status.}
 
 \item{type}{Character: \code{"curtate"} or \code{"complete"}.}
 
 \item{frac}{Fractional-age assumption for \code{type = "complete"},
 as in \code{\link{t_pxy}}: \code{"UDD"}, \code{"CF"},
-\code{"CML"}, or \code{"Balducci"}. If not specified and \code{lt}
-carries a \code{frac} attribute, that value is used.
-An inherited \code{"CML"} attribute is normalized to \code{"CF"}.}
+\code{"CML"}, or \code{"Balducci"}. If omitted, valid \code{frac}
+attributes are inherited from the tables, defaulting to \code{"UDD"}.
+Inherited \code{"CML"} is normalized to \code{"CF"}; conflicting
+attributes require an explicit \code{frac}, as in \code{t_pxy}.}
 
-\item{cohort}{Two-life cohort: \code{"first"} (joint-life) or
-\code{"last"} (last survivor).}
+\item{cohort}{Legacy survival-state selector: \code{"first"} means
+joint-life and \code{"last"} means last survivor. Prefer \code{status}
+in new calls. Supply only one of \code{cohort} and \code{status}.}
 
 \item{tidy}{Logical. If \code{TRUE}, returns a tibble.}
 
@@ -44,9 +49,16 @@ An inherited \code{"CML"} attribute is normalized to \code{"CF"}.}
 Table consistency and scalar logical controls are always checked.}
 
 \item{tol}{Numeric tolerance for integer checks.}
+
+\item{status}{Survival status: \code{"joint"} (first death) or
+\code{"last"} (last survivor). Defaults to joint-life when neither
+selector is supplied. Appended to preserve existing positional calls.}
 }
 \value{
-Numeric vector, or tibble if \code{tidy = TRUE}.
+Numeric vector, or tibble if \code{tidy = TRUE}. The tibble
+  retains its existing columns, including \code{cohort}: \code{"first"}
+  for joint-life and \code{"last"} for last survivor, also when the
+  selection is made using \code{status}.
 }
 \description{
 Computes the expected future lifetime for two independent lives aged
@@ -69,10 +81,13 @@ measured from the initial ages, conditional on both lives being alive
 at time zero. In particular, last-survivor survival at later times does
 not imply that both lives remain alive.
 
-Horizons end at the last recorded age: the older life limits joint-life
-expectation and the younger life limits last-survivor expectation.
-Survival beyond that age is taken as zero, as in \code{t_px}; an open
-table therefore gives a truncated expectation. Missing initial ages or
+Each marginal horizon ends at its own table's last recorded age minus
+its initial age. Joint-life expectation uses the smaller horizon and
+last-survivor expectation the larger. With a shared table, these are
+the horizons of the older and younger life, respectively.
+Survival beyond each marginal horizon is taken as zero, as in
+\code{t_px}; open tables therefore give truncated expectations.
+Missing initial ages or
 zero initial survivors give \code{NA}, including when \code{t = 0}.
 Tables must have unique consecutive annual integer ages and finite,
 nonnegative, nonincreasing \code{lx}. Observed \code{px}/\code{qx} must
@@ -93,27 +108,33 @@ lt <- data.frame(
 )
 
 # Curtate joint-life expectancy (Finan, Sec. 56.4)
-e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first")
+e_xy(lt, x = 60, y = 62, type = "curtate", status = "joint")
 
 # Curtate last-survivor expectancy (Finan, Sec. 57)
-e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "last")
+e_xy(lt, x = 60, y = 62, type = "curtate", status = "last")
 
 # Verify identity (Finan, Example 57.4):
 # e_{xy-bar} = e_x + e_y - e_xy
-e_joint <- e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first")
-e_last  <- e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "last")
+e_joint <- e_xy(lt, x = 60, y = 62, type = "curtate", status = "joint")
+e_last  <- e_xy(lt, x = 60, y = 62, type = "curtate", status = "last")
 e_x_val <- e_x(lt, x = 60, type = "curtate")
 e_y_val <- e_x(lt, x = 62, type = "curtate")
 c(last_surv = e_last, sum_minus_joint = e_x_val + e_y_val - e_joint)
 
 # Complete joint-life expectancy under UDD
-e_xy(lt, x = 60, y = 62, type = "complete", frac = "UDD", cohort = "first")
+e_xy(lt, x = 60, y = 62, type = "complete", frac = "UDD", status = "joint")
 
 # Temporary: 3-year curtate joint-life
-e_xy(lt, x = 60, y = 62, t = 3, type = "curtate", cohort = "first")
+e_xy(lt, x = 60, y = 62, t = 3, type = "curtate", status = "joint")
 
 # Tidy output
-e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first", tidy = TRUE)
+e_xy(lt, x = 60, y = 62, type = "curtate", status = "joint", tidy = TRUE)
+
+# Distinct mortality tables, applied to the corresponding lives
+lt_x <- data.frame(x = 60:62, lx = c(100, 80, 0))
+lt_y <- data.frame(x = 60:62, lx = c(100, 50, 0))
+e_xy(list(lt_x, lt_y), 60, 60, status = "joint") # 0.4
+e_xy(list(lt_x, lt_y), 60, 60, status = "last")  # 0.9
 
 }
 \seealso{

@@ -1,0 +1,21 @@
+Data: mortality_regions
+Copyright: United Nations, Department of Economic and Social Affairs,
+  Population Division (2024).
+Source: World Population Prospects 2024, complete period life tables,
+  historical estimates for 2023. https://population.un.org/wpp/
+License: Creative Commons Attribution 3.0 IGO.
+  https://creativecommons.org/licenses/by/3.0/igo/
+Changes: selected areas and year, renamed columns, added geographic labels
+  and an open-interval flag. Numerical values are retained as published.
+  No endorsement by the United Nations is implied.
+
+Data: pet_lifetables
+Copyright: Montoya, Morrison, Arrignon, Spofford, Charles, Hours and Biourge
+  (2023), tables 3 and 4; Teng, Brodbelt, Pegram, Church and O'Neill (2022),
+  table 2.
+Sources: https://pmc.ncbi.nlm.nih.gov/articles/PMC9989186/
+  https://doi.org/10.1038/s41598-022-10341-6
+License: Creative Commons Attribution 4.0 International.
+  https://creativecommons.org/licenses/by/4.0/
+Changes: selected tables, renamed fields and normalized interval punctuation.
+  Numeric values and the original open intervals are retained.

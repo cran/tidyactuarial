@@ -4,10 +4,10 @@
 
 `tidyactuarial` provides tools for financial mathematics, life contingencies, and collective risk in R. The package is designed so that the actuarial model remains visible: formulas, timing conventions, mortality assumptions, and valuation dates come first; computation is then used to reproduce, audit, and scale the calculation.
 
-This repository contains the **0.2.0 release candidate**. This README describes
-that candidate; it does not imply that CRAN has accepted or published it.
-Until then, installation from CRAN may provide an earlier release without
-some of the features and corrections described here.
+The current stable release is **tidyactuarial 0.2.0**, published on CRAN
+on October 25, 2026. This repository and its reference website document
+the released features, including collective risk, insurance coverage,
+aggregate loss distributions, and tail risk measures.
 
 ## Installation
 
@@ -38,6 +38,51 @@ The package currently includes tools for:
 - **Collective risk and coverage:** frequency and severity models, deductibles and limits, aggregate loss distributions and simulation, VaR, TVaR, and stop-loss premiums.
 
 The full API is organized by actuarial area in the **Reference** section of the package website.
+
+## Collective risk: from a model to an annual loss
+
+In the collective risk model, the annual aggregate loss is the sum of
+individual claim amounts:
+
+$$
+S = \sum_{j=1}^{N} X_j.
+$$
+
+For this example, suppose the number of annual claims follows a Poisson
+distribution with mean 3, while individual claim amounts follow a Gamma
+distribution with shape 2 and rate 0.005. We can calculate aggregate
+moments from the model and then use simulation to examine its tail.
+
+```r
+frequency <- frequency_spec("poisson", lambda = 3)
+
+risk_model <- frequency |>
+  collective_risk_spec(
+    severity = severity_spec(
+      "gamma", shape = 2, rate = 0.005
+    )
+  )
+
+# Expected aggregate loss and second moment
+risk_model |>
+  aggregate_moments(order = 1:2)
+
+# Simulate annual aggregate losses
+losses <- risk_model |>
+  simulate_aggregate(n_sim = 5000, seed = 2026)
+
+# Empirical tail risk at 95% and 99%
+losses |>
+  value_at_risk(level = c(0.95, 0.99))
+
+losses |>
+  tail_value_at_risk(level = c(0.95, 0.99))
+```
+
+The theoretical expected annual loss is $E[S] = 3(2/0.005) = 1,200$.
+The simulated VaR and TVaR are estimates, and will not necessarily match
+their theoretical values exactly. The distinction between analytical
+calculations and simulation is important when interpreting actuarial results.
 
 ## A simple design principle
 
@@ -247,6 +292,29 @@ soa08lt |>
 
 The pipe records the actuarial construction of the contract; it does not replace the underlying equation of equivalence.
 
+## Datasets
+
+The package includes selected 2023 period life tables from UN World
+Population Prospects 2024 in `mortality_regions`: 67 countries or areas
+and 28 geographic aggregates. To compute five-year survival at age 65
+using the published survivor counts for Colombia:
+
+```r
+col <- subset(mortality_regions, location_code == 170L & sex == "both",
+              select = c(x, lx))
+t_px(col, x = 65, t = 5)
+```
+
+The 100+ interval is open; it does not supply a one-year probability or
+an age of extinction. See `?mortality_regions` for units, source and
+licence. The existing mortality datasets are unchanged. The
+`working-with-datasets` vignette also illustrates competing risks using
+the external `MASS::Melanoma` dataset.
+
+`pet_lifetables` includes study-specific life tables for US dogs and cats
+and UK dogs. Each table retains its own denominator and open last age;
+see `?pet_lifetables` for the published quantities and limitations.
+
 ## Articles
 
 Four introductory articles develop complete workflows rather than isolated function calls:
@@ -320,6 +388,7 @@ The package follows standard actuarial and financial mathematics. Useful backgro
 - Dickson, D. C. M., Hardy, M. R., & Waters, H. R. *Actuarial Mathematics for Life Contingent Risks*.
 - Kellison, S. G. *The Theory of Interest*.
 - Bowers, N. L., Gerber, H. U., Hickman, J. C., Jones, D. A., & Nesbitt, C. J. *Actuarial Mathematics*.
+- Klugman, S. A., Panjer, H. H., & Willmot, G. E. (2019). *Loss Models: From Data to Decisions* (5th ed.). Wiley. A primary reference for the collective risk module.
 
 ## License
 

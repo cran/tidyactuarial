@@ -4,23 +4,30 @@
 #' \code{x} and \code{y}, for either joint-life (first death) or
 #' last-survivor (second death).
 #'
-#' @param lt A life table data frame with columns \code{x} and \code{lx}.
+#' @param lt A life table data frame shared by both lives, or a list of two
+#'   life tables \code{list(lt_x, lt_y)}, one for each life in that order.
+#'   Each table must contain columns \code{x} and \code{lx}.
 #' @param x Integer actuarial age for life 1.
 #' @param y Integer actuarial age for life 2.
 #' @param t Optional nonnegative numeric duration(s). If \code{NULL}, uses
-#'   the maximum horizon allowed by the table.
+#'   the maximum horizon allowed by the tables and selected status.
 #' @param type Character: \code{"curtate"} or \code{"complete"}.
 #' @param frac Fractional-age assumption for \code{type = "complete"},
 #'   as in \code{\link{t_pxy}}: \code{"UDD"}, \code{"CF"},
-#'   \code{"CML"}, or \code{"Balducci"}. If not specified and \code{lt}
-#'   carries a \code{frac} attribute, that value is used.
-#'   An inherited \code{"CML"} attribute is normalized to \code{"CF"}.
-#' @param cohort Two-life cohort: \code{"first"} (joint-life) or
-#'   \code{"last"} (last survivor).
+#'   \code{"CML"}, or \code{"Balducci"}. If omitted, valid \code{frac}
+#'   attributes are inherited from the tables, defaulting to \code{"UDD"}.
+#'   Inherited \code{"CML"} is normalized to \code{"CF"}; conflicting
+#'   attributes require an explicit \code{frac}, as in \code{t_pxy}.
+#' @param cohort Legacy survival-state selector: \code{"first"} means
+#'   joint-life and \code{"last"} means last survivor. Prefer \code{status}
+#'   in new calls. Supply only one of \code{cohort} and \code{status}.
 #' @param tidy Logical. If \code{TRUE}, returns a tibble.
 #' @param check Logical. If \code{TRUE}, performs basic input checks.
 #'   Table consistency and scalar logical controls are always checked.
 #' @param tol Numeric tolerance for integer checks.
+#' @param status Survival status: \code{"joint"} (first death) or
+#'   \code{"last"} (last survivor). Defaults to joint-life when neither
+#'   selector is supplied. Appended to preserve existing positional calls.
 #'
 #' @details
 #' \strong{Curtate expectation} (Finan, Section 56.4 / Section 57):
@@ -38,10 +45,13 @@
 #' at time zero. In particular, last-survivor survival at later times does
 #' not imply that both lives remain alive.
 #'
-#' Horizons end at the last recorded age: the older life limits joint-life
-#' expectation and the younger life limits last-survivor expectation.
-#' Survival beyond that age is taken as zero, as in \code{t_px}; an open
-#' table therefore gives a truncated expectation. Missing initial ages or
+#' Each marginal horizon ends at its own table's last recorded age minus
+#' its initial age. Joint-life expectation uses the smaller horizon and
+#' last-survivor expectation the larger. With a shared table, these are
+#' the horizons of the older and younger life, respectively.
+#' Survival beyond each marginal horizon is taken as zero, as in
+#' \code{t_px}; open tables therefore give truncated expectations.
+#' Missing initial ages or
 #' zero initial survivors give \code{NA}, including when \code{t = 0}.
 #' Tables must have unique consecutive annual integer ages and finite,
 #' nonnegative, nonincreasing \code{lx}. Observed \code{px}/\code{qx} must
@@ -55,7 +65,10 @@
 #'
 #' This can be used to cross-validate results.
 #'
-#' @return Numeric vector, or tibble if \code{tidy = TRUE}.
+#' @return Numeric vector, or tibble if \code{tidy = TRUE}. The tibble
+#'   retains its existing columns, including \code{cohort}: \code{"first"}
+#'   for joint-life and \code{"last"} for last survivor, also when the
+#'   selection is made using \code{status}.
 #'
 #' @seealso \code{\link{e_x}} for single-life expectancy,
 #'   \code{\link{t_pxy}} for two-life survival probabilities,
@@ -68,27 +81,33 @@
 #' )
 #'
 #' # Curtate joint-life expectancy (Finan, Sec. 56.4)
-#' e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first")
+#' e_xy(lt, x = 60, y = 62, type = "curtate", status = "joint")
 #'
 #' # Curtate last-survivor expectancy (Finan, Sec. 57)
-#' e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "last")
+#' e_xy(lt, x = 60, y = 62, type = "curtate", status = "last")
 #'
 #' # Verify identity (Finan, Example 57.4):
 #' # e_{xy-bar} = e_x + e_y - e_xy
-#' e_joint <- e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first")
-#' e_last  <- e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "last")
+#' e_joint <- e_xy(lt, x = 60, y = 62, type = "curtate", status = "joint")
+#' e_last  <- e_xy(lt, x = 60, y = 62, type = "curtate", status = "last")
 #' e_x_val <- e_x(lt, x = 60, type = "curtate")
 #' e_y_val <- e_x(lt, x = 62, type = "curtate")
 #' c(last_surv = e_last, sum_minus_joint = e_x_val + e_y_val - e_joint)
 #'
 #' # Complete joint-life expectancy under UDD
-#' e_xy(lt, x = 60, y = 62, type = "complete", frac = "UDD", cohort = "first")
+#' e_xy(lt, x = 60, y = 62, type = "complete", frac = "UDD", status = "joint")
 #'
 #' # Temporary: 3-year curtate joint-life
-#' e_xy(lt, x = 60, y = 62, t = 3, type = "curtate", cohort = "first")
+#' e_xy(lt, x = 60, y = 62, t = 3, type = "curtate", status = "joint")
 #'
 #' # Tidy output
-#' e_xy(lt, x = 60, y = 62, type = "curtate", cohort = "first", tidy = TRUE)
+#' e_xy(lt, x = 60, y = 62, type = "curtate", status = "joint", tidy = TRUE)
+#'
+#' # Distinct mortality tables, applied to the corresponding lives
+#' lt_x <- data.frame(x = 60:62, lx = c(100, 80, 0))
+#' lt_y <- data.frame(x = 60:62, lx = c(100, 50, 0))
+#' e_xy(list(lt_x, lt_y), 60, 60, status = "joint") # 0.4
+#' e_xy(list(lt_x, lt_y), 60, 60, status = "last")  # 0.9
 #'
 #' @export
 e_xy <- function(
@@ -100,10 +119,19 @@ e_xy <- function(
     cohort = c("first", "last"),
     tidy = FALSE,
     check = TRUE,
-    tol = 1e-10
+    tol = 1e-10,
+    status = c("joint", "last")
 ) {
   type   <- match.arg(type)
-  cohort <- match.arg(cohort)
+  if (!missing(status) && !missing(cohort))
+    stop("Provide only one of `status` or legacy `cohort`.", call. = FALSE)
+  if (missing(status)) {
+    cohort <- match.arg(cohort)
+    status <- if (cohort == "first") "joint" else "last"
+  } else {
+    status <- match.arg(status)
+    cohort <- if (status == "joint") "first" else "last"
+  }
 
   for (name in c("check", "tidy")) {
     value <- get(name, inherits = FALSE)
@@ -113,12 +141,34 @@ e_xy <- function(
   if (!is.numeric(tol) || length(tol) != 1L || !is.finite(tol) || tol < 0)
     stop("`tol` must be a single finite nonnegative number.", call. = FALSE)
 
-  # --- inherit frac from lifetable attribute if not supplied ---
+  if (missing(lt)) stop("`lt` is required.")
+  if (is.data.frame(lt)) {
+    lt_x <- lt_y <- lt
+  } else if (is.list(lt) && length(lt) == 2L &&
+             all(vapply(lt, is.data.frame, logical(1)))) {
+    lt_x <- lt[[1L]]
+    lt_y <- lt[[2L]]
+  } else {
+    stop("`lt` must be either one life table or a list of two life tables.", call. = FALSE)
+  }
+  .two_life_table(lt_x)
+  if (!identical(lt_x, lt_y)) .two_life_table(lt_y)
+
+  # Resolve inherited assumptions exactly as in t_pxy.
   if (missing(frac)) {
-    lt_frac <- attr(lt, "frac")
-    if (identical(lt_frac, "CML")) lt_frac <- "CF"
-    if (!is.null(lt_frac) && lt_frac %in% c("UDD", "CF", "Balducci")) {
-      frac <- lt_frac
+    frac_x <- attr(lt_x, "frac")
+    frac_y <- attr(lt_y, "frac")
+    if (identical(frac_x, "CML")) frac_x <- "CF"
+    if (identical(frac_y, "CML")) frac_y <- "CF"
+    ok_x <- !is.null(frac_x) && frac_x %in% c("UDD", "CF", "Balducci")
+    ok_y <- !is.null(frac_y) && frac_y %in% c("UDD", "CF", "Balducci")
+    if (ok_x && ok_y && !identical(frac_x, frac_y))
+      stop("The two life tables carry different `frac` attributes. Supply `frac` explicitly.",
+           call. = FALSE)
+    if (ok_x) {
+      frac <- frac_x
+    } else if (ok_y) {
+      frac <- frac_y
     } else {
       frac <- "UDD"
     }
@@ -127,11 +177,7 @@ e_xy <- function(
     if (frac == "CML") frac <- "CF"
   }
 
-  if (missing(lt)) stop("`lt` is required.")
-  if (!is.data.frame(lt)) stop("`lt` must be a data.frame.")
-  if (!all(c("x", "lx") %in% names(lt))) stop("`lt` must contain columns `x` and `lx`.")
   if (missing(x) || missing(y)) stop("`x` and `y` are required.")
-  .two_life_table(lt)
 
   x <- as.numeric(x); y <- as.numeric(y)
 
@@ -168,28 +214,26 @@ e_xy <- function(
   if (ny == 1L && nout > 1L) y <- rep(y, nout)
   if (nt == 1L && nout > 1L) t <- rep(t, nout)
 
-  ages  <- as.integer(lt$x)
-  omega <- max(ages, na.rm = TRUE)
-
-  status <- if (cohort == "first") "joint" else "last"
+  omega_x <- max(as.double(lt_x$x))
+  omega_y <- max(as.double(lt_y$x))
 
   ex <- rep(NA_real_, nout)
 
   for (j in seq_len(nout)) {
     xj <- x[j]; yj <- y[j]; tj <- t[j]
 
-    initial <- match(c(xj, yj), ages)
-    if (anyNA(initial) || any(!is.finite(lt$lx[initial]) | lt$lx[initial] <= 0)) {
+    initial_x <- match(xj, lt_x$x)
+    initial_y <- match(yj, lt_y$x)
+    if (is.na(initial_x) || is.na(initial_y) ||
+        lt_x$lx[initial_x] <= 0 || lt_y$lx[initial_y] <= 0) {
       next
     }
 
-    # --- maximum horizon depends on status ---
-    # Joint life: limited by the older life (both must be alive)
-    # Last survivor: limited by the younger life (at least one alive)
-    if (cohort == "first") {
-      max_k <- omega - max(xj, yj)
+    # Truncate each marginal at its own observed horizon.
+    if (status == "joint") {
+      max_k <- min(omega_x - xj, omega_y - yj)
     } else {
-      max_k <- omega - min(xj, yj)
+      max_k <- max(omega_x - xj, omega_y - yj)
     }
     if (max_k <= 0) {
       ex[j] <- 0
@@ -203,7 +247,7 @@ e_xy <- function(
     }
 
     n_int <- floor(tj_use)
-    basis <- .two_life_survival_basis(lt, lt, xj, yj)
+    basis <- .two_life_survival_basis(lt_x, lt_y, xj, yj)
 
     # --- curtate: e = sum_{k=1}^{n} k_p (Finan, Sec. 56.4) ---
     if (type == "curtate") {

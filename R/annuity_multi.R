@@ -25,18 +25,18 @@
 #'   for \code{i_type = "effective"} and \code{i_type = "force"}. In
 #'   \code{tidyactuarial}, \code{m} is reserved for interest conversion
 #'   frequency, not deferment.
-#' @param n Integer term in years after deferment. If \code{NULL}, runs to the
-#'   end of the available table horizon, conservatively based on the smallest
-#'   omega across life tables.
+#' @param n Integer term in years after deferment. If \code{NULL}, uses the
+#'   remaining common horizon after deferment, or zero if none remains.
 #' @param h Integer deferment period in years.
 #' @param k Integer payments per year. If \code{k > 1}, Woolhouse
 #'   approximations may be applied.
-#' @param annuity Type of annuity logic: \code{"cohort"} uses the status
-#'   defined in \code{cohort}; \code{"reversionary"} uses the \eqn{\alpha}
+#' @param annuity Type of annuity logic: \code{"cohort"} uses the selected
+#'   survival status; \code{"reversionary"} uses the \eqn{\alpha}
 #'   fractional reduction.
-#' @param cohort Survival status: \code{"first"} for joint-life, paying while
+#' @param cohort Legacy selector: \code{"first"} for joint-life, paying while
 #'   all lives are alive, or \code{"last"} for last-survivor, paying while at
 #'   least one life remains alive. Used only when \code{annuity = "cohort"}.
+#'   Prefer \code{status} in new calls.
 #' @param alpha Reversionary fraction, typically \eqn{0 \le \alpha \le 1}.
 #'   Used only when \code{annuity = "reversionary"}. Note: \code{alpha = 0}
 #'   matches joint-life; \code{alpha = 1} matches last-survivor.
@@ -44,6 +44,10 @@
 #' @param woolhouse \code{"none"}, \code{"first"}, or \code{"second"}.
 #' @param frac Fractional-age assumption for exact payments: \code{"UDD"}
 #'   (default), \code{"CF"}, \code{"CML"} (alias of CF), or \code{"Balducci"}.
+#' @param status \code{"joint"} or \code{"last"} for \code{annuity = "cohort"}.
+#'   If neither selector is supplied, uses joint-life. Supply only one of
+#'   \code{status} and \code{cohort}. Omit \code{status} for reversionary
+#'   payments, which are determined by \code{alpha}.
 #'
 #' @details
 #' This function follows the compact actuarial notation used throughout
@@ -85,8 +89,11 @@
 #' required for second-order approximation. This is a smoothness approximation,
 #' not exact fractional valuation under \code{frac}; negative approximations
 #' produce a warning. Immediate subtracts \eqn{[F(h)-F(h+n)]/k} from due.
-#' Exact valuation requires consecutive annual ages and retains the documented
-#' conservative common-age horizon; it does not extrapolate unobserved lives.
+#' Valuation requires consecutive annual ages. For each life, subtract the
+#' age at issue from the last observed age in its own table. The common
+#' horizon is the smallest of these durations; a positive term must end
+#' within it, including for last-survivor and reversionary payments.
+#' The calculation does not extrapolate unobserved lives.
 #'
 #' @return A single numeric value representing the APV.
 #'
@@ -106,7 +113,7 @@
 #'   ages = c(60, 62),
 #'   i = 0.05,
 #'   n = 5,
-#'   cohort = "first",
+#'   status = "joint",
 #'   timing = "due"
 #' )
 #'
@@ -119,7 +126,7 @@
 #'   ages = c(60, 62),
 #'   i = 0.05,
 #'   n = 5,
-#'   cohort = "last",
+#'   status = "last",
 #'   timing = "due"
 #' )
 #'
@@ -130,10 +137,20 @@ annuity_multi <- function(
     cohort = c("first", "last"), alpha = NULL,
     timing = c("immediate", "due"),
     woolhouse = c("none", "first", "second"),
-    frac = c("UDD", "CF", "CML", "Balducci")
+    frac = c("UDD", "CF", "CML", "Balducci"),
+    status = c("joint", "last")
 ) {
   annuity <- match.arg(annuity)
-  cohort <- match.arg(cohort)
+  if (missing(status)) {
+    cohort <- match.arg(cohort)
+    status <- if (cohort == "first") "joint" else "last"
+  } else {
+    if (!missing(cohort))
+      stop("Provide only one of `status` or legacy `cohort`.", call. = FALSE)
+    if (annuity == "reversionary")
+      stop("Omit `status` for reversionary payments; use `alpha`.", call. = FALSE)
+    status <- match.arg(status)
+  }
   timing <- match.arg(timing)
   woolhouse <- match.arg(woolhouse)
   frac <- match.arg(frac)
@@ -172,15 +189,15 @@ annuity_multi <- function(
   mortality <- lapply(seq_along(ages),function(j)
     .life_payment_basis(tables[[j]],ages[j]))
   basis <- .interest_basis(i_type,i,m)
-  # Preserve the explicitly documented conservative common-age horizon.
-  omega <- min(vapply(mortality,function(z) z$omega,0))
-  if (is.null(n)) n <- max(0,omega-max(ages)-h)
+  # Use elapsed years from issue, not a common cutoff in attained age.
+  horizon <- min(vapply(mortality, function(z) z$omega, 0) - ages)
+  if (is.null(n)) n <- max(0, horizon - h)
   if (!integer_scalar(n,0))
     stop("`n` must be a nonnegative integer or NULL.", call. = FALSE)
   n <- round(n)
   if (n == 0) return(0)
-  if (!is.finite(h+n) || max(ages)+h+n > omega)
-    stop("Life table horizon insufficient (based on smallest omega).", call. = FALSE)
+  if (!is.finite(h+n) || h+n > horizon)
+    stop("Life table horizon insufficient for at least one life.", call. = FALSE)
   if (!is.finite(n*k) || n*k > .Machine$integer.max)
     stop("Number of payments exceeds the supported payment grid.", call. = FALSE)
 
@@ -193,7 +210,7 @@ annuity_multi <- function(
     any <- if (hi == -Inf) -Inf else if (hi < -36)
       hi + log(sum(exp(logs-hi))) else
       log(-expm1(sum(log1p(-exp(logs)))))
-    selected <- if (cohort == "first") all else any
+    selected <- if (status == "joint") all else any
     if (annuity == "cohort") return(c(sign=1,log=selected))
     if (all == any || alpha == 0) return(c(sign=1,log=all))
     if (alpha == 1) return(c(sign=1,log=any))

@@ -1,7 +1,7 @@
 Package: tidyactuarial
 Type: Package
 Title: Tidy Tools for Actuarial Mathematics and Life Contingencies
-Version: 0.2.0
+Version: 0.2.1
 Authors@R: person(given = "Julian", family = "Fajardo", email = "julian.fajardo1908@gmail.com", role = c("aut", "cre"))
 Description: Provides tidyverse-aligned tools for actuarial mathematics
     and life contingencies, including life tables, survival probabilities,
@@ -15,7 +15,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports: dplyr, ggplot2, rlang, scales, stats, tibble, utils
-Suggests: knitr, purrr, rmarkdown, testthat (>= 3.0.0)
+Suggests: knitr, MASS, purrr, rmarkdown, testthat (>= 3.0.0)
 LazyData: true
 LazyDataCompression: xz
 Config/testthat/edition: 3
@@ -25,8 +25,8 @@ URL: https://github.com/JulianFajardo1908/tidyactuarial,
 BugReports: https://github.com/JulianFajardo1908/tidyactuarial/issues
 NeedsCompilation: no
 Config/roxygen2/version: 8.1.0
-Packaged: 2026-10-24 02:57:12 UTC; LENOVO
+Packaged: 2026-11-08 23:31:55 UTC; LENOVO
 Author: Julian Fajardo [aut, cre]
 Maintainer: Julian Fajardo <julian.fajardo1908@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-10-25 09:30:02 UTC
+Date/Publication: 2026-11-09 00:40:02 UTC

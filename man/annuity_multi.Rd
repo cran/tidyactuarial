@@ -18,7 +18,8 @@ annuity_multi(
   alpha = NULL,
   timing = c("immediate", "due"),
   woolhouse = c("none", "first", "second"),
-  frac = c("UDD", "CF", "CML", "Balducci")
+  frac = c("UDD", "CF", "CML", "Balducci"),
+  status = c("joint", "last")
 )
 }
 \arguments{
@@ -41,22 +42,22 @@ for \code{i_type = "effective"} and \code{i_type = "force"}. In
 \code{tidyactuarial}, \code{m} is reserved for interest conversion
 frequency, not deferment.}
 
-\item{n}{Integer term in years after deferment. If \code{NULL}, runs to the
-end of the available table horizon, conservatively based on the smallest
-omega across life tables.}
+\item{n}{Integer term in years after deferment. If \code{NULL}, uses the
+remaining common horizon after deferment, or zero if none remains.}
 
 \item{h}{Integer deferment period in years.}
 
 \item{k}{Integer payments per year. If \code{k > 1}, Woolhouse
 approximations may be applied.}
 
-\item{annuity}{Type of annuity logic: \code{"cohort"} uses the status
-defined in \code{cohort}; \code{"reversionary"} uses the \eqn{\alpha}
+\item{annuity}{Type of annuity logic: \code{"cohort"} uses the selected
+survival status; \code{"reversionary"} uses the \eqn{\alpha}
 fractional reduction.}
 
-\item{cohort}{Survival status: \code{"first"} for joint-life, paying while
+\item{cohort}{Legacy selector: \code{"first"} for joint-life, paying while
 all lives are alive, or \code{"last"} for last-survivor, paying while at
-least one life remains alive. Used only when \code{annuity = "cohort"}.}
+least one life remains alive. Used only when \code{annuity = "cohort"}.
+Prefer \code{status} in new calls.}
 
 \item{alpha}{Reversionary fraction, typically \eqn{0 \le \alpha \le 1}.
 Used only when \code{annuity = "reversionary"}. Note: \code{alpha = 0}
@@ -68,6 +69,11 @@ matches joint-life; \code{alpha = 1} matches last-survivor.}
 
 \item{frac}{Fractional-age assumption for exact payments: \code{"UDD"}
 (default), \code{"CF"}, \code{"CML"} (alias of CF), or \code{"Balducci"}.}
+
+\item{status}{\code{"joint"} or \code{"last"} for \code{annuity = "cohort"}.
+If neither selector is supplied, uses joint-life. Supply only one of
+\code{status} and \code{cohort}. Omit \code{status} for reversionary
+payments, which are determined by \code{alpha}.}
 }
 \value{
 A single numeric value representing the APV.
@@ -125,8 +131,11 @@ Positive supported weights at both borders and the following year are
 required for second-order approximation. This is a smoothness approximation,
 not exact fractional valuation under \code{frac}; negative approximations
 produce a warning. Immediate subtracts \eqn{[F(h)-F(h+n)]/k} from due.
-Exact valuation requires consecutive annual ages and retains the documented
-conservative common-age horizon; it does not extrapolate unobserved lives.
+Valuation requires consecutive annual ages. For each life, subtract the
+age at issue from the last observed age in its own table. The common
+horizon is the smallest of these durations; a positive term must end
+within it, including for last-survivor and reversionary payments.
+The calculation does not extrapolate unobserved lives.
 }
 \examples{
 lt <- data.frame(
@@ -139,7 +148,7 @@ annuity_multi(
   ages = c(60, 62),
   i = 0.05,
   n = 5,
-  cohort = "first",
+  status = "joint",
   timing = "due"
 )
 
@@ -152,7 +161,7 @@ annuity_multi(
   ages = c(60, 62),
   i = 0.05,
   n = 5,
-  cohort = "last",
+  status = "last",
   timing = "due"
 )
 

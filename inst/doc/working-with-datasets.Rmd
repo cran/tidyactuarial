@@ -1,0 +1,65 @@
+---
+title: "Working with mortality and competing-risks data"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Working with mortality and competing-risks data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup}
+library(tidyactuarial)
+```
+
+## Period mortality from WPP 2024
+
+[World Population Prospects 2024](https://population.un.org/wpp/) provides
+estimated mortality for a reference period. This example uses the
+published survivor counts for Colombia in 2023, measured per 100,000
+initial lives. The five-year survival probability from age 65 uses the
+ratio of the published counts at ages 70 and 65.
+
+```{r wpp}
+col <- subset(mortality_regions, location_code == 170L & sex == "both",
+              select = c(x, lx))
+t_px(col, x = 65, t = 5)
+```
+
+The rates in the source are in base 1. Rounding can cause slight
+discrepancies between the published probabilities and survivor counts;
+using only x and lx makes the valuation basis explicit. The original
+100+ interval is open: its qx of 1 is not a one-year probability and
+does not justify a whole-life extrapolation. See the dataset help for
+the published aggregate dx discrepancy at 100+.
+
+## Competing risks with an external dataset
+
+[MASS::Melanoma](https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/Melanoma.html)
+contains 205 patients from Andersen, Borgan, Gill and Keiding (1993).
+Status 1 indicates death from melanoma, 2 indicates alive at last
+follow-up (right-censored), and 3 indicates death from other causes.
+The observations are read from MASS when installed; no copy is included.
+
+At each death time, divide deaths by cause by the number at risk just
+before that time. Multiply those increments by the probability of
+remaining alive before the time, then accumulate by cause. Patients
+censored at that time are in its risk set and are removed afterwards.
+
+```{r melanoma, eval=requireNamespace("MASS", quietly = TRUE)}
+d <- MASS::Melanoma
+times <- sort(unique(d$time[d$status != 2L]))
+risk <- vapply(times, function(t) sum(d$time >= t), 0L)
+death <- sapply(c(melanoma = 1L, other = 3L), function(cause) {
+  vapply(times, function(t) sum(d$time == t & d$status == cause), 0L)
+})
+increment <- death / risk
+survival <- cumprod(1 - rowSums(increment))
+before <- c(1, head(survival, -1))
+incidence <- apply(increment * before, 2, cumsum)
+tail(data.frame(days = times, survival, incidence), 1)
+```
+
+These are cumulative incidences on follow-up time, with censoring
+accounted for. They are not annual age-specific probabilities for
+md_table(). For an example of that input, use the package's synthetic
+multiple_decrement_sample with its three cause columns and close = FALSE.
